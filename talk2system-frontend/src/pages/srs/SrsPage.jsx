@@ -11,6 +11,17 @@ export default function SrsPage() {
     setShowApprovalModal(false);
   };
 
+  const handleExportClick = (e) => {
+  e.preventDefault();
+
+  if (!approved) {
+    setShowApprovalModal(true);
+    return;
+  }
+
+  // approved → continue export logic here (later)
+};
+
   return (
     <div className="font-display bg-background-light dark:bg-background-dark min-h-screen text-[#1F2937] dark:text-gray-200">
 
@@ -35,30 +46,20 @@ export default function SrsPage() {
 
 
             <div className="relative group">
-              <button className="h-10 px-4 rounded-lg flex items-center gap-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200">
-                <span className="material-symbols-outlined text-lg">
-                  download
-                </span>
+              <button
+                onClick={handleExportClick}
+                className="h-10 px-4 rounded-lg flex items-center gap-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
+              >
+                <span className="material-symbols-outlined text-lg">download</span>
                 Export
-                <span className="material-symbols-outlined text-lg transition-transform group-hover:rotate-180">
-                  expand_more
-                </span>
+       
               </button>
 
-              <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-background-dark rounded-lg shadow-lg border opacity-0 invisible group-hover:visible group-hover:opacity-100">
-                {["Doc", "PDF"].map((f) => (
-                  <a
-                    key={f}
-                    href="#"
-                    className="block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-primary/20"
-                  >
-                    Export as {f}
-                  </a>
-                ))}
-              </div>
+
+
             </div>
-           <button
-              onClick={() => setShowApprovalModal(true)}
+            <button
+              onClick={() => setApproved(true)}
               disabled={approved}
               className={`h-10 px-6 rounded-lg flex items-center gap-2 text-white
                 ${approved ? "bg-green-600" : "bg-primary hover:opacity-90"}`}
@@ -68,6 +69,8 @@ export default function SrsPage() {
               </span>
               {approved ? "Approved" : "Approve"}
             </button>
+
+
           </div>
         </div>
 
