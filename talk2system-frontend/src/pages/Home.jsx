@@ -17,9 +17,22 @@ export default function Home() {
 
         <Link
           to="/uml"
-          className="px-6 py-3 bg-gray-200 dark:bg-gray-700 rounded-lg font-bold"
+          className="px-6 py-3 bg-primary text-white rounded-lg font-bold"
         >
           Open UML Diagrams
+        </Link>
+
+        <Link
+          to="/transcript"
+          className="px-6 py-3 bg-primary text-white rounded-lg font-bold"
+        >
+          Open Transcript
+        </Link>
+        <Link
+          to="/project-details"
+          className="px-6 py-3 bg-primary text-white rounded-lg font-bold"
+        >
+          Open Project Details
         </Link>
       </div>
     </div>
