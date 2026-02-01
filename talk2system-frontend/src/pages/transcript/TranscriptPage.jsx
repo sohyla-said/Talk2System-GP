@@ -13,11 +13,11 @@ export default function TranscriptPage() {
       return;
     }
     if (type === "uml") {
-      navigate("/uml");
+      navigate("/artifacts/uml");
       return;
     }
     if (type === "srs") {
-      navigate("/srs");
+      navigate("/artifacts/srs");
       return;
     }
     alert("Asset generation started 🚀");

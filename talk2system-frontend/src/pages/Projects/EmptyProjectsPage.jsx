@@ -36,7 +36,7 @@ export default function EmptyProjectsPage() {
 
             {/* Create First Project */}
             <button
-              onClick={() => navigate("/add-project-details")}
+              onClick={() => navigate("/projects/new")}
               className="
                 flex items-center justify-center gap-2
                 px-8 py-4

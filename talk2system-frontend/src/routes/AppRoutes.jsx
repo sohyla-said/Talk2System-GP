@@ -1,39 +1,78 @@
-// src/routes/AppRoutes.jsx
-import AppLayout from "../components/layout/AppLayout";
 import { Routes, Route } from "react-router-dom";
-import SrsPage from "../pages/srs/SRSPage";
-import UMLPage from "../pages/uml/UmlPage";
+
+import AppLayout from "../components/layout/AppLayout";
+import AuthLayout from "../components/layout/AuthLayout";
+
+// Pages
 import Home from "../pages/Home";
-import TranscriptPage from "../pages/transcript/TranscriptPage";
-import ProjectDetailsPage from "../pages/projectdetails/ProjectDetailsPage"; 
-import RecordingSessionPage from "../pages/recordingsession/RecordingSessionPage";
-import EmptyProjectsPage from  "../pages/emptyprojects/EmptyProjectsPage"; 
-import DashboardPage from "../pages/Dashboard/DashboardPage";
-import ProjectsPage from "../pages/Projects/ProjectsPage";
-import AddProjectDetailsPage from "../pages/AddProjectDetails/AddProjectDetailsPage";
-import SignupPage from "../pages/Signup/SignupPage";
-import LoginPage from "../pages/login/LoginPage";
-import PendingApprovalPage from "../pages/UserRoleApproval/PendingApprovalPage";
-import RoleApprovalPage from "../pages/UserRoleApproval/role-approval";
+
+// Auth
+import Login from "../pages/auth/LoginPage";
+import Signup from "../pages/auth/SignupPage";
+import PendingApproval from "../pages/auth/PendingApprovalPage";
+import RoleApproval from "../pages/auth/role-approval";
+
+// Dashboard
+import Dashboard from "../pages/dashboard/DashboardPage";
+
+// Projects
+import ProjectsPage from "../pages/projects/ProjectsPage";
+import ProjectDetails from "../pages/projects/ProjectDetailsPage";
+import AddProject from "../pages/projects/AddProjectDetailsPage";
+import EmptyProjectsPage from "../pages/projects/EmptyProjectsPage";
+
+// Recording & Transcript
+import RecordingSession from "../pages/recordingsession/RecordingSessionPage";
+import TranscriptView from "../pages/transcript/TranscriptPage";
+// import TranscriptSummary from "../pages/transcript/TranscriptSummary";
+
+// Requirements & Artifacts
+// import RequirementsView from "../pages/requirements/RequirementsView";
+import SRSDocument from "../pages/artifacts/SrsPage";
+import UMLDiagrams from "../pages/artifacts/UmlPage";
+
+// Results
+// import Results from "../pages/results/Results";
+
 export default function AppRoutes() {
   return (
-    <AppLayout>
-      <Routes>
+    <Routes>
+      {/* Public */}
+      <Route element={<AuthLayout />}>
         <Route path="/" element={<Home />} />
-        <Route path="/srs" element={<SrsPage />} />
-        <Route path="/uml" element={<UMLPage />} />
-        <Route path="/transcript" element={<TranscriptPage />} />
-        <Route path="/project-details" element={<ProjectDetailsPage />} />
-        <Route path="/recording-session" element={<RecordingSessionPage />} />
-        <Route path="/emptyprojects" element={<EmptyProjectsPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/projects" element={<ProjectsPage />} />
-        <Route path="/add-project-details" element={<AddProjectDetailsPage />} />
-        <Route path="/signup" element={<SignupPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/pending-approval" element={<PendingApprovalPage />} />
-        <Route path="/role-approval" element={<RoleApprovalPage />} />
-      </Routes>
-    </AppLayout>
+      </Route>
+      
+
+      {/* Auth */}
+      <Route element={<AuthLayout />}>
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/pending-approval" element={<PendingApproval />} />
+        <Route path="/role-approval" element={<RoleApproval />} />
+      </Route>
+
+      {/* App */}
+      <Route element={<AppLayout />}>
+        <Route path="/dashboard" element={<Dashboard />} />
+
+        <Route path="/projects">
+          <Route index element={<ProjectsPage />} />
+          <Route path="new" element={<AddProject />} />
+          <Route path=":id" element={<ProjectDetails />} />
+        </Route>
+
+        <Route path="/recording" element={<RecordingSession />} />
+
+        <Route path="/transcript">
+          <Route index element={<TranscriptView />} />
+          
+        </Route>
+
+        
+        <Route path="/artifacts/srs" element={<SRSDocument />} />
+        <Route path="/artifacts/uml" element={<UMLDiagrams />} />
+        
+      </Route>
+    </Routes>
   );
 }

@@ -19,7 +19,7 @@ export default function ProjectsPage() {
             </h2>
 
             <button
-              onClick={() => navigate("/add-project-details")}
+              onClick={() => navigate("/projects/new")}
               className="flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-white font-bold"
             >
               <span className="material-symbols-outlined">add</span>
@@ -35,7 +35,7 @@ export default function ProjectsPage() {
               date="Sep 12, 2025"
               status="Completed"
               color="green"
-              onClick={() => navigate("/project-details")}
+              onClick={() => navigate("/projects/1")}
             />
 
             <ProjectCard
@@ -43,7 +43,7 @@ export default function ProjectsPage() {
               date="Oct 26, 2024"
               status="Ongoing"
               color="blue"
-              onClick={() => navigate("/project-details/1")}
+              onClick={() => navigate("/projects/2")}
             />
 
             <ProjectCard
@@ -51,7 +51,7 @@ export default function ProjectsPage() {
               date="Nov 02, 2025"
               status="Pending Approval"
               color="amber"
-              onClick={() => navigate("/project-details/2")}
+              onClick={() => navigate("/projects/3")}
             />
 
             <ProjectCard
@@ -59,7 +59,7 @@ export default function ProjectsPage() {
               date="Nov 15, 2025"
               status="Archived"
               color="gray"
-              onClick={() => navigate("/project-details/3")}
+              onClick={() => navigate("/projects/4")}
             />
 
           </div>

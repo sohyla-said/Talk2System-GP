@@ -6,8 +6,10 @@ export default function TranscriptApprovalModal({ open, onApprove, onClose, appr
       <div className="w-full max-w-lg mx-4 bg-white dark:bg-background-dark rounded-2xl shadow-xl-soft border border-border-light dark:border-white/10 overflow-hidden transform transition-all">
         <div className="p-8">
           <div className="flex flex-col items-center text-center gap-6">
-            <div className="size-20 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-              <span className="material-symbols-outlined text-4xl">verified_user</span>
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-500 mb-6">
+              <span className="material-symbols-outlined text-4xl">
+                warning
+              </span>
             </div>
             <div className="space-y-3">
               <h2 className="text-2xl font-black text-text-dark dark:text-text-light tracking-tight">Approval Required</h2>

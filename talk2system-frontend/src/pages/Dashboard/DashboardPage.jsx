@@ -1,6 +1,9 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
+  
   return (
     <div className="flex min-h-screen font-display bg-background-light dark:bg-background-dark text-gray-900 dark:text-gray-100">
 
@@ -128,21 +131,12 @@ export default function DashboardPage() {
             Ready to transform your ideas? Create new project to start converting voice sessions into professional documentation.
           </p>
           <button
-              onClick={() => navigate("/add-project-details")}
-              className="
-                flex items-center justify-center gap-2
-                px-8 py-4
-                rounded-xl
-                bg-primary text-white
-                text-base font-bold
-                shadow-lg shadow-primary/25
-                hover:bg-primary/90
-                transition
-              "
+              onClick={() => navigate("/projects/new")}
+              className="flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-white font-bold"
             >
-            <span className="material-symbols-outlined text-lg">add</span>
-            <span>Create New Project</span>
-          </button>
+              <span className="material-symbols-outlined">add</span>
+              Create New Project
+            </button>
         </div>
 
       </main>

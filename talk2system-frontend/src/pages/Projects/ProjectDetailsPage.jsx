@@ -5,7 +5,7 @@ const ProjectDetailsPage = () => {
   const navigate = useNavigate();
 
   const handleStartMeetingSession = () => {
-    navigate('/recording-session');
+    navigate('/recording');
   };
 
   return (
