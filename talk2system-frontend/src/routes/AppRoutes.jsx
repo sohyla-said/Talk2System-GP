@@ -11,6 +11,10 @@ import EmptyProjectsPage from  "../pages/emptyprojects/EmptyProjectsPage";
 import DashboardPage from "../pages/Dashboard/DashboardPage";
 import ProjectsPage from "../pages/Projects/ProjectsPage";
 import AddProjectDetailsPage from "../pages/AddProjectDetails/AddProjectDetailsPage";
+import SignupPage from "../pages/Signup/SignupPage";
+import LoginPage from "../pages/login/LoginPage";
+import PendingApprovalPage from "../pages/UserRoleApproval/PendingApprovalPage";
+import RoleApprovalPage from "../pages/UserRoleApproval/role-approval";
 export default function AppRoutes() {
   return (
     <AppLayout>
@@ -25,6 +29,10 @@ export default function AppRoutes() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/add-project-details" element={<AddProjectDetailsPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/pending-approval" element={<PendingApprovalPage />} />
+        <Route path="/role-approval" element={<RoleApprovalPage />} />
       </Routes>
     </AppLayout>
   );
