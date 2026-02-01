@@ -1,4 +1,4 @@
-export default function TranscriptApprovalModal({ open, onApprove, onClose, approved }) {
+export default function RequirementsApprovalModal({ open, onApprove, onClose }) {
   if (!open) return null;
 
   return (
@@ -23,20 +23,21 @@ export default function TranscriptApprovalModal({ open, onApprove, onClose, appr
           </h3>
 
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
-            Please approve the transcript before generating project assets. This ensures the AI uses the most accurate and reviewed version of your session.
+            To proceed to the next phase of the project, including UML Diagrams and SRS generation, 
+            you must first review and approve the finalized requirements. This step ensures all 
+            stakeholders are aligned.
           </p>
         </div>
 
         <div className="flex flex-col gap-3">
           <button
             onClick={onApprove}
-            disabled={approved}
             className="inline-flex w-full justify-center items-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-bold text-white hover:opacity-90 transition-all"
           >
             <span className="material-symbols-outlined text-lg">
               check_circle
             </span>
-            {approved ? 'Approved' : 'Approve Now'}
+            Approve Now
           </button>
 
           <button

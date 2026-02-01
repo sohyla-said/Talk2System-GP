@@ -1,10 +1,12 @@
 import SrsApprovalModal from "../../components/modals/SrsApprovalModal.jsx";
+import { useNavigate } from "react-router-dom";
 
 import { useState } from "react";
 
 export default function SrsPage() {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [approved, setApproved] = useState(false);
+  const navigate = useNavigate()
 
   const handleApprove = () => {
     setApproved(true);
@@ -30,10 +32,23 @@ export default function SrsPage() {
       {/* MAIN */}
       <main className="max-w-screen-2xl mx-auto p-6">
         {/* BREADCRUMBS */}
-        <div className="flex items-center gap-2 text-sm text-[#57499c] dark:text-indigo-300 mb-4">
-          <span>Projects</span> / <span>AI Shopping App</span> /{" "}
-          <span className="text-[#100d1c] dark:text-white">SRS Document</span>
-        </div>
+        <div className="flex flex-wrap gap-2 text-sm">
+              <button 
+                onClick={() => navigate("/projects")}
+                className="text-primary-accent dark:text-secondary-accent font-medium leading-normal"
+              >
+                Projects
+              </button>
+              <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
+              <button 
+                onClick={() => navigate("/projects/1")}
+                className="text-primary-accent dark:text-secondary-accent font-medium leading-normal"
+              >
+                E-commerce App Redesign
+              </button>
+              <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
+              <span className="text-text-dark dark:text-text-light font-medium leading-normal">SRS Document</span>
+            </div>
 
         {/* PAGE HEADER */}
         <div className="flex justify-between items-center mb-6 flex-wrap gap-4">

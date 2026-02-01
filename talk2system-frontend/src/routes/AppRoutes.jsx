@@ -24,15 +24,15 @@ import EmptyProjectsPage from "../pages/projects/EmptyProjectsPage";
 // Recording & Transcript
 import RecordingSession from "../pages/recordingsession/RecordingSessionPage";
 import TranscriptView from "../pages/transcript/TranscriptPage";
-// import TranscriptSummary from "../pages/transcript/TranscriptSummary";
+import TranscriptSummary from "../pages/transcript/Summary";
 
 // Requirements & Artifacts
-// import RequirementsView from "../pages/requirements/RequirementsView";
+import RequirementsView from "../pages/requirements/RequirementsView";
 import SRSDocument from "../pages/artifacts/SrsPage";
 import UMLDiagrams from "../pages/artifacts/UmlPage";
 
 // Results
-// import Results from "../pages/results/Results";
+import Results from "../pages/results/Results";
 
 export default function AppRoutes() {
   return (
@@ -59,18 +59,21 @@ export default function AppRoutes() {
           <Route index element={<ProjectsPage />} />
           <Route path="new" element={<AddProject />} />
           <Route path=":id" element={<ProjectDetails />} />
+          <Route path="empty" element={<EmptyProjectsPage />} />
         </Route>
 
         <Route path="/recording" element={<RecordingSession />} />
 
         <Route path="/transcript">
           <Route index element={<TranscriptView />} />
-          
+          <Route path="summary" element={<TranscriptSummary />} />
         </Route>
 
-        
+        <Route path="/requirements" element={<RequirementsView />} />
         <Route path="/artifacts/srs" element={<SRSDocument />} />
         <Route path="/artifacts/uml" element={<UMLDiagrams />} />
+
+        <Route path="/results" element={<Results />} />
         
       </Route>
     </Routes>

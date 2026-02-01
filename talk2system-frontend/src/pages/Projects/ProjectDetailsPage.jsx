@@ -48,15 +48,24 @@ const ProjectDetailsPage = () => {
           <div className="flex flex-col mt-4">
             <div className="border-b border-gray-200 dark:border-gray-700 px-4">
               <div className="flex gap-8">
-                <a className="flex flex-col items-center justify-center border-b-[3px] border-b-primary text-gray-900 dark:text-white pb-[13px] pt-4" href="#">
+                <button 
+                  onClick={() => navigate('/projects/1')}
+                  className="flex flex-col items-center justify-center border-b-[3px] border-b-primary text-gray-900 dark:text-white pb-[13px] pt-4"
+                >
                   <p className="text-sm font-bold leading-normal tracking-[0.015em]">Sessions</p>
-                </a>
-                <a className="flex flex-col items-center justify-center border-b-[3px] border-b-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 pb-[13px] pt-4" href="#">
+                </button>
+                <button 
+                  onClick={() => navigate('/requirements')}
+                  className="flex flex-col items-center justify-center border-b-[3px] border-b-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 pb-[13px] pt-4"
+                >
                   <p className="text-sm font-bold leading-normal tracking-[0.015em]">Requirements</p>
-                </a>
-                <a className="flex flex-col items-center justify-center border-b-[3px] border-b-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 pb-[13px] pt-4" href="#">
+                </button>
+                <button 
+                  onClick={() => navigate('/results')}
+                  className="flex flex-col items-center justify-center border-b-[3px] border-b-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 pb-[13px] pt-4"
+                >
                   <p className="text-sm font-bold leading-normal tracking-[0.015em]">Artifacts</p>
-                </a>
+                </button>
               </div>
             </div>
 
@@ -78,7 +87,7 @@ const ProjectDetailsPage = () => {
             {/* Sessions Grid */}
             <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Session Card 1 */}
-              <div className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+              <div onClick={() => navigate('/transcript')} className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
                 <div className="flex justify-between items-start">
                   <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Initial Brainstorming</h3>
                   <span className="inline-flex items-center rounded-md bg-green-50 dark:bg-green-900/50 px-2 py-1 text-xs font-medium text-green-700 dark:text-green-300 ring-1 ring-inset ring-green-600/20 dark:ring-green-600/30">Completed</span>
@@ -96,7 +105,7 @@ const ProjectDetailsPage = () => {
               </div>
 
               {/* Session Card 2 */}
-              <div className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+              <div onClick={() => navigate('/transcript')} className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
                 <div className="flex justify-between items-start">
                   <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">User Flow Mapping</h3>
                   <span className="inline-flex items-center rounded-md bg-green-50 dark:bg-green-900/50 px-2 py-1 text-xs font-medium text-green-700 dark:text-green-300 ring-1 ring-inset ring-green-600/20 dark:ring-green-600/30">Completed</span>
@@ -114,7 +123,7 @@ const ProjectDetailsPage = () => {
               </div>
 
               {/* Session Card 3 */}
-              <div className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+              <div onClick={() => navigate('/transcript')} className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
                 <div className="flex justify-between items-start">
                   <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Checkout Process Review</h3>
                   <span className="inline-flex items-center rounded-md bg-yellow-50 dark:bg-yellow-900/50 px-2 py-1 text-xs font-medium text-yellow-800 dark:text-yellow-300 ring-1 ring-inset ring-yellow-600/20 dark:ring-yellow-600/30">Processing</span>

@@ -5,10 +5,12 @@ import TranscriptApprovalModal from "../../components/modals/TranscriptApprovalM
 export default function TranscriptPage() {
   const [approved, setApproved] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState(null);
   const navigate = useNavigate();
 
   const handleGenerate = (type) => {
     if (!approved) {
+      setPendingNavigation(type);
       setShowModal(true);
       return;
     }
@@ -20,7 +22,35 @@ export default function TranscriptPage() {
       navigate("/artifacts/srs");
       return;
     }
+
+    if (type === "req") {
+      navigate("/requirements");
+      return;
+    }
+
+    if (type === "sum") {
+      navigate("/transcript/summary");
+      return;
+    }
+    
     alert("Asset generation started 🚀");
+  };
+
+  const handleApprove = () => {
+    setApproved(true);
+    setShowModal(false);
+    
+    // Navigate to pending destination if exists
+    if (pendingNavigation) {
+      if (pendingNavigation === "uml") {
+        navigate("/artifacts/uml");
+      } else if (pendingNavigation === "srs") {
+        navigate("/artifacts/srs");
+      } else if (pendingNavigation === "req") {
+        navigate("/requirements");
+      }
+      setPendingNavigation(null);
+    }
   };
 
   return (
@@ -33,9 +63,19 @@ export default function TranscriptPage() {
           <div className="flex flex-col gap-4">
             {/* Breadcrumb */}
             <div className="flex flex-wrap gap-2 text-sm">
-              <a className="text-primary-accent dark:text-secondary-accent font-medium leading-normal" href="#">Projects</a>
+              <button 
+                onClick={() => navigate("/projects")}
+                className="text-primary-accent dark:text-secondary-accent font-medium leading-normal"
+              >
+                Projects
+              </button>
               <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
-              <a className="text-primary-accent dark:text-secondary-accent font-medium leading-normal" href="#">Session 1</a>
+              <button 
+                onClick={() => navigate("/projects/1")}
+                className="text-primary-accent dark:text-secondary-accent font-medium leading-normal"
+              >
+                E-commerce App Redesign
+              </button>
               <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
               <span className="text-text-dark dark:text-text-light font-medium leading-normal">Transcript</span>
             </div>
@@ -54,7 +94,7 @@ export default function TranscriptPage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => {}}
+                  onClick={() => setApproved(true)}
                   disabled={approved}
                   className={`flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold text-white shadow-soft transition-colors
                     ${approved ? "bg-green-600 cursor-default" : "bg-primary hover:bg-primary/90"}
@@ -171,11 +211,11 @@ export default function TranscriptPage() {
               <div className="flex flex-col gap-6 bg-white dark:bg-background-dark/50 rounded-xl p-6 shadow-soft border border-border-light dark:border-white/10">
                 <h3 className="text-text-dark dark:text-text-light text-xl font-bold">Generate Assets</h3>
                 <div className="flex flex-col gap-3">
-                  <button onClick={() => handleGenerate()} className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-primary-accent/90">
+                  <button onClick={() => handleGenerate("sum")} className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-primary-accent/90">
                     <span className="material-symbols-outlined text-xl">summarize</span>
                     Summarize Transcript
                   </button>
-                  <button onClick={() => handleGenerate()} className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-primary-accent/90">
+                  <button onClick={() => handleGenerate("req")} className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-primary-accent/90">
                     <span className="material-symbols-outlined text-xl">checklist</span>
                     Extract Requirements
                   </button>
@@ -200,11 +240,11 @@ export default function TranscriptPage() {
       </div>
       <TranscriptApprovalModal
         open={showModal}
-        onClose={() => setShowModal(false)}
-        onApprove={() => {
-          setApproved(true);
+        onClose={() => {
           setShowModal(false);
+          setPendingNavigation(null);
         }}
+        onApprove={handleApprove}
         approved={approved}
       />
     </>

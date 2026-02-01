@@ -1,5 +1,6 @@
 import { useState } from "react";
 import UMLApprovalModal from "../../components/modals/UMLApprovalModal";
+import { useNavigate } from "react-router-dom";
 
 const DIAGRAM_IMAGES = {
   usecase: "/uml/usecase.png",
@@ -11,6 +12,7 @@ export default function UmlPage() {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [approved, setApproved] = useState(false);
   const [diagramType, setDiagramType] = useState("usecase");
+  const navigate = useNavigate()
 
   const handleApprove = () => {
     setApproved(true);
@@ -33,6 +35,23 @@ export default function UmlPage() {
       {/* MAIN */}
       <main className="max-w-5xl mx-auto pt-8 px-4">
 
+        <div className="flex flex-wrap gap-2 text-sm">
+              <button 
+                onClick={() => navigate("/projects")}
+                className="text-primary-accent dark:text-secondary-accent font-medium leading-normal"
+              >
+                Projects
+              </button>
+              <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
+              <button 
+                onClick={() => navigate("/projects/1")}
+                className="text-primary-accent dark:text-secondary-accent font-medium leading-normal"
+              >
+                E-commerce App Redesign
+              </button>
+              <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
+              <span className="text-text-dark dark:text-text-light font-medium leading-normal">UML Diagrams</span>
+          </div>
         {/* TITLE */}
         <div className="mb-6">
           <h1 className="text-4xl font-black">UML Diagrams</h1>

@@ -18,7 +18,7 @@ export default function SrsApprovalModal({ onClose, onApprove }) {
           </div>
 
           <h3 className="text-xl font-bold text-[#100d1c] dark:text-white mb-3">
-            Document Not Approved
+            Approval Required
           </h3>
 
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
