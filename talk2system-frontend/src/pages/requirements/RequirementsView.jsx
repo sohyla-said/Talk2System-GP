@@ -1,15 +1,18 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import RequirementsApprovalModal from "../../components/modals/RequirementsApprovalModal";
+import RequirementsEditModal from "../../components/modals/RequirementsEditModal";
 
 export default function RequirementsView() {
   const [approved, setApproved] = useState(false);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingSection, setEditingSection] = useState(null);
   const navigate = useNavigate();
 
   // Mock requirements data - replace with actual data from API/context later
-  const requirements = {
+  const [requirements, setRequirements] = useState({
     functional: [
       {
         id: "FR-001",
@@ -49,7 +52,7 @@ export default function RequirementsView() {
         description: "Authentication: The process of verifying a user's identity, including registration and login."
       }
     ]
-  };
+  });
 
   // Handle navigation with approval check
   const handleNavigation = (path) => {
@@ -77,6 +80,22 @@ export default function RequirementsView() {
   const handleCloseModal = () => {
     setShowApprovalModal(false);
     setPendingNavigation(null);
+  };
+
+  // Handle opening edit modal
+  const handleEditSection = (sectionType) => {
+    setEditingSection(sectionType);
+    setShowEditModal(true);
+  };
+
+  // Handle saving edited requirements
+  const handleSaveRequirements = (sectionType, updatedData) => {
+    setRequirements({
+      ...requirements,
+      [sectionType]: updatedData
+    });
+    setShowEditModal(false);
+    setEditingSection(null);
   };
 
   // Get tag color classes
@@ -200,7 +219,13 @@ export default function RequirementsView() {
                   <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                     Functional Requirements
                   </p>
-                  <span className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors">
+                  <span 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditSection('functional');
+                    }}
+                    className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
+                  >
                     edit
                   </span>
                 </div>
@@ -245,7 +270,13 @@ export default function RequirementsView() {
                   <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                     Non-Functional Requirements
                   </p>
-                  <span className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors">
+                  <span 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditSection('nonFunctional');
+                    }}
+                    className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
+                  >
                     edit
                   </span>
                 </div>
@@ -290,7 +321,13 @@ export default function RequirementsView() {
                   <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                     Actors
                   </p>
-                  <span className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors">
+                  <span 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditSection('actors');
+                    }}
+                    className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
+                  >
                     edit
                   </span>
                 </div>
@@ -325,7 +362,13 @@ export default function RequirementsView() {
                   <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                     Features
                   </p>
-                  <span className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors">
+                  <span 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditSection('features');
+                    }}
+                    className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
+                  >
                     edit
                   </span>
                 </div>
@@ -359,6 +402,18 @@ export default function RequirementsView() {
         open={showApprovalModal}
         onApprove={handleApprove}
         onClose={handleCloseModal}
+      />
+
+      {/* Edit Modal */}
+      <RequirementsEditModal
+        open={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingSection(null);
+        }}
+        onSave={handleSaveRequirements}
+        sectionData={editingSection ? requirements[editingSection] : null}
+        sectionType={editingSection}
       />
     </>
   );

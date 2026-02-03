@@ -20,18 +20,17 @@ export default function AuthLayout() {
           to="/"
           className="flex items-center gap-3 text-[#100d1c] dark:text-white hover:opacity-90 transition-opacity"
         >
-          <div className="size-8 text-primary">
-            <svg fill="none" viewBox="0 0 48 48">
-              <path
-                fill="currentColor"
-                fillRule="evenodd"
-                d="M39.475 21.6262C40.358 21.4363..."
-              />
-            </svg>
-          </div>
-          <span className="text-lg font-bold tracking-tight">
-            Talk2System
-          </span>
+          <img 
+          src="/logo.png" 
+          alt="Talk2System Logo" 
+          className="h-20 w-auto object-contain -my-4"
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.style.display = 'none';
+            console.error('Logo failed to load from /logo.png');
+          }}
+        />
+          
         </NavLink>
 
         {/* Auth Links */}

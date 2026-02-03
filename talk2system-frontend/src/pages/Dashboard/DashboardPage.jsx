@@ -32,9 +32,6 @@ export default function DashboardPage() {
                     mic
                   </span>
                 </div>
-                <span className="text-xs font-bold text-green-500 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded">
-                  +12%
-                </span>
               </div>
               <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">
                 Total Sessions

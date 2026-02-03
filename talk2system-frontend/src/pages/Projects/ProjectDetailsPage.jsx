@@ -20,7 +20,9 @@ const ProjectDetailsPage = () => {
               <p className="text-gray-500 dark:text-gray-400 text-base font-normal leading-normal">A project to redesign the core user experience for our main e-commerce platform.</p>
             </div>
             <div className="flex items-center gap-3">
-              <button className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-6 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-bold leading-normal tracking-[0.015em] gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+              <button 
+                onClick={() => navigate('/projects/1/add-participant')}
+                className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-6 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-bold leading-normal tracking-[0.015em] gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                 <span className="material-symbols-outlined">person_add</span>
                 <span className="truncate">Add Participants</span>
               </button>

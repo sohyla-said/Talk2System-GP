@@ -1,12 +1,37 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import TranscriptApprovalModal from "../../components/modals/TranscriptApprovalModal";
+import TranscriptEditModal from "../../components/modals/TranscriptEditModal";
 
 export default function TranscriptPage() {
   const [approved, setApproved] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingSpeaker, setEditingSpeaker] = useState(null);
   const navigate = useNavigate();
+
+  // Initial transcript data
+  const [transcriptData, setTranscriptData] = useState([
+    {
+      id: 1,
+      name: "Speaker 1",
+      avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuAptLIO7pwsGP-E1vCtmR5R9tmy7svX0HFM7SYwdzydUUsyBPvdvaFa3tpQ0vYhTc9Dnl4Qe-opbfHMLNIqUfeHP6d_IbPS99KrashDM9SFd_HGKF2pHBNfednvqolmL3mS4vzsfBlmExnR1ASZf0mSpJpti53uGw-C7peKlKL5A6B1qJXpXGx_QLjCQEOHhMzUp0K6utaN-jrGd_Tp3o79-ij15KClyw6LMH5igpd7C8yXqGy1RgLSsJeSCL26XeNkbB0jvtFO8qHw",
+      text: "Okay, let's kick off the brainstorming session for the new mobile banking app. What are the absolute core features we need for the MVP launch?"
+    },
+    {
+      id: 2,
+      name: "Speaker 2",
+      avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuAoUmoakIgWlvD3hmmLUKi29Kloxoxwt9Qb6MN3YZOTagGvRpedM33wo1jrHGWkI9pEDOeN4EL59M2bfeObZlbKhX43zTvOdQ1QylxA_UaeKR_Ah4tkGiIEaSZo0n3TI8q6hroEQ5lxk_iBYM-0ePuZxR_I9qJTKHYH42iJzFE2LavTCAx_noA5cX08dE8hnMidOSypc7Fc9lP5BoDclEuEzGlepPV_KmYJlV7CSQXONabsSL3Ji1gmodvp1pUyTXB-weM_6rdX2dk2",
+      text: "Definitely account balance and transaction history. That's the bare minimum. I also think a simple transfer feature—P2P and to external accounts—is crucial."
+    },
+    {
+      id: 3,
+      name: "Speaker 1",
+      avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuD4vRBxKtx6RHaMwYp64Y1CoGdxQ8FIpQaMg85bkd3Al_96Iq_54DZLG7wWTrZ043TAekqYmX6Sa-jfX52PL7UB-beL5fLEbUOiGbKCTvFRDy-JYaiIoBSQrOrBkIoS7to4NAK3TTgjDUOzc15icg5ibDqwhBoFguu-vp2F7SWUqKsnuU4BFbQFnU0Y6_IVBxIDnIoKZYyOU0GMrM_4gFslm5uGeXtmwgXOdPyiyR2QvzGKz7pfg2oBugAH25yw-WSlx9vvh4EBQGCk",
+      text: "Good point. What about security? Biometric login—Face ID or fingerprint—should be there from day one. Nobody wants to type passwords anymore."
+    }
+  ]);
 
   const handleGenerate = (type) => {
     if (!approved) {
@@ -53,6 +78,19 @@ export default function TranscriptPage() {
     }
   };
 
+  const handleEditClick = (speaker) => {
+    setEditingSpeaker(speaker);
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = (updatedSpeaker) => {
+    setTranscriptData(transcriptData.map(speaker => 
+      speaker.id === updatedSpeaker.id ? updatedSpeaker : speaker
+    ));
+    setShowEditModal(false);
+    setEditingSpeaker(null);
+  };
+
   return (
     <>
       <div className="relative flex h-auto min-h-screen w-full flex-col bg-background-light dark:bg-background-dark font-display text-text-dark dark:text-text-light overflow-x-hidden">
@@ -81,7 +119,7 @@ export default function TranscriptPage() {
             </div>
             {/* Title and Actions */}
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <h1 className="text-text-dark dark:text-text-light text-4xl font-black leading-tight tracking-[-0.033em] flex-1">Mobile Banking App - Initial Brainstorm</h1>
+              <h1 className="text-text-dark dark:text-text-light text-4xl font-black leading-tight tracking-[-0.033em] flex-1">E-commerce App - Initial Brainstorm</h1>
               <div className="flex items-center gap-3">
                 <div className="relative min-w-[200px]">
                   <select className="form-select appearance-none w-full bg-surface-light dark:bg-background-dark/50 border-border-light dark:border-white/10 rounded-lg py-2 px-4 pr-10 text-sm font-medium text-text-dark dark:text-text-light focus:ring-2 focus:ring-primary focus:border-transparent cursor-pointer shadow-soft">
@@ -112,66 +150,34 @@ export default function TranscriptPage() {
             {/* LEFT CONTENT - Speaker Bubbles */}
             <div className="lg:col-span-2 flex flex-col gap-6">
               <div className="flex flex-col gap-8 bg-surface-light dark:bg-background-dark/50 rounded-xl p-4 sm:p-6 shadow-soft">
-                {/* Example Speaker Bubble 1 */}
-                <div className="flex gap-4 group/speaker">
-                  <div className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 flex-shrink-0" style={{backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuAptLIO7pwsGP-E1vCtmR5R9tmy7svX0HFM7SYwdzydUUsyBPvdvaFa3tpQ0vYhTc9Dnl4Qe-opbfHMLNIqUfeHP6d_IbPS99KrashDM9SFd_HGKF2pHBNfednvqolmL3mS4vzsfBlmExnR1ASZf0mSpJpti53uGw-C7peKlKL5A6B1qJXpXGx_QLjCQEOHhMzUp0K6utaN-jrGd_Tp3o79-ij15KClyw6LMH5igpd7C8yXqGy1RgLSsJeSCL26XeNkbB0jvtFO8qHw")'}} data-alt="Avatar for Speaker 1"></div>
-                  <div className="flex flex-1 flex-col items-stretch gap-2">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <p className="text-text-dark dark:text-text-light text-base font-bold leading-tight">Speaker 1</p>
-                          <p className="text-text-dark/60 dark:text-text-light/60 text-sm font-normal leading-normal">00:01</p>
+                {transcriptData.map((speaker) => (
+                  <div key={speaker.id} className="flex gap-4 group/speaker">
+                    <div 
+                      className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 flex-shrink-0" 
+                      style={{backgroundImage: `url("${speaker.avatar}")`}} 
+                      data-alt={`Avatar for ${speaker.name}`}
+                    ></div>
+                    <div className="flex flex-1 flex-col items-stretch gap-2">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <p className="text-text-dark dark:text-text-light text-base font-bold leading-tight">{speaker.name}</p>
+                          </div>
+                          <button 
+                            onClick={() => handleEditClick(speaker)}
+                            className="flex items-center text-text-dark/40 hover:text-primary dark:text-text-light/40 dark:hover:text-primary transition-colors p-1" 
+                            title="Edit this line"
+                          >
+                            <span className="material-symbols-outlined text-lg">edit</span>
+                          </button>
                         </div>
-                        <button className="flex items-center text-text-dark/40 hover:text-primary dark:text-text-light/40 dark:hover:text-primary transition-colors p-1" title="Edit this line">
-                          <span className="material-symbols-outlined text-lg">edit</span>
-                        </button>
+                        <p className="text-text-dark/90 dark:text-text-light/90 text-base font-normal leading-relaxed">
+                          {speaker.text}
+                        </p>
                       </div>
-                      <p className="text-text-dark/90 dark:text-text-light/90 text-base font-normal leading-relaxed">
-                        Okay, let's kick off the brainstorming session for the new mobile banking app. What are the absolute core features we need for the MVP launch?
-                      </p>
                     </div>
                   </div>
-                </div>
-                {/* Example Speaker Bubble 2 */}
-                <div className="flex gap-4 group/speaker">
-                  <div className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 flex-shrink-0" style={{backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuAoUmoakIgWlvD3hmmLUKi29Kloxoxwt9Qb6MN3YZOTagGvRpedM33wo1jrHGWkI9pEDOeN4EL59M2bfeObZlbKhX43zTvOdQ1QylxA_UaeKR_Ah4tkGiIEaSZo0n3TI8q6hroEQ5lxk_iBYM-0ePuZxR_I9qJTKHYH42iJzFE2LavTCAx_noA5cX08dE8hnMidOSypc7Fc9lP5BoDclEuEzGlepPV_KmYJlV7CSQXONabsSL3Ji1gmodvp1pUyTXB-weM_6rdX2dk2")'}} data-alt="Avatar for Speaker 2"></div>
-                  <div className="flex flex-1 flex-col items-stretch gap-2">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <p className="text-text-dark dark:text-text-light text-base font-bold leading-tight">Speaker 2</p>
-                          <p className="text-text-dark/60 dark:text-text-light/60 text-sm font-normal leading-normal">00:15</p>
-                        </div>
-                        <button className="flex items-center text-text-dark/40 hover:text-primary dark:text-text-light/40 dark:hover:text-primary transition-colors p-1" title="Edit this line">
-                          <span className="material-symbols-outlined text-lg">edit</span>
-                        </button>
-                      </div>
-                      <p className="text-text-dark/90 dark:text-text-light/90 text-base font-normal leading-relaxed">
-                        Definitely account balance and transaction history. That's the bare minimum. I also think a simple transfer feature—P2P and to external accounts—is crucial.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                {/* Example Speaker Bubble 3 */}
-                <div className="flex gap-4 group/speaker">
-                  <div className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 flex-shrink-0" style={{backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuD4vRBxKtx6RHaMwYp64Y1CoGdxQ8FIpQaMg85bkd3Al_96Iq_54DZLG7wWTrZ043TAekqYmX6Sa-jfX52PL7UB-beL5fLEbUOiGbKCTvFRDy-JYaiIoBSQrOrBkIoS7to4NAK3TTgjDUOzc15icg5ibDqwhBoFguu-vp2F7SWUqKsnuU4BFbQFnU0Y6_IVBxIDnIoKZYyOU0GMrM_4gFslm5uGeXtmwgXOdPyiyR2QvzGKz7pfg2oBugAH25yw-WSlx9vvh4EBQGCk")'}} data-alt="Avatar for Speaker 1"></div>
-                  <div className="flex flex-1 flex-col items-stretch gap-2">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <p className="text-text-dark dark:text-text-light text-base font-bold leading-tight">Speaker 1</p>
-                          <p className="text-text-dark/60 dark:text-text-light/60 text-sm font-normal leading-normal">00:32</p>
-                        </div>
-                        <button className="flex items-center text-text-dark/40 hover:text-primary dark:text-text-light/40 dark:hover:text-primary transition-colors p-1" title="Edit this line">
-                          <span className="material-symbols-outlined text-lg">edit</span>
-                        </button>
-                      </div>
-                      <p className="text-text-dark/90 dark:text-text-light/90 text-base font-normal leading-relaxed">
-                        Good point. What about security? Biometric login—Face ID or fingerprint—should be there from day one. Nobody wants to type passwords anymore.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
             {/* SIDEBAR */}
@@ -246,6 +252,15 @@ export default function TranscriptPage() {
         }}
         onApprove={handleApprove}
         approved={approved}
+      />
+      <TranscriptEditModal
+        open={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingSpeaker(null);
+        }}
+        onSave={handleSaveEdit}
+        speakerData={editingSpeaker}
       />
     </>
   );

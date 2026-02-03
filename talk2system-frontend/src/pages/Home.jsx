@@ -38,12 +38,6 @@ export default function Home() {
                 <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
               </Link>
               
-              <Link
-                to="/projects"
-                className="flex items-center gap-2 px-8 py-4 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white rounded-xl font-bold text-lg transition-all shadow-md border border-gray-200 dark:border-gray-700"
-              >
-                View Projects
-              </Link>
             </div>
           </div>
         </div>

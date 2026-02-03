@@ -19,6 +19,7 @@ import Dashboard from "../pages/dashboard/DashboardPage";
 import ProjectsPage from "../pages/projects/ProjectsPage";
 import ProjectDetails from "../pages/projects/ProjectDetailsPage";
 import AddProject from "../pages/projects/AddProjectDetailsPage";
+import AddParticipant from "../pages/projects/AddParticipantPage";
 import EmptyProjectsPage from "../pages/projects/EmptyProjectsPage";
 
 // Recording & Transcript
@@ -59,6 +60,7 @@ export default function AppRoutes() {
           <Route index element={<ProjectsPage />} />
           <Route path="new" element={<AddProject />} />
           <Route path=":id" element={<ProjectDetails />} />
+          <Route path=":id/add-participant" element={<AddParticipant />} />
           <Route path="empty" element={<EmptyProjectsPage />} />
         </Route>
 

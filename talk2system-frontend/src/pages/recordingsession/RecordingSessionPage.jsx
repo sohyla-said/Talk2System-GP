@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const RecordingSessionPage = () => {
+  const navigate = useNavigate();
   const [hours, setHours] = useState(0);
   const [minutes, setMinutes] = useState(0);
   const [seconds, setSeconds] = useState(0);
@@ -35,7 +37,14 @@ const RecordingSessionPage = () => {
   };
 
   const handleStopRecording = () => {
-    setIsRecording(false);
+    const confirmed = window.confirm(
+      'Are you sure you want to stop recording and proceed to the transcript page?'
+    );
+    
+    if (confirmed) {
+      setIsRecording(false);
+      navigate('/transcript');
+    }
   };
 
   const handleReset = () => {
