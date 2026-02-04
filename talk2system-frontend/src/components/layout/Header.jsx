@@ -33,18 +33,25 @@ export default function Header() {
        
       </NavLink>
 
-      {/* CENTER: NAV LINKS (Desktop only) */}
-      <nav className="hidden lg:flex items-center gap-2">
+      {/* NAV LINKS + User Avatar (Right) */}
+      <div className="flex items-center gap-2 ml-auto">
         <NavLink to="/dashboard" className={navLinkClasses}>
           <span className="material-symbols-outlined text-xl">grid_view</span>
           Dashboard
         </NavLink>
-
         <NavLink to="/projects" className={navLinkClasses}>
           <span className="material-symbols-outlined text-xl">folder</span>
           Projects
         </NavLink>
-      </nav>
+        <div
+          className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 ring-2 ring-white dark:ring-white/10 ml-2"
+          data-alt="User profile picture showing a smiling professional"
+          style={{
+            backgroundImage:
+              'url("https://lh3.googleusercontent.com/aida-public/AB6AXuAYI0aZKZE-VvkXhyWW_VwkFYcUyP5A363tXUVEJZI9IQnWLJZSWjkFjtum-9r3XSE2aVD8q0YI0GfCRdJIxBSKtp1Pfg7Zry0Fg84eK_N5mwr1GqwzCX5COa-xlc7aG6bGFjmklNozxNTGIxUGljxMdlZpIqIXGUGLRmHxXS6AL7I-lCz2VrQSTwq5dhA_r_SWqg4nvlg-lRdrXoX43iLvC3H9IyvL34_D9I_8Tj5CeSXFfNTeXhfQNhKm9MM-1TFcXFSXs8dmwWAe")',
+          }}
+        ></div>
+      </div>
     </header>
   );
 }
