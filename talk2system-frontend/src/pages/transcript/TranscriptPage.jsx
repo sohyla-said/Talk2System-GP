@@ -235,10 +235,6 @@ export default function TranscriptPage() {
                   </button>
                 </div>
                 <hr className="border-border-light dark:border-white/10" />
-                <button onClick={handleGenerate} className="flex w-full items-center justify-center gap-3 rounded-lg border border-border-light dark:border-white/10 bg-white dark:bg-transparent px-4 py-3 text-base font-bold text-text-dark dark:text-text-light shadow-soft transition-colors hover:bg-background-light dark:hover:bg-white/5">
-                  <span className="material-symbols-outlined text-xl">download</span>
-                  Export Transcript
-                </button>
               </div>
             </div>
           </div>

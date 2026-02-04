@@ -13,8 +13,14 @@ export default function AuthLayout() {
     <div className="min-h-screen flex flex-col bg-background-light dark:bg-background-dark text-[#1F2937] dark:text-gray-200">
 
       {/* Header */}
-      <header className="flex items-center justify-between px-6 sm:px-10 py-4 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-background-dark/80 backdrop-blur-sm">
-        
+      <header className="
+        h-14 flex items-center justify-between
+        whitespace-nowrap
+        border-b border-gray-200 dark:border-gray-700
+        px-6 sm:px-10 py-2
+        bg-white/80 dark:bg-background-dark/80
+        backdrop-blur-sm sticky top-0 z-20
+      ">   
         {/* Logo → Home */}
         <NavLink
           to="/"
@@ -23,7 +29,7 @@ export default function AuthLayout() {
           <img 
           src="/logo.png" 
           alt="Talk2System Logo" 
-          className="h-20 w-auto object-contain -my-4"
+          className="h-12 w-auto object-contain"
           onError={(e) => {
             e.target.onerror = null;
             e.target.style.display = 'none';
