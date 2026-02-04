@@ -33,6 +33,7 @@ Talk2System is a modern web application that streamlines the software requiremen
 - 📝 **AI Transcription** - Convert audio to text with accurate transcripts
 - ✅ **Requirements Extraction** - Automatically identify and categorize requirements
 - 📄 **Document Generation** - Create SRS documents and UML diagrams
+- 📝 **Transcription Summary** - Concise summaries of transcripts
 - 🗂️ **Project Management** - Organize multiple projects with sessions and artifacts
 - 📊 **Analytics Dashboard** - Track statistics and visualize project insights
 - 👥 **User Role Management** - Approval workflows for different user roles
