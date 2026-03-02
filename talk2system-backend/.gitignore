@@ -5,3 +5,4 @@ __pycache__/
 data/binary_classifier_dataset.xlsx
 data/NFR_categories_dataset.xlsx
 data/preprocessing_output.json
+data/testData.csv
