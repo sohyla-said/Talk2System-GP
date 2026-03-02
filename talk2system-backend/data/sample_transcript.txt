@@ -1,0 +1,35 @@
+[00:00:01] Sarah: Hi everyone, good morning.
+[00:00:04] Ahmed: Good morning, how are you?
+[00:00:07] Sarah: I'm good, thanks. So yeah, let's start.
+[00:00:12] ProductOwner: Um okay so the system must allow users to sign in and register.
+[00:00:18] Developer1: Uh, do you mean login and sign up?
+[00:00:21] ProductOwner: Yes exactly, it should allow them to log in using email and password.
+[00:00:30] SecurityLead: The system must be highly secure and it must not store passwords in plain text.
+[00:00:39] SecurityLead: It should encrypt them before saving them to the database.
+
+[00:00:48] UXDesigner: I mean the user interface should be simple, clean, and responsive.
+[00:00:55] UXDesigner: It should also load quickly.
+[00:01:02] Developer2: So basically the client can reset their password if they forget it, right?
+[00:01:09] ProductOwner: Yes, the user must be able to reset their password within 2 minutes.
+
+
+[00:01:18] QA: The system should not crash if the database goes down.
+[00:01:23] QA: It should handle errors gracefully and show a proper error message.
+[00:01:32] Developer1: Uh I guess it should also authenticate users via Google.
+[00:01:39] ProductOwner: Yes, the system may allow authentication using third-party providers.
+[00:01:48] SecurityLead: And it must prevent unauthorized access.
+[00:01:52] SecurityLead: It must not allow access without valid credentials.
+[00:02:00] Sarah: Nice to see everyone aligned on this.
+[00:02:04] Ahmed: Yeah so that makes sense.
+[00:02:08] ProductOwner: The system must allow login.
+[00:02:12] ProductOwner: Users should be able to log in.
+[00:02:16] ProductOwner: The system must allow users to authenticate.
+
+[00:02:25] Developer2: Well it should support up to 10,000 concurrent users.
+[00:02:32] Developer2: It must respond within 2 seconds under normal load.
+[00:02:40] QA: The system should generate an audit log.
+[00:02:45] QA: It must track user activity.
+[00:02:52] SecurityLead: The application must not allow SQL injection attacks.
+[00:02:59] SecurityLead: It should validate all inputs.
+[00:03:05] Sarah: Alright, I think that’s everything for today.
+[00:03:09] Ahmed: Thanks everyone.
