@@ -7,7 +7,6 @@ import spacy    #nlp framework
 from fastcoref import FCoref    #Fast neural Coreference Resolution system.
 from sentence_transformers import SentenceTransformer   #Library to generate sentence embeddings.
 from sklearn.metrics.pairwise import cosine_similarity
-from transformers import AutoTokenizer  #HuggingFace tokenizer
 
 # Load spaCy transformer model
 nlp = spacy.load("en_core_web_trf")
@@ -19,8 +18,6 @@ coref_model = FCoref(device="cpu")
 # Embedding → vector representation → cosine similarity detects duplicates.
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
-# HuggingFace tokenizer for ML model input
-hf_tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
 
 ############################    Step 1  ############################
@@ -255,22 +252,13 @@ def split_conjunctions(sentence: str) -> List[str]:
 
 
 ############################    Step 7  ############################
-# tokenize the same sentence in two different ways:
-# 1) spaCy tokenization → linguistic tokens (words)
-# 2) HuggingFace tokenizer → model-ready numeric tokens
+# tokenize the sentence using spaCy tokenization → linguistic tokens (words)
 def tokenize_sentence(sentence: str):
     doc = nlp(sentence)
     # tokenize the sentence into readable words by words and punctuation
     spacy_tokens = [token.text for token in doc if not token.is_punct and not token.is_space]
 
-    # Convert text into subword tokens, map them to numbers, prepare them for transformer models
-    hf_tokens = hf_tokenizer(
-        sentence,
-        truncation=True,    # If sentence is too long for the model: cut it to maximum allowed length
-        padding=False   # Do not add padding tokens, return exact token length
-    )["input_ids"]  # numeric IDs corresponding to tokens.
-
-    return spacy_tokens, hf_tokens
+    return spacy_tokens
 
 
 ############################    Step 8  ############################
@@ -391,7 +379,7 @@ def extract_speaker(sentence: str):
 ############################    Step 15  ############################
 # function to build the final json object to be stored
 def build_sentence_object(original_sentence: str, cleaned_sentence: str, speaker: str):
-    spacy_tokens, hf_tokens = tokenize_sentence(cleaned_sentence)
+    spacy_tokens = tokenize_sentence(cleaned_sentence)
     lemmas = lemmatize_sentence(cleaned_sentence)
     neg_flag, neg_token = detect_negation(cleaned_sentence)
 

@@ -1,8 +1,15 @@
-# Talk2System Backend - NLP Preprocessing Pipeline & Rule-Based Requirement Extraction
+# Talk2System Backend - Intelligent Requirements Extraction System
 
 ## Overview
 
-This project implements a comprehensive NLP model designed to process conversational transcripts and extract clean, structured requirements.
+This project implements a comprehensive NLP-based requirements extraction system that processes conversational transcripts and identifies functional and non-functional requirements. The system combines three powerful approaches:
+
+1. **Advanced Preprocessing Pipeline** - Transforms raw meeting transcripts into clean, atomic sentence objects
+2. **Rule-Based Extraction** - Deterministic pattern matching using linguistic features and domain knowledge
+3. **Machine Learning Models** - SVM-based classifiers trained on labeled requirement datasets
+4. **Hybrid Engine** - Confidence-based ensemble combining rule-based and ML predictions
+
+The system can classify requirements as Functional (FR) or Non-Functional (NFR) and further categorize NFRs into specific quality attributes (Security, Performance, Usability, etc.).
 
 ## Project Structure
 
@@ -13,16 +20,45 @@ talk2system-backend/
 │   ├── main.py                       # FastAPI app entry point
 │   └── nlp/
 │       ├── preprocessing.py          # Core preprocessing pipeline
-│       └── rule_engine.py            # Rule-based requirement extraction
+│       ├── rule_engine.py            # Rule-based requirement extraction
+│       ├── inference.py              # ML-based inference pipeline
+│       ├── hybrid_engine.py          # Hybrid ML + Rule-based engine
+├── ML/
+│   ├── dataset/
+│   │   ├── binary_classifier_dataset.csv        # FR/NFR binary classification dataset
+│   │   ├── NFR_categories_dataset.csv          # NFR category classification dataset
+│   │   ├── NFR_categories_dataset_balanced.xlsx # Balanced NFR dataset
+│   │   ├── PROMISE.csv                         # PROMISE requirements dataset
+│   │   ├── testData.csv                        # Test data for FR/NFR classifier 
+│   │   └── testData_nfr.csv                    # Test data for NFR category classifier
+│   ├── training/
+│   │   ├── train_fr_nfr_svm.py      # Train FR/NFR binary classifier
+│   │   └── train_nfr_svm.py          # Train NFR category classifier
+│   ├── evaluation/
+│   │   ├── evaluate_fr_nfr.py        # Evaluate FR/NFR classifier
+│   │   ├── evaluate_nfr.py           # Evaluate NFR category classifier
+│   ├── models/
+│   │   ├── fr_nfr_classifier.pkl              # Trained FR/NFR SVM classifier
+│   │   ├── fr_nfr_selector.pkl                # Feature selector for FR/NFR
+│   │   ├── fr_nfr_tfidf_vectorizer.pkl        # TF-IDF vectorizer for FR/NFR
+│   │   ├── nfr_category_classifier.pkl        # Trained NFR category SVM classifier
+│   │   ├── nfr_selector.pkl                   # Feature selector for NFR categories
+│   │   └── nfr_vectorizer.pkl                 # TF-IDF vectorizer for NFR categories
+│   └── analysis/
+│       └── datasets_EDA.ipynb        # Exploratory data analysis notebook
 ├── data/
-│   ├── sample_transcript.txt         # Sample input transcript
-│   ├── preprocessing_output.json     # Output from preprocessing pipeline
-│   └── rule_engine_output.json       # Output from rule-based engine
+│   ├── sample_transcript.txt                # Sample input transcript
+│   ├── preprocessing_output.json            # Output from preprocessing pipeline (ignored)
+│   ├── rule_engine_output.json              # Output from rule-based engine (ignored)
+│   ├── test_transcript_ml_inference.csv     # ML inference results (ignored)
+│   └── hybrid_inference_results.csv         # Hybrid inference results (ignored)
 ├── tests/
 │   ├── test_preprocessing.py         # Tests for preprocessing pipeline
 │   └── test_rule_engine.py           # Tests for rule-based engine
+├── venv/                             # Virtual environment (ignored)
+├── .gitignore                        # Git ignore rules
 ├── requirements.txt                  # Python dependencies
-└── README.md                      
+└── README.md                         # Project documentation
 ```
 
 ## Preprocessing Pipeline
@@ -91,6 +127,141 @@ Each extracted requirement is returned as a structured object containing:
 
 - `is_negative` - Boolean flag indicating whether the sentence expresses negation.
 
+## Machine Learning Models
+
+The project includes two trained Support Vector Machine (SVM) models for automated requirement classification:
+
+### 1. FR/NFR Binary Classifier
+
+**Purpose**: Classifies requirements as either Functional Requirements (FR) or Non-Functional Requirements (NFR).
+
+**Architecture**:
+- **Feature Extraction**: TF-IDF Vectorization with unigrams and bigrams (max 10,000 features)
+- **Feature Selection**: Chi-Square feature selection (top 5,000 features)
+- **Classifier**: Linear SVM with balanced class weights
+- **Training Dataset**: `binary_classifier_dataset.csv`
+
+**Training Process**:
+- 80/20 train-test split with stratified sampling
+- 5-fold cross-validation for robust evaluation
+- F1-macro scoring for balanced performance assessment
+
+**Model Files**:
+- `fr_nfr_tfidf_vectorizer.pkl` - TF-IDF feature extractor
+- `fr_nfr_selector.pkl` - Chi-square feature selector
+- `fr_nfr_classifier.pkl` - Trained SVM classifier
+
+**Performance**: Evaluated using classification report and confusion matrix on held-out test set. Cross-validation F1-macro score provides reliable performance estimate across different data splits. Achieved accuracy of 89% and F1-score 87%.
+
+### 2. NFR Category Classifier
+
+**Purpose**: Classifies Non-Functional Requirements into specific quality categories (e.g., Security, Performance, Usability, Reliability).
+
+**Architecture**:
+- **Feature Extraction**: TF-IDF Vectorization with unigrams, bigrams, and trigrams (max 15,000 features)
+- **Feature Selection**: Chi-Square feature selection (top 2,000 features)
+- **Classifier**: Linear SVM (C=1.5) with balanced class weights
+- **Training Dataset**: `NFR_categories_dataset.csv`
+
+**Training Process**:
+- 10-fold stratified cross-validation on full dataset
+- Cross-validation predictions for comprehensive evaluation
+- Final model trained on entire dataset for production use
+
+**Model Files**:
+- `nfr_vectorizer.pkl` - TF-IDF feature extractor
+- `nfr_selector.pkl` - Chi-square feature selector
+- `nfr_category_classifier.pkl` - Trained SVM classifier
+
+**Performance**: Evaluated using 10-fold cross-validation with classification report showing per-class precision, recall, and F1-scores. Confusion matrix reveals model performance across all NFR categories.
+
+### Model Evaluation
+
+Both models can be evaluated on test datasets:
+- **FR/NFR Classifier**: Run `ML/evaluation/evaluate_fr_nfr.py` with test data
+- **NFR Classifier**: Run `ML/evaluation/evaluate_nfr.py` with test data
+
+Evaluation outputs include:
+- Classification report (precision, recall, F1-score per class)
+- Confusion matrix (prediction vs. actual labels)
+- Predictions with confidence scores saved to CSV
+
+## ML Inference Pipeline
+
+The `inference.py` module provides a pure machine learning approach to requirement extraction from conversational transcripts.
+
+### Pipeline Steps
+
+1. **Preprocessing**: Transcript is processed through the `RequirementPreprocessingPipeline` to generate clean, atomic sentence objects
+2. **FR/NFR Classification**: Each sentence is classified as Functional or Non-Functional with a confidence score
+3. **NFR Category Prediction**: If classified as NFR, the sentence is further categorized into specific quality attributes
+4. **Confidence Scoring**: 
+   - FR/NFR confidence uses sigmoid transformation of SVM decision scores
+   - NFR category confidence uses softmax over multiclass decision scores
+
+### Usage
+
+```python
+from app.nlp.inference import infer_transcript_nfr_pipeline
+
+transcript = "User should be able to login securely. The system must respond within 2 seconds."
+results = infer_transcript_nfr_pipeline(transcript)
+```
+
+### Output Format
+
+Each result contains:
+- `sentence_id` - Unique identifier
+- `speaker` - Speaker name from transcript
+- `cleaned_sentence` - Preprocessed sentence text
+- `requirement_type` - FR or NFR
+- `requirement_confidence` - Confidence score (0-1)
+- `nfr_category` - Specific category if NFR (e.g., "Security", "Performance")
+- `nfr_category_confidence` - Category prediction confidence
+
+## Hybrid Inference Engine
+
+The `hybrid_engine.py` combines the strengths of both rule-based and machine learning approaches to achieve more robust requirement extraction.
+
+### Hybrid Strategy
+
+**Confidence-Based Selection**: For each sentence, both the rule-based engine and ML models make predictions. The final prediction is selected based on which approach has higher confidence.
+
+**Process Flow**:
+
+1. **Preprocessing**: Transcript passes through the `RequirementPreprocessingPipeline`
+2. **Parallel Prediction**:
+   - **ML Path**: FR/NFR classification → NFR category prediction (if applicable)
+   - **Rule Path**: Rule-based scoring → Type determination → NFR category extraction
+3. **Confidence Comparison**: Compare ML confidence vs. rule engine confidence
+4. **Selection**: Choose the prediction with higher confidence as the final result
+5. **Comprehensive Output**: Return both predictions for transparency and analysis
+
+### Why Hybrid?
+
+- **ML Strengths**: Generalizes well to unseen patterns, learns from labeled data
+- **Rule Strengths**: Highly precise on explicit patterns (modals, keywords, domain terms)
+- **Combined Power**: Achieves better coverage and accuracy by leveraging both approaches
+
+### Usage
+
+```python
+from app.nlp.hybrid_engine import hybrid_inference
+
+transcript = "The application must encrypt all user data. Users want a simple interface."
+results = hybrid_inference(transcript)
+```
+
+### Output Format
+
+Each result includes:
+- Standard fields: `sentence_id`, `speaker`, `cleaned_sentence`
+- **Final prediction**: `requirement_type`, `requirement_confidence`, `nfr_category`
+- **ML prediction**: `ml_prediction_type`, `ml_confidence`
+- **Rule prediction**: `rule_prediction_type`, `rule_confidence`
+
+This transparency allows analysis of when each approach performs better and facilitates continuous improvement.
+
 ## Installation
 
 ### Prerequisites
@@ -153,14 +324,115 @@ python tests/test_rule_engine.py
 ### Expected Output:
 The script will save a JSON file containing the extracted requirements.
 
+## Running the ML Inference Test
+
+### Execute the inference script:
+
+```powershell
+python app/nlp/inference.py
+```
+
+### What it does:
+- Reads the sample transcript from `data/sample_transcript.txt`
+- Processes it through the preprocessing pipeline
+- Applies ML models to classify each sentence as FR or NFR
+- Predicts NFR categories for non-functional requirements
+- Saves results to `data/test_transcript_ml_inference.csv`
+
+### Expected Output:
+A CSV file with columns: `sentence_id`, `speaker`, `cleaned_sentence`, `requirement_type`, `requirement_confidence`, `nfr_category`, `nfr_category_confidence`
+
+## Running the Hybrid Inference Test
+
+### Execute the hybrid engine script:
+
+```powershell
+python app/nlp/hybrid_engine.py
+```
+
+### What it does:
+- Reads the sample transcript from `data/sample_transcript.txt`
+- Processes it through the preprocessing pipeline
+- Runs both ML models and rule-based engine in parallel
+- Compares confidence scores and selects the best prediction
+- Saves comprehensive results to `data/hybrid_inference_results.csv`
+
+### Expected Output:
+A CSV file containing both the final predictions and individual ML/rule-based predictions for comparison and analysis.
+
+## Training the ML Models
+
+### Train the FR/NFR Binary Classifier:
+
+```powershell
+python ML/training/train_fr_nfr_svm.py
+```
+
+**Outputs**:
+- Classification report on test set
+- Confusion matrix
+- 5-fold cross-validation F1-macro score
+- Trained models saved to `ML/models/`
+
+### Train the NFR Category Classifier:
+
+```powershell
+python ML/training/train_nfr_svm.py
+```
+
+**Outputs**:
+- Classification report from 10-fold cross-validation
+- Confusion matrix
+- Trained models saved to `ML/models/`
+
+## Evaluating the ML Models
+
+### Evaluate FR/NFR Classifier on Test Data:
+
+```powershell
+python ML/evaluation/evaluate_fr_nfr.py
+```
+
+**Outputs**:
+- Classification report
+- Confusion matrix
+- Predictions with confidence scores saved to `ML/evaluation/test_predictions.csv`
+
+### Evaluate NFR Category Classifier on Test Data:
+
+```powershell
+python ML/evaluation/evaluate_nfr.py
+```
+
+**Outputs**:
+- Classification report
+- Confusion matrix  
+- Predictions with confidence scores saved to `ML/evaluation/test_predictions_nfr.csv`
+
 ## Dependencies
 
 Key libraries used:
-- **spaCy** - Advanced NLP processing
+
+**NLP & Language Processing**:
+- **spaCy** - Advanced NLP processing and linguistic analysis
 - **fastcoref** - Neural coreference resolution
 - **sentence-transformers** - Semantic similarity and deduplication
 - **transformers** - HuggingFace tokenizers
-- **scikit-learn** - Cosine similarity computation
+- **nltk** - Natural language toolkit for tokenization and lemmatization
+
+**Machine Learning**:
+- **scikit-learn** - SVM classifiers, TF-IDF vectorization, feature selection, evaluation metrics
+- **torch** - PyTorch deep learning framework (used by transformer models)
+- **joblib** - Model serialization and persistence
+
+**Data Processing**:
+- **pandas** - Data manipulation and CSV handling
+- **numpy** - Numerical computing
+- **scipy** - Scientific computing (softmax for confidence scores)
+
+**Utilities**:
+- **matplotlib & seaborn** - Data visualization
+- **datasets** - HuggingFace datasets library
 
 See `requirements.txt` for complete dependency list.
 
@@ -168,4 +440,12 @@ See `requirements.txt` for complete dependency list.
 
 - The pipeline is optimized for requirement extraction from conversational speech
 - Processing time depends on transcript length and model complexity
-- First run may take longer due to model loading
+- First run may take longer due to model loading and downloading spaCy models
+- **Three extraction approaches available**:
+  - **Rule-based** (`rule_engine.py`): Fast, deterministic, pattern-based extraction
+  - **ML-based** (`inference.py`): Learned patterns from labeled data, better generalization
+  - **Hybrid** (`hybrid_engine.py`): Best of both worlds, confidence-based selection
+- ML models are pre-trained and stored in `ML/models/` directory
+- Model retraining can be done using scripts in `ML/training/`
+- All evaluation metrics and predictions are saved for analysis and improvement
+- The hybrid approach provides transparency by showing both ML and rule-based predictions
