@@ -136,9 +136,12 @@ The project includes two trained Support Vector Machine (SVM) models for automat
 **Purpose**: Classifies requirements as either Functional Requirements (FR) or Non-Functional Requirements (NFR).
 
 **Architecture**:
-- **Feature Extraction**: TF-IDF Vectorization with unigrams and bigrams (max 10,000 features)
-- **Feature Selection**: Chi-Square feature selection (top 5,000 features)
-- **Classifier**: Linear SVM with balanced class weights
+- **Train/Test Split**: split data into 80% training and 20% testing
+- **Preprocess text**: Lowercase, remove punctuation, lemmatize
+- **Feature Extraction**: TF-IDF Vectorization with unigrams, bigrams and trigrams (max 15,000 features)
+- **Feature Selection**: Chi-Square feature selection (top 8,000 features)
+- **Classifier**: Linear SVM (with C tuned using GridSerach with StratifiedKFold(5)) with balanced class weights
+- **Evaluation**: classification report + confusion matrix + CV stability check
 - **Training Dataset**: `binary_classifier_dataset.csv`
 
 **Training Process**:
@@ -151,16 +154,19 @@ The project includes two trained Support Vector Machine (SVM) models for automat
 - `fr_nfr_selector.pkl` - Chi-square feature selector
 - `fr_nfr_classifier.pkl` - Trained SVM classifier
 
-**Performance**: Evaluated using classification report and confusion matrix on held-out test set. Cross-validation F1-macro score provides reliable performance estimate across different data splits. Achieved accuracy of 89% and F1-score 87%.
+**Performance**: Evaluated using classification report and confusion matrix on held-out test set. Cross-validation F1-macro score provides reliable performance estimate across different data splits. Achieved 90% accuracy and F1-score on the test split. Achieveing 96% accuracy and f1-score on new unseen test dataset.
 
 ### 2. NFR Category Classifier
 
-**Purpose**: Classifies Non-Functional Requirements into specific quality categories (e.g., Security, Performance, Usability, Reliability).
+**Purpose**: Classifies Non-Functional Requirements into specific quality categories (e.g., Security, Performance, Usability,...).
 
 **Architecture**:
+- **Preprocess text**: Lowercase, remove punctuation, lemmatize
 - **Feature Extraction**: TF-IDF Vectorization with unigrams, bigrams, and trigrams (max 15,000 features)
 - **Feature Selection**: Chi-Square feature selection (top 2,000 features)
-- **Classifier**: Linear SVM (C=1.5) with balanced class weights
+- **Classifier**: Linear SVM (with C tuned using GridSerach with StratifiedKFold(10) ) with balanced class weights
+- **Cross-val predictions**: simulates a train/test split — 10 times. -> there is no need and it's better than making 1 train/test split
+- **Evaluation**: classification report + confusion matrix + CV stability check
 - **Training Dataset**: `NFR_categories_dataset.csv`
 
 **Training Process**:

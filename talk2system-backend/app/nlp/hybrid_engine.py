@@ -11,9 +11,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from app.nlp.preprocessing import RequirementPreprocessingPipeline
 from app.nlp.rule_engine import RuleBasedRequirementEngine
 
-nltk.download("punkt")
-nltk.download("stopwords")
-nltk.download("wordnet")
+# nltk.download("punkt")
+# nltk.download("stopwords")
+# nltk.download("wordnet")
 
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer

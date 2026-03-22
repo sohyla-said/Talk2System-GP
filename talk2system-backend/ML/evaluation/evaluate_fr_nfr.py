@@ -12,9 +12,9 @@ from sklearn.metrics import classification_report, confusion_matrix
 from scipy.special import softmax
 
 # download if not already installed
-nltk.download("punkt")
-nltk.download("stopwords")
-nltk.download("wordnet")
+# nltk.download("punkt")
+# nltk.download("stopwords")
+# nltk.download("wordnet")
 
 
 ############################    Load Saved Models ############################

@@ -9,16 +9,16 @@ from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import word_tokenize
 
 # ML
-from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, StratifiedKFold
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.svm import LinearSVC
 from sklearn.metrics import classification_report, confusion_matrix
 
 # Download required nltk resources (run once)
-nltk.download('punkt')
-nltk.download('stopwords')
-nltk.download('wordnet')
+# nltk.download('punkt')
+# nltk.download('stopwords')
+# nltk.download('wordnet')
 
 
 ############################    Load Dataset  ############################
@@ -69,10 +69,12 @@ y_test = test_df["label"]
 
 
 ############################    TF_IDF Vectorization  ############################
+
 vectorizer = TfidfVectorizer(
-    ngram_range=(1,2),     # unigrams + bigrams
-    max_features=10000,
-    min_df=2
+    ngram_range=(1, 3),     # unigrams + bigrams + trigrams
+    max_features=15000,
+    min_df=1,                # keep rare but meaningful domain terms
+    sublinear_tf=True        # log-scale TF to reduce dominance of frequent words
 )
 
 X_train = vectorizer.fit_transform(X_train_text)
@@ -82,20 +84,35 @@ X_test = vectorizer.transform(X_test_text)
 ############################    Chi-Square Feature Selection  ############################
 selector = SelectKBest(
     score_func=chi2,
-    k=5000
+    k=8000
 )
 
 X_train = selector.fit_transform(X_train, y_train)
 X_test = selector.transform(X_test)
 
+############################    Grid Search - Tune C  ############################
+param_grid = {"C": [0.01, 0.1, 0.5, 1.0, 5.0, 10.0]}
 
-############################    Train SVM Classifier  ############################
-classifier = LinearSVC(class_weight="balanced")
+# Stratified ensures each fold has the same FR/NFR ratio as the full training set.
+skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
-classifier.fit(X_train, y_train)
+grid_search = GridSearchCV(
+    LinearSVC(class_weight="balanced"),
+    param_grid, 
+    cv=skf,
+    scoring='f1_macro',
+    n_jobs=-1
+)
+
+grid_search.fit(X_train, y_train)
+
+print("\nBest C:", grid_search.best_params_["C"])
+print("Best CV F1 (macro):", round(grid_search.best_score_, 4))
 
 
 ############################    Predict  ############################
+classifier = grid_search.best_estimator_
+
 y_pred = classifier.predict(X_test)
 
 
@@ -107,17 +124,22 @@ print("\nConfusion Matrix\n")
 print(confusion_matrix(y_test, y_pred))
 
 
-############################    Cross Validation   ############################
+############################    Cross Validation - Stability Check   ############################
 
 scores = cross_val_score(
     classifier,
     X_train,
     y_train,
-    cv=5,
+    cv=skf,
     scoring="f1_macro"
 )
 
 print("\nCross Validation Macro F1:", scores.mean())
+
+if scores.std() > 0.05:
+    print("⚠️  High variance detected — consider collecting more balanced data.")
+else:
+    print("✅  Model is stable across folds.")
 
 
 ############################    Save Models  ############################
