@@ -9,6 +9,8 @@ data/testData.csv
 data/rule_engine_output.json
 data/hybrid_inference_results.csv
 data/test_transcript_ml_inference.csv
+data/binary_classifier_dataset.xlsx
+data/NFR_categories_dataset.xlsx
 
 ML/evaluation/test_predictions_nfr.csv
 ML/evaluation/test_predictions.csv

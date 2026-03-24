@@ -11,9 +11,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from app.nlp.preprocessing import RequirementPreprocessingPipeline
 from app.nlp.rule_engine import RuleBasedRequirementEngine
 
-# nltk.download("punkt")
-# nltk.download("stopwords")
-# nltk.download("wordnet")
+nltk.download("punkt")
+nltk.download("stopwords")
+nltk.download("wordnet")
 
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
@@ -98,16 +98,28 @@ def hybrid_inference(transcript: str) -> List[dict]:
         if not rule_result:
             continue
         # Step 3: Compare confidences and select the higher one
-        if rule_result and ml_conf < rule_result["req_confidence"]:
+        if rule_result and ml_conf < rule_result["req_type_confidence"]:
             # Use rule engine
             final_type = rule_result["req_type"]
-            final_conf = rule_result["req_confidence"]
+            final_conf = rule_result["req_type_confidence"]
             final_nfr_cat = rule_result.get("quality_category")
         else:
             # Use ML
             final_type = ml_type
             final_conf = ml_conf
             final_nfr_cat = ml_nfr_category
+
+        # Step 3B: If final decision is NFR → compare category confidence
+        if final_type == "NFR":
+            rule_cat_conf = rule_result.get("quality_category_confidence", 0) or 0
+            ml_cat_conf = ml_nfr_conf or 0
+
+            if ml_cat_conf > rule_cat_conf:
+                final_nfr_cat = ml_nfr_category
+                final_conf = ml_cat_conf
+            else:
+                final_nfr_cat = rule_result.get("quality_category")
+                final_conf = rule_cat_conf
 
         result = {
             "sentence_id": sentence_obj["id"],
@@ -119,7 +131,7 @@ def hybrid_inference(transcript: str) -> List[dict]:
             "ml_prediction_type": ml_type,
             "ml_confidence": round(ml_conf, 3),
             "rule_prediction_type": rule_result["req_type"] if rule_result else None,
-            "rule_confidence": round(rule_result["req_confidence"], 3) if rule_result else None
+            "rule_confidence": round(rule_result["req_type_confidence"], 3) if rule_result else None
         }
 
         results.append(result)

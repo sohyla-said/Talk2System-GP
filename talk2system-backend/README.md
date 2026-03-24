@@ -117,6 +117,8 @@ Each extracted requirement is returned as a structured object containing:
 
 - `quality_category` - Non-functional or quality-related category (e.g., Security, Performance).
 
+- `quality_category_confidence` - Confidence score for the predicted NFR category.
+
 - `actor` - The entity performing the action in the sentence.
 
 - `action` - The verb or action described in the sentence.

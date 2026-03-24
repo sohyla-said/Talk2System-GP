@@ -47,9 +47,7 @@ class RuleBasedRequirementEngine:
             "look_and_feel": {"modern", "professional", "consistent", "aesthetic", "look and feel", "design", "appearance", "ui", "user interface","color", "layout", "theme","visual"},
             "maintainability": {"maintainable", "modular", "well-documented", "clean code", "refactor", "code quality", "maintainability"},
             "operability": {"monitor", "logging", "alert", "diagnose", "operability","operate"},
-            "portability": {"portable", "platform-independent", "cross-platform", "portability", "environment","support", "compatible"},
-
-
+            "portability": {"portable", "platform-independent", "cross-platform", "portability", "environment","support", "compatible"}
         }
 
         # Known system actors
@@ -83,8 +81,6 @@ class RuleBasedRequirementEngine:
     def score_requirement_type(self, lemmas: List[str], doc, sentence: str):
         fr_score = 0.0
         nfr_score = 0.0
-        nfr_category_scores = {cat: 0.0 for cat in self.nfr_keywords}  # Track per NFR category
-
         lemma_set = set(lemmas)
 
         # 1️- Modal contribution
@@ -102,67 +98,39 @@ class RuleBasedRequirementEngine:
                 fr_score += self.weights["functional_verb"]
 
         # 3️- NFR keywords scoring (with per-category scores)
+        category_hits = {cat: 0 for cat in self.nfr_keywords}
         for category, keywords in self.nfr_keywords.items():
             for lemma in lemma_set:
                 if lemma in keywords:
                     nfr_score += self.weights["nfr_keyword"]
-                    nfr_category_scores[category] += self.weights["nfr_keyword"]
+                    category_hits[category] += self.weights["nfr_keyword"]
 
         # 4️- Time pattern detection (boost performance)
         if re.search(self.time_pattern, sentence.lower()):
             nfr_score += self.weights["time_expression"]
-            nfr_category_scores["performance"] += self.weights["time_expression"]
+            category_hits["performance"] += self.weights["time_expression"]
 
         # 5️- Normalize scores for FR/NFR
         total_score = fr_score + nfr_score
         if total_score == 0:
-            return "FR", None, 0.5
-
+            return "FR", None, 0.5, None
         fr_confidence = fr_score / total_score
         nfr_confidence = nfr_score / total_score
-        
-        # Normalize NFR categories
-        total_category_score = sum(nfr_category_scores.values())
 
-        if total_category_score > 0:
-            normalized_category_scores = {
-                cat: round(score / total_category_score, 3)
-                for cat, score in nfr_category_scores.items()
-                if score > 0
-            }
-        else:
-            normalized_category_scores = {}
-        
 
-        # Final decision
+        # Determine NFR category
         if nfr_confidence > fr_confidence:
-
-            best_category, best_score = max(
-                nfr_category_scores.items(),
-                key=lambda x: x[1]
+            best_category = max(category_hits, key=lambda k: category_hits[k])
+            # Count all NFR-related words in sentence
+            total_nfr_words = sum(
+                1 for lemma in lemma_set if any(lemma in keywords for keywords in self.nfr_keywords.values())
             )
-
-            category_confidence = (
-                round(best_score / total_category_score, 3)
-                if total_category_score > 0 else 0.0
-            )
-
-            return (
-                "NFR",
-                best_category,
-                round(nfr_confidence, 3),
-                category_confidence,
-                normalized_category_scores
-            )
-
+            category_confidence = 0.0
+            if total_nfr_words > 0:
+                category_confidence = round((category_hits[best_category] / total_nfr_words) * nfr_confidence, 3)
+            return "NFR", best_category, round(nfr_confidence,3), category_confidence
         else:
-            return (
-                "FR",
-                None,
-                round(fr_confidence, 3),
-                None,
-                {}
-            )
+            return "FR", None, round(fr_confidence,3), None
 
 
     # ===============================
@@ -307,12 +275,10 @@ class RuleBasedRequirementEngine:
 
         cleaned_sentence = sentence_obj["cleaned_sentence"]
         lemmas = sentence_obj["lemmas"]
-
         doc = nlp(cleaned_sentence)
 
         # 1. Detect trigger
         is_req, trigger_type, req_confidence = self.detect_requirement_trigger(lemmas)
-
         if not is_req:
             return None
 
