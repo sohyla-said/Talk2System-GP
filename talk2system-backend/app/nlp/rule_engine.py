@@ -38,10 +38,18 @@ class RuleBasedRequirementEngine:
         # NFR keywords dictionary
         self.nfr_keywords = {
             "performance": {"fast", "slow", "latency", "response", "within", "seconds", "time", "efficient", "optimize", self.time_pattern, "performance"},
-            "security": {"secure", "encrypt", "authentication", "authorization", "vulnerability", "attack", "breach","unauthorized", "unauthenticated", "unsecure", "access", "security","credentials"},
+            "security": {"secure", "encrypt", "authentication", "authorization", "vulnerability", "attack", "breach","unauthorized", "unauthenticated", "unsecure", "access", "security","credentials","malicious", "data protection", "privacy"},
             "usability": {"easy", "user-friendly", "intuitive", "simple", "clear", "accessible", "responsive", "usability"},
-            "reliability": {"available", "uptime", "recover", "fail", "reliable", "robust", "resilient", "reliability"},
-            "scalability": {"scalable", "load", "concurrent", "scale", "scaling", "scalability"}
+            "availability": {"available", "uptime", "recover", "fail", "reliable", "robust", "resilient", "reliability"},
+            "scalability": {"scalable", "load", "concurrent", "scale", "scaling", "scalability"},
+            "fault_tolerance": {"fault-tolerant", "redundant", "backup", "failover", "fault tolerance","crash" },
+            "legality": {"compliant", "regulation", "law", "legal", "compliance", "gdpr", "hipaa", "pci" ,"standards", "audit", "legal requirements","guidelines"},
+            "look_and_feel": {"modern", "professional", "consistent", "aesthetic", "look and feel", "design", "appearance", "ui", "user interface","color", "layout", "theme","visual"},
+            "maintainability": {"maintainable", "modular", "well-documented", "clean code", "refactor", "code quality", "maintainability"},
+            "operability": {"monitor", "logging", "alert", "diagnose", "operability","operate"},
+            "portability": {"portable", "platform-independent", "cross-platform", "portability", "environment","support", "compatible"},
+
+
         }
 
         # Known system actors
@@ -112,14 +120,50 @@ class RuleBasedRequirementEngine:
 
         fr_confidence = fr_score / total_score
         nfr_confidence = nfr_score / total_score
+        
+        # Normalize NFR categories
+        total_category_score = sum(nfr_category_scores.values())
 
-        # 6️- Determine NFR category based on highest score
-        if nfr_confidence > fr_confidence:
-            # pick the category with highest cumulative score
-            best_category = max(nfr_category_scores.items(), key=lambda x: x[1])[0]
-            return "NFR", best_category, round(nfr_confidence, 3)
+        if total_category_score > 0:
+            normalized_category_scores = {
+                cat: round(score / total_category_score, 3)
+                for cat, score in nfr_category_scores.items()
+                if score > 0
+            }
         else:
-            return "FR", None, round(fr_confidence, 3)
+            normalized_category_scores = {}
+        
+
+        # Final decision
+        if nfr_confidence > fr_confidence:
+
+            best_category, best_score = max(
+                nfr_category_scores.items(),
+                key=lambda x: x[1]
+            )
+
+            category_confidence = (
+                round(best_score / total_category_score, 3)
+                if total_category_score > 0 else 0.0
+            )
+
+            return (
+                "NFR",
+                best_category,
+                round(nfr_confidence, 3),
+                category_confidence,
+                normalized_category_scores
+            )
+
+        else:
+            return (
+                "FR",
+                None,
+                round(fr_confidence, 3),
+                None,
+                {}
+            )
+
 
     # ===============================
     # Step 3: Actor Extraction
@@ -274,7 +318,7 @@ class RuleBasedRequirementEngine:
 
         # 2. Classify type
         # req_type, quality_category = self.classify_requirement_type(lemmas, doc)
-        req_type, quality_category, type_confidence = self.score_requirement_type(
+        req_type, quality_category, type_confidence ,category_confidence = self.score_requirement_type(
             lemmas, doc, cleaned_sentence
         )
 
@@ -295,6 +339,7 @@ class RuleBasedRequirementEngine:
             "req_type_confidence": type_confidence,
             "req_type": req_type,
             "quality_category": quality_category,
+            "quality_category_confidence": category_confidence,
             "actor": actor,
             "action": action,
             "direct_object": direct_object,
