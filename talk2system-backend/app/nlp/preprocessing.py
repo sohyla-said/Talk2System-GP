@@ -155,13 +155,27 @@ def segment_sentences(text: str) -> List[str]:
         if not block:
             continue
 
-        # Extract speaker
-        match = re.match(r'^([A-Za-z0-9_]+:)\s*(.*)', block)
-        if not match:
-            continue
+        # # Extract speaker
+        # match = re.match(r'^([A-Za-z0-9_]+:)\s*(.*)', block)
+        # if not match:
+        #     continue
 
-        speaker = match.group(1)
-        content = match.group(2)
+        # speaker = match.group(1)
+        # content = match.group(2)
+
+        # if not content.strip():
+        #     continue
+
+        match = re.match(r'^([A-Za-z0-9_]+:)\s*(.*)', block, re.DOTALL)
+
+        if match:
+            # ✅ Has speaker label → original behavior
+            speaker = match.group(1)
+            content = match.group(2)
+        else:
+            # ✅ No speaker label → treat whole block as content
+            speaker = "Unknown:"
+            content = block
 
         if not content.strip():
             continue
@@ -367,10 +381,19 @@ def normalize_domain_terms(sentence: str) -> str:
 
 ############################    Step 14  ############################
 # extract the speaker label from the sentence
+# def extract_speaker(sentence: str):
+#     match = re.match(r'^\s*([A-Za-z0-9_]+)\s*:\s*(.*)', sentence)
+#     if match:
+#         speaker = match.group(1)
+#         content = match.group(2)
+#         return speaker, content
+#     return None, sentence
 def extract_speaker(sentence: str):
     match = re.match(r'^\s*([A-Za-z0-9_]+)\s*:\s*(.*)', sentence)
     if match:
         speaker = match.group(1)
+        # Return None for unknown/unlabeled speakers
+        speaker = None if speaker == "Unknown" else speaker
         content = match.group(2)
         return speaker, content
     return None, sentence
