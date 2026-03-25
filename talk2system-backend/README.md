@@ -18,6 +18,17 @@ talk2system-backend/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py                       # FastAPI app entry point
+│   ├── api/
+│   │   ├── requirements.py           # API endpoints for requirement extraction
+│   ├── db/
+│   │   ├── base.py                   # Database base model
+│   │   ├── session.py                # Database session management
+│   ├── models/                       # Database models
+│   │   ├── requirement.py            # Requirement model
+│   │   ├── project.py                # Project model
+│   ├── services/
+│   │   ├── requirement_service.py     # Business logic for requirements
+│   │   ├── project_service.py          # Business logic for projects
 │   └── nlp/
 │       ├── preprocessing.py          # Core preprocessing pipeline
 │       ├── rule_engine.py            # Rule-based requirement extraction
@@ -270,6 +281,84 @@ Each result includes:
 
 This transparency allows analysis of when each approach performs better and facilitates continuous improvement.
 
+## Database Storage
+
+The system uses **PostgreSQL** as its primary database to persist extracted requirements and project metadata.
+
+### Prerequisites
+
+- **PostgreSQL** must be installed on your machine.
+  Download the installer here: [https://www.postgresql.org/download/](https://www.postgresql.org/download/)
+- During installation, set the following credentials:
+  - **Username**: `postgres` by default
+  - **Password**: `0000`
+  - **Port**: `5432`
+
+### Database Setup
+
+1. **After installing PostgreSQL, create the database:**
+
+   Right-click on the `Databases` section in pgAdmin and select `Create > Database...`. Name the database `talk2system` and save.
+
+Enter password `0000` when prompted.
+
+
+2. **The connection URL used by the app is:**
+```
+   postgresql://postgres:0000@localhost:5432/talk2system
+```
+   This is configured in `app/db/session.py`.
+
+3. **Tables are created automatically** when the FastAPI app starts — no manual migration needed. The app calls:
+```python
+   Base.metadata.create_all(bind=engine)
+```
+
+
+### Database Schema
+
+The system uses two tables:
+
+**`projects`** — Stores project metadata:
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | Integer (PK) | Auto-incremented project ID |
+| `name` | String | Project name |
+
+**`requirements`** — Stores extracted requirements per project:
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | Integer (PK) | Auto-incremented requirement ID |
+| `project_id` | Integer (FK) | References `projects.id` |
+| `requirements_json` | JSON | Full structured extraction output |
+| `created_at` | DateTime | Timestamp of extraction |
+
+
+
+### Stored JSON Structure
+
+Each row in the `requirements` table stores a `requirements_json` field with the following structure:
+```json
+{
+  "project_id": 1,
+  "total_requirements": 2,
+  "requirements": [
+    {
+      "sentence_id": "sent_a1b2c3",
+      "speaker": "Speaker1",
+      "cleaned_sentence": "The system must encrypt all user data.",
+      "requirement_type": "NFR",
+      "requirement_confidence": 0.91,
+      "nfr_category": "security",
+      "ml_prediction_type": "NFR",
+      "ml_confidence": 0.88,
+      "rule_prediction_type": "NFR",
+      "rule_confidence": 0.91
+    }
+  ]
+}
+```
+
 ## Installation
 
 ### Prerequisites
@@ -367,6 +456,27 @@ python app/nlp/hybrid_engine.py
 
 ### Expected Output:
 A CSV file containing both the final predictions and individual ML/rule-based predictions for comparison and analysis.
+
+## Running the API
+1. **Start the FastAPI server:**
+```powershell
+   uvicorn app.main:app --reload
+```
+
+2. **The server will be available at:**
+```
+   http://127.0.0.1:8000
+```
+
+3. **Access the interactive Swagger UI to test all endpoints in the browser:**
+```
+   http://127.0.0.1:8000/docs
+```
+
+
+### Expected Output:
+You can test the API endpoints for project creation and requirement extraction using the Swagger UI. The responses will include structured JSON outputs with extracted requirements.
+
 
 ## Training the ML Models
 
