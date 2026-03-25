@@ -332,6 +332,8 @@ The system uses two tables:
 | `project_id` | Integer (FK) | References `projects.id` |
 | `requirements_json` | JSON | Full structured extraction output |
 | `created_at` | DateTime | Timestamp of extraction |
+| `approval_status` | String | Approval status (pending, approved, rejected) |
+| `version` | String | Requirement version |
 
 
 
@@ -340,23 +342,41 @@ The system uses two tables:
 Each row in the `requirements` table stores a `requirements_json` field with the following structure:
 ```json
 {
-  "project_id": 1,
   "total_requirements": 2,
-  "requirements": [
+  "raw_requirements": [
     {
       "sentence_id": "sent_a1b2c3",
       "speaker": "Speaker1",
       "cleaned_sentence": "The system must encrypt all user data.",
       "requirement_type": "NFR",
-      "requirement_confidence": 0.91,
       "nfr_category": "security",
-      "ml_prediction_type": "NFR",
-      "ml_confidence": 0.88,
-      "rule_prediction_type": "NFR",
-      "rule_confidence": 0.91
+      "structure":{
+                "actor": "system",
+                "action": "encrypt",
+                "object": "user data",
+                "is_negative": false
+               },
+      "confidence":{
+         "final": 0.45, 
+         "ml_prediction_type": "NFR", 
+         "ml_confidence": 0.637, 
+         "ml_nfr_predidction": "US", 
+         "ml_nfr_confidence": 0.45, 
+         "rule_prediction_type": "NFR", 
+         "rule_confidence": 0.75, 
+         "rule_nfr_prediction": "security", 
+         "rule_nfr_confidence": 0.45}
     }
-  ]
+  ],
+  "grouped_requirements": {
+      "actors": ["system"], 
+      "functional_requirements": [
+         {"text": "the system shall allow users to login projects .", "actor": "system"}, 
+         {"text": "the system shall allow users to manage projects .", "actor": "system"}], 
+      "nonfunctional_requirements": []
+   }
 }
+
 ```
 
 ## Installation

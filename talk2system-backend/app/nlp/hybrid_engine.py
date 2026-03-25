@@ -112,7 +112,7 @@ def hybrid_inference(transcript: str) -> List[dict]:
         # Step 3B: If final decision is NFR → compare category confidence
         if final_type == "NFR":
             rule_cat_conf = rule_result.get("quality_category_confidence", 0) or 0
-            ml_cat_conf = ml_nfr_conf or 0
+            ml_cat_conf = round(ml_nfr_conf, 2) or 0
 
             if ml_cat_conf > rule_cat_conf:
                 final_nfr_cat = ml_nfr_category
@@ -125,13 +125,25 @@ def hybrid_inference(transcript: str) -> List[dict]:
             "sentence_id": sentence_obj["id"],
             "speaker": sentence_obj["speaker"],
             "cleaned_sentence": cleaned_sentence,
-            "requirement_type": final_type,
-            "requirement_confidence": round(final_conf, 3),
-            "nfr_category": final_nfr_cat,
-            "ml_prediction_type": ml_type,
-            "ml_confidence": round(ml_conf, 3),
-            "rule_prediction_type": rule_result["req_type"] if rule_result else None,
-            "rule_confidence": round(rule_result["req_type_confidence"], 3) if rule_result else None
+            "requirement_type": final_type,     # core classification
+            "nfr_category": final_nfr_cat,      # NFR grouping
+            "structure":{
+                "actor": rule_result["actor"] if rule_result else None,     # needed for grouping and UML
+                "action": rule_result["action"] if rule_result else None,   # usefyl for UML/SRS
+                "object": rule_result["direct_object"] if rule_result else None,    # useful for understanding
+                "is_negative": rule_result["is_negative"] if rule_result else None  # affects meaning
+            },
+            "confidence":{  # useful for debugging
+                "final": round(final_conf, 3),
+                "ml_prediction_type": ml_type,
+                "ml_confidence": round(ml_conf, 3),
+                "ml_nfr_predidction": ml_nfr_category if final_type == "NFR" else None,
+                "ml_nfr_confidence": ml_cat_conf if final_type == "NFR" else None,
+                "rule_prediction_type": rule_result["req_type"] if rule_result else None,
+                "rule_confidence": round(rule_result["req_type_confidence"], 3) if rule_result else None,
+                "rule_nfr_prediction": rule_result.get("quality_category") if final_type == "NFR" else None,
+                "rule_nfr_confidence": rule_cat_conf if final_type == "NFR" else None
+            }
         }
 
         results.append(result)

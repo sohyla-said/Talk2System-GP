@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, ForeignKey, DateTime, String
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -13,5 +13,9 @@ class Requirement(Base):
     requirements_json = Column(JSON, nullable=False)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    approval_status = Column(String(10), default='pending')
+
+    version = Column(String(10), default='v1')
 
     project = relationship("Project", back_populates="requirements")
