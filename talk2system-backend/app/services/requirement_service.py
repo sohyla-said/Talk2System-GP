@@ -51,7 +51,7 @@ class RequirementService:
             "approval_status": db_requirement.approval_status,  # used in the UI to display status and enable/diable buttons
             "version": db_requirement.version,  # used in the UI to display the requirements version
             "total_requirements": len(results),
-            "requirements_json": grouped
+            "requirements_grouped": grouped
         }
     
     # get latest requirement version
@@ -63,12 +63,14 @@ class RequirementService:
 
         if not req:
             raise ValueError("No requirements found")
+
+        grouped = RequirementService._extract_grouped_requirements(req.requirements_json)
         
         return{
             "id": req.id,
             "version": req.version,
             "approval_status": req.approval_status,
-            "data": req.requirements_json["grouped_requirements"]
+            "data": grouped
         }
     
     # get all requirements version of a project
@@ -92,6 +94,28 @@ class RequirementService:
                 for req in reqs
         ]
     
+
+    @staticmethod
+    def _extract_grouped_requirements(requirements_json: dict):
+        if not isinstance(requirements_json, dict):
+            return {
+                "actors": [],
+                "functional_requirements": [],
+                "nonfunctional_requirements": [],
+            }
+
+        grouped = requirements_json.get("grouped_requirements") or requirements_json.get("grouped") or {}
+
+        # Normalize key spelling for UI compatibility.
+        if "non_functional_requirements" in grouped and "nonfunctional_requirements" not in grouped:
+            grouped["nonfunctional_requirements"] = grouped.get("non_functional_requirements", [])
+
+        grouped.setdefault("actors", [])
+        grouped.setdefault("functional_requirements", [])
+        grouped.setdefault("nonfunctional_requirements", [])
+        return grouped
+    
+    
     # get requirement by id
     @staticmethod
     def get_requirement_by_id(db: Session, req_id: int):
@@ -100,12 +124,14 @@ class RequirementService:
         
         if not req:
             raise ValueError("Requirement not found")
+
+        grouped = RequirementService._extract_grouped_requirements(req.requirements_json)
         
         return{
             "id": req.id,
             "version": req.version,
             "approval_status": req.approval_status,
-            "data": req.requirements_json["grouped_requirements"]
+            "data": grouped
         }
     
     # edit/update requirement --> creates a new version
@@ -126,7 +152,7 @@ class RequirementService:
             project_id=old_req.project_id,
             requirements_json={
                 # "project_id": old_req.project_id,
-                "grouped": grouped_data
+                "grouped_requirements": grouped_data
             },
             version=new_version,
             approval_status="pending"

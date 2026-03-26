@@ -41,7 +41,7 @@ def extract_requirements(
             "requirement_id": result["id"],
             "version": result['version'],
             "approval_status": result['approval_status'],
-            "data": result["requirements_json"]
+            "data": result["requirements_grouped"]
         }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
