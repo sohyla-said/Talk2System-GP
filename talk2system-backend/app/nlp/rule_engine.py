@@ -32,7 +32,18 @@ class RuleBasedRequirementEngine:
             "create", "generate", "delete", "update",
             "store", "display", "allow", "login",
             "reset", "register", "save",
-            "approve", "submit"
+            "approve", "submit","send", "notify", "track", "manage", "process",
+            "receive", "view", "access", "validate", "authenticate",
+            "upload", "download", "export", "import", "search",
+            "assign", "reject", "confirm", "schedule", "report", "archive", "restore", "configure", "customize", "integrate", "monitor", "analyze", "optimize", "backup", "recover", "audit", "enforce", "escalate", "suspend", "reactivate", "deactivate", "delete", "remove", "add", "edit", "modify", "approve"
+        }
+
+        # Autonomous system verbs — system acts on its own, no human initiates it
+        self.autonomous_system_verbs = {
+            "send", "notify", "generate", "calculate", "process", "compute",
+            "schedule", "sync", "backup", "log", "monitor", "detect", "trigger",
+            "execute", "run", "dispatch", "broadcast", "refresh",
+            "archive", "encrypt", "index", "cache", "queue", "retry", "expire"
         }
 
         # NFR keywords dictionary
@@ -70,8 +81,21 @@ class RuleBasedRequirementEngine:
 
         # Implicit verb-based detection (fallback)
         for lemma in lemmas:
-            if lemma in {"create", "generate", "delete", "update", "store", "display", "allow"}:
+            if lemma in self.functional_verbs:
                 return True, "implicit_action", 0.6
+            
+        # any sentence with a known actor as subject + any action verb
+        has_known_actor = any(lemma in self.known_actors for lemma in lemmas)
+        has_any_verb = any(
+            lemma not in self.strong_modals
+            and lemma not in self.medium_modals
+            and lemma not in {"be", "have", "do", "say", "go", "get"}  # skip generic verbs
+            and len(lemma) > 3  # skip short noise words
+            for lemma in lemmas
+            if lemma.isalpha()
+        )
+        if has_known_actor and has_any_verb:
+            return True, "implicit_action", 0.55
 
         return False, "no_trigger", 0.0
     
@@ -136,16 +160,73 @@ class RuleBasedRequirementEngine:
     # ===============================
     # Step 3: Actor Extraction
     # ===============================
+
     def extract_actor(self, doc) -> Optional[str]:
 
+        subject = None
+        human_actor_default = "user"
+        found_actors = set()
+
+        # 1️⃣ Extract grammatical subject
         for token in doc:
             if token.dep_ in {"nsubj", "nsubjpass"}:
-                actor = token.text.lower()
-                if actor in self.known_actors:
-                    return actor
+                subject = token.text.lower()
+                break
+
+        # 2️⃣ Collect known actors in sentence
+        for token in doc:
+            if token.text.lower() in self.known_actors:
+                found_actors.add(token.text.lower())
+
+        # 3️⃣ Identify direct or prepositional objects
+        beneficiaries = set()
+        for token in doc:
+            if token.dep_ in {"dobj", "pobj"}:
+                # If the object is a known human actor → beneficiary
+                if token.text.lower() in {"user", "customer", "client", "employee"}:
+                    beneficiaries.add(token.text.lower())
+                else:
+                    # Also consider nouns that represent actions or entities benefiting humans
+                    for child in token.children:
+                        if child.text.lower() in {"user", "customer", "client", "employee"}:
+                            beneficiaries.add(child.text.lower())
+
+        # 4️⃣ Determine actor
+        # Case A: subject is human → actor = subject
+        human_subjects = {"user", "users","customer","customers" ,"client", "clients","managers" ,"manager", "admins", "admin", "employee", "employees"}
+        if subject and subject in human_subjects:
+            return subject
+
+        # Case B: subject = system but action benefits humans
+        if subject == "system" and beneficiaries:
+            return beneficiaries.pop()  # usually user
+
+        # Case C: subject = system, no explicit human beneficiary
+        if subject == "system" and not beneficiaries:
+            root_verb = None
+            for token in doc:
+                if token.dep_ == "ROOT" and token.pos_ == "VERB":
+                    root_verb = token
+                    break
+
+            if root_verb:
+                verb_lemma = root_verb.lemma_.lower()
+
+                if verb_lemma in self.autonomous_system_verbs:
+                    return "system" 
+                else:
+                    return human_actor_default  
+            else:
+                return "system"
+
+        # Case D: fallback if subject is a human actor mentioned anywhere
+        for actor in human_subjects:
+            if actor in found_actors:
                 return actor
 
-        return None
+        # Case E: fallback default
+        return human_actor_default
+
 
     # ===============================
     # Step 4: Action Extraction

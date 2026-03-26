@@ -25,7 +25,10 @@ embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 # quotes, fix broken punctuation. Remove duplicate punctuation.
 def normalize_text(text: str) -> str:
     text = text.strip()     # remove leading and trailing whitespace.
-    text = re.sub(r'\s+', ' ', text)  # replace multiple whitespace characters with a single space.
+    # Keep line boundaries so segmentation can split transcript lines into separate sentences.
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r'[ \t\f\v]+', ' ', text)  # collapse horizontal whitespace only.
+    text = re.sub(r'\n{2,}', '\n', text)      # collapse multiple blank lines.
     text = re.sub(r'[“”]', '"', text)   # replace smart quotes with standard double quotes
     text = re.sub(r"[‘’]", "'", text)   # replace smart apostrophes to standard apostrophes.
     text = re.sub(r'\.\.+', '.', text)  # replace multiple dots (...) with a single dot.
@@ -54,6 +57,28 @@ MODAL_GUARD = {
     "cannot", "must not", "not", "without", "within", "could", "may",
     "might", "would", "ought to"
 }
+
+REQUIREMENT_START_RE = re.compile(
+    r"\b(?:the\s+system|system|it)\s+(?:must|shall|should|will|can|could|may|might|would|need\s+to|has\s+to|required\s+to|ought\s+to)\b",
+    re.IGNORECASE,
+)
+
+
+def split_requirement_runs(line: str) -> List[str]:
+    """Split back-to-back requirement clauses when punctuation is missing."""
+    matches = list(REQUIREMENT_START_RE.finditer(line))
+    if len(matches) <= 1:
+        return [line]
+
+    parts = []
+    starts = [m.start() for m in matches]
+    for i, start in enumerate(starts):
+        end = starts[i + 1] if i + 1 < len(starts) else len(line)
+        chunk = line[start:end].strip()
+        if chunk:
+            parts.append(chunk)
+
+    return parts or [line]
 
 def remove_fillers(text: str) -> str:
     # send the text to Spacy
@@ -180,12 +205,21 @@ def segment_sentences(text: str) -> List[str]:
         if not content.strip():
             continue
 
-        # Now segment content only
-        doc = nlp(content)
-        for sent in doc.sents:
-            clean_sent = sent.text.strip()
-            if clean_sent:
-                sentences.append(f"{speaker} {clean_sent}")
+        lines = re.split(r'[.!?\n]+', content)
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+
+            # Split concatenated requirement clauses before spaCy sentence segmentation.
+            requirement_chunks = split_requirement_runs(line)
+            for chunk in requirement_chunks:
+                doc = nlp(chunk)
+                for sent in doc.sents:
+                    clean_sent = sent.text.strip()
+                    if clean_sent:
+                        sentences.append(f"{speaker} {clean_sent}")
 
     return sentences
 
@@ -475,4 +509,3 @@ class RequirementPreprocessingPipeline:
         ]
 
         return final_output
-    
