@@ -24,6 +24,7 @@ import EmptyProjectsPage from "../pages/projects/EmptyProjectsPage";
 
 // Recording & Transcript
 import RecordingSession from "../pages/recordingsession/RecordingSessionPage";
+import TranscriptInput from "../pages/recordingsession/TranscriptInputPage"
 import TranscriptView from "../pages/transcript/TranscriptPage";
 import TranscriptSummary from "../pages/transcript/Summary";
 
@@ -62,18 +63,21 @@ export default function AppRoutes() {
           <Route path=":id" element={<ProjectDetails />} />
           <Route path=":id/add-participant" element={<AddParticipant />} />
           <Route path="empty" element={<EmptyProjectsPage />} />
+          <Route path=":id/recording" element={<RecordingSession />} />
+          <Route path=":id/transcript-input" element={<TranscriptInput />} />
+          <Route path=":id/requirements" element={<RequirementsView />} />
+          <Route path=":id/artifacts/srs" element={<SRSDocument />} />
+          <Route path=":id/artifacts/uml" element={<UMLDiagrams />} />
         </Route>
 
-        <Route path="/recording" element={<RecordingSession />} />
 
         <Route path="/transcript">
           <Route index element={<TranscriptView />} />
           <Route path="summary" element={<TranscriptSummary />} />
         </Route>
 
-        <Route path="/requirements" element={<RequirementsView />} />
-        <Route path="/artifacts/srs" element={<SRSDocument />} />
-        <Route path="/artifacts/uml" element={<UMLDiagrams />} />
+        {/* <Route path="/requirements" element={<RequirementsView />} /> */}
+        
 
         <Route path="/results" element={<Results />} />
         

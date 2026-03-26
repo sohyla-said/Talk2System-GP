@@ -1,13 +1,14 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 export default function AddParticipantPage() {
   const navigate = useNavigate();
+  const { id: projectId } = useParams();
 
   const handleSubmit = (e) => {
     e.preventDefault();
     // Handle form submission logic here
-    navigate('/projects/1'); // Navigate back to project details
+    navigate(`/projects/${projectId}`); // Navigate back to project details
   };
 
   return (

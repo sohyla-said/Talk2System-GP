@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 const RecordingSessionPage = () => {
   const navigate = useNavigate();
@@ -7,6 +7,7 @@ const RecordingSessionPage = () => {
   const [minutes, setMinutes] = useState(0);
   const [seconds, setSeconds] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
+  const { id: projectId } = useParams();
 
   useEffect(() => {
     let interval = null;
@@ -57,9 +58,9 @@ const RecordingSessionPage = () => {
   const progress = isRecording ? Math.min((seconds + minutes * 60 + hours * 3600) / 36, 100) : 0;
 
   return (
-    <div className="w-full">
-      <div className="px-4 sm:px-10 md:px-20 lg:px-40 flex flex-1 justify-center py-5">
-        <div className="layout-content-container flex flex-col w-full max-w-[960px] flex-1">
+    <div className="w-full flex flex-col min-h-screen">
+      <div className="flex flex-1 justify-center px-4 sm:px-10 md:px-20 lg:px-40 py-5">
+        <div className="layout-content-container flex flex-col w-full max-w-[960px]">
           <main className="flex flex-col items-center py-10 px-4">
             <div className="flex flex-wrap justify-between gap-3 p-4 w-full">
               <div className="flex w-full flex-col gap-3 text-center">
@@ -136,7 +137,10 @@ const RecordingSessionPage = () => {
                   <span className="material-symbols-outlined text-3xl">upload_file</span>
                   <span className="font-semibold text-sm">Upload Audio</span>
                 </button>
-                <button className="flex flex-col items-center justify-center gap-2 p-4 bg-[#e9e7f4] dark:bg-primary/20 text-primary dark:text-indigo-300 rounded-lg hover:bg-[#dcd9f0] dark:hover:bg-primary/30 transition-colors duration-200 h-28">
+                <button 
+                  onClick={() => navigate(`/projects/${projectId}/transcript-input`)}
+                  className="flex flex-col items-center justify-center gap-2 p-4 bg-[#e9e7f4] dark:bg-primary/20 text-primary dark:text-indigo-300 rounded-lg hover:bg-[#dcd9f0] dark:hover:bg-primary/30 transition-colors duration-200 h-28"
+                >
                   <span className="material-symbols-outlined text-3xl">description</span>
                   <span className="font-semibold text-sm">Upload Transcript</span>
                 </button>

@@ -1,11 +1,12 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 const ProjectDetailsPage = () => {
   const navigate = useNavigate();
+  const { id: projectId } = useParams();
 
   const handleStartMeetingSession = () => {
-    navigate('/recording');
+    navigate(`/projects/${projectId}/recording`);
   };
 
   return (
@@ -51,13 +52,13 @@ const ProjectDetailsPage = () => {
             <div className="border-b border-gray-200 dark:border-gray-700 px-4">
               <div className="flex gap-8">
                 <button 
-                  onClick={() => navigate('/projects/1')}
+                  onClick={() => navigate(`/projects/${projectId}`)}
                   className="flex flex-col items-center justify-center border-b-[3px] border-b-primary text-gray-900 dark:text-white pb-[13px] pt-4"
                 >
                   <p className="text-sm font-bold leading-normal tracking-[0.015em]">Sessions</p>
                 </button>
                 <button 
-                  onClick={() => navigate('/requirements')}
+                  onClick={() => navigate(`/projects/${projectId}/requirements`)}
                   className="flex flex-col items-center justify-center border-b-[3px] border-b-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 pb-[13px] pt-4"
                 >
                   <p className="text-sm font-bold leading-normal tracking-[0.015em]">Requirements</p>
