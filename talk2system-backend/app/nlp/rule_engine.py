@@ -64,6 +64,21 @@ class RuleBasedRequirementEngine:
         # Known system actors
         self.known_actors = {"user", "admin", "system", "customer", "manager", "employee", "client", "user interface"}
 
+        self.verb_semantics = {
+            "user_initiated": {
+                "login","register","create","update","delete","submit",
+                "request","view","access","manage"
+            },
+            "system_internal": {
+                "store","validate","compute","encrypt","process","calculate","save"
+            },
+            "system_mediated": {
+                "allow","enable","provide","support","track","notify",
+                "log","display","send"
+            }
+        }
+        self.actor_prepositions = {"for", "to", "by"}
+        self.default_actor = "user"
     # ===============================
     # Step 1: Requirement Trigger Detection
     # ===============================
@@ -161,73 +176,187 @@ class RuleBasedRequirementEngine:
     # Step 3: Actor Extraction
     # ===============================
 
+    # def extract_actor(self, doc) -> Optional[str]:
+
+    #     subject = None
+    #     human_actor_default = "user"
+    #     found_actors = set()
+
+    #     # 1️⃣ Extract grammatical subject
+    #     for token in doc:
+    #         if token.dep_ in {"nsubj", "nsubjpass"}:
+    #             subject = token.text.lower()
+    #             break
+
+    #     # 2️⃣ Collect known actors in sentence
+    #     for token in doc:
+    #         if token.text.lower() in self.known_actors:
+    #             found_actors.add(token.text.lower())
+
+    #     # 3️⃣ Identify direct or prepositional objects
+    #     beneficiaries = set()
+    #     for token in doc:
+    #         if token.dep_ in {"dobj", "pobj"}:
+    #             # If the object is a known human actor → beneficiary
+    #             if token.text.lower() in {"user", "customer", "client", "employee"}:
+    #                 beneficiaries.add(token.text.lower())
+    #             else:
+    #                 # Also consider nouns that represent actions or entities benefiting humans
+    #                 for child in token.children:
+    #                     if child.text.lower() in {"user", "customer", "client", "employee"}:
+    #                         beneficiaries.add(child.text.lower())
+
+    #     # 4️⃣ Determine actor
+    #     # Case A: subject is human → actor = subject
+    #     human_subjects = {"user", "users","customer","customers" ,"client", "clients","managers" ,"manager", "admins", "admin", "employee", "employees"}
+    #     if subject and subject in human_subjects:
+    #         return subject
+
+    #     # Case B: subject = system but action benefits humans
+    #     if subject == "system" and beneficiaries:
+    #         return beneficiaries.pop()  # usually user
+
+    #     # Case C: subject = system, no explicit human beneficiary
+    #     if subject == "system" and not beneficiaries:
+    #         root_verb = None
+    #         for token in doc:
+    #             if token.dep_ == "ROOT" and token.pos_ == "VERB":
+    #                 root_verb = token
+    #                 break
+
+    #         if root_verb:
+    #             verb_lemma = root_verb.lemma_.lower()
+
+    #             if verb_lemma in self.autonomous_system_verbs:
+    #                 return "system" 
+    #             else:
+    #                 return human_actor_default  
+    #         else:
+    #             return "system"
+
+    #     # Case D: fallback if subject is a human actor mentioned anywhere
+    #     for actor in human_subjects:
+    #         if actor in found_actors:
+    #             return actor
+
+    #     # Case E: fallback default
+    #     return human_actor_default
+
+
+    # ===============================
+    # SMART ACTOR EXTRACTION
+    # ===============================
     def extract_actor(self, doc) -> Optional[str]:
 
+        scores = {}
         subject = None
-        human_actor_default = "user"
-        found_actors = set()
+        root_verb = None
 
-        # 1️⃣ Extract grammatical subject
+        # initialize scores
+        for actor in self.known_actors:
+            scores[actor] = 0
+
+        # -------------------------------
+        # 1. SUBJECT + ROOT VERB
+        # -------------------------------
         for token in doc:
+
             if token.dep_ in {"nsubj", "nsubjpass"}:
-                subject = token.text.lower()
-                break
+                subject = token.lemma_.lower()
 
-        # 2️⃣ Collect known actors in sentence
-        for token in doc:
-            if token.text.lower() in self.known_actors:
-                found_actors.add(token.text.lower())
+                if subject.endswith("s"):
+                    subject = subject[:-1]
 
-        # 3️⃣ Identify direct or prepositional objects
-        beneficiaries = set()
+                if subject in scores:
+                    scores[subject] += 3
+
+            if token.dep_ == "ROOT" and token.pos_ == "VERB":
+                root_verb = token.lemma_.lower()
+
+        # -------------------------------
+        # 2. OBJECTS (beneficiaries)
+        # -------------------------------
         for token in doc:
             if token.dep_ in {"dobj", "pobj"}:
-                # If the object is a known human actor → beneficiary
-                if token.text.lower() in {"user", "customer", "client", "employee"}:
-                    beneficiaries.add(token.text.lower())
+                candidate = token.lemma_.lower()
+
+                if candidate.endswith("s"):
+                    candidate = candidate[:-1]
+
+                if candidate in scores and candidate != "system":
+                    scores[candidate] += 2
+
+        # -------------------------------
+        # 3. PASSIVE VOICE (agent)
+        # -------------------------------
+        for token in doc:
+            if token.dep_ == "agent":
+                for child in token.children:
+                    candidate = child.lemma_.lower()
+
+                    if candidate.endswith("s"):
+                        candidate = candidate[:-1]
+
+                    if candidate in scores:
+                        scores[candidate] += 4
+
+        # -------------------------------
+        # 4. PREPOSITIONAL ROLES
+        # -------------------------------
+        for token in doc:
+            if token.dep_ == "prep" and token.text.lower() in self.actor_prepositions:
+                for child in token.children:
+                    if child.dep_ == "pobj":
+                        candidate = child.lemma_.lower()
+
+                        if candidate.endswith("s"):
+                            candidate = candidate[:-1]
+
+                        if candidate in scores and candidate != "system":
+                            scores[candidate] += 2
+
+        # -------------------------------
+        # 5. VERB SEMANTICS
+        # -------------------------------
+        if root_verb:
+
+            if root_verb in self.verb_semantics["system_internal"]:
+                scores["system"] += 2
+
+            elif root_verb in self.verb_semantics["system_mediated"]:
+
+                # If a human object exists → prioritize it
+                human_candidates = [
+                    token.lemma_.lower()
+                    for token in doc
+                    if token.dep_ in {"dobj", "pobj"}
+                    and token.lemma_.lower().rstrip("s") in self.known_actors
+                    and token.lemma_.lower().rstrip("s") != "system"
+                ]
+
+                if human_candidates:
+                    for actor in human_candidates:
+                        scores[actor.rstrip("s")] += 3
                 else:
-                    # Also consider nouns that represent actions or entities benefiting humans
-                    for child in token.children:
-                        if child.text.lower() in {"user", "customer", "client", "employee"}:
-                            beneficiaries.add(child.text.lower())
+                    scores["user"] += 2  # fallback only
+            elif root_verb in self.verb_semantics["user_initiated"]:
+                scores["user"] += 3
 
-        # 4️⃣ Determine actor
-        # Case A: subject is human → actor = subject
-        human_subjects = {"user", "users","customer","customers" ,"client", "clients","managers" ,"manager", "admins", "admin", "employee", "employees"}
-        if subject and subject in human_subjects:
-            return subject
+        # -------------------------------
+        # 6. REDUCE SYSTEM DOMINANCE
+        # -------------------------------
+        if subject == "system":
+            scores["system"] -= 2
 
-        # Case B: subject = system but action benefits humans
-        if subject == "system" and beneficiaries:
-            return beneficiaries.pop()  # usually user
+        # -------------------------------
+        # 7. SELECT BEST ACTOR
+        # -------------------------------
+        best_actor = max(scores, key=scores.get)
 
-        # Case C: subject = system, no explicit human beneficiary
-        if subject == "system" and not beneficiaries:
-            root_verb = None
-            for token in doc:
-                if token.dep_ == "ROOT" and token.pos_ == "VERB":
-                    root_verb = token
-                    break
+        if scores[best_actor] <= 0:
+            return self.default_actor
 
-            if root_verb:
-                verb_lemma = root_verb.lemma_.lower()
-
-                if verb_lemma in self.autonomous_system_verbs:
-                    return "system" 
-                else:
-                    return human_actor_default  
-            else:
-                return "system"
-
-        # Case D: fallback if subject is a human actor mentioned anywhere
-        for actor in human_subjects:
-            if actor in found_actors:
-                return actor
-
-        # Case E: fallback default
-        return human_actor_default
-
-
+        return best_actor
     # ===============================
     # Step 4: Action Extraction
     # ===============================
