@@ -261,3 +261,64 @@ export default function TranscriptPage() {
     </>
   );
 }
+
+
+
+// ///// NEW CODE TO INTEGRATE WITH BACKEND TRANSCRIPT API
+// import React, { useEffect, useState } from "react";
+// import { useLocation, useParams } from "react-router-dom";
+
+// export default function TranscriptPage() {
+//   const { sessionId } = useParams();              // Get session id from URL
+//   const location = useLocation();                 // For passing state from Recording page
+//   const [transcript, setTranscript] = useState(""); // Transcript text
+//   const [loading, setLoading] = useState(false);   // Loading state
+//   const [error, setError] = useState("");          // Error message
+
+//   // On mount, either use state passed from previous page or fetch from backend
+//   useEffect(() => {
+//     if (location.state?.transcript) {
+//       setTranscript(location.state.transcript);
+//     } else {
+//       fetchTranscript();
+//     }
+//   }, []);
+
+//   // Function to fetch transcript from backend
+//   const fetchTranscript = async () => {
+//     try {
+//       setLoading(true);
+//       setError("");
+//       const response = await fetch(
+//         `http://localhost:8000/sessions/${sessionId}/transcript`
+//       );
+
+//       if (!response.ok) {
+//         throw new Error("Failed to fetch transcript");
+//       }
+
+//       const data = await response.json();
+//       setTranscript(data.transcript || "No transcript available");
+//     } catch (err) {
+//       console.error(err);
+//       setError("Unable to load transcript. Please try again.");
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   return (
+//     <div className="transcript-page-container w-full min-h-screen px-4 py-8 bg-background-light dark:bg-background-dark text-text-dark dark:text-text-light">
+//       <h1 className="text-4xl font-black mb-6">Transcript</h1>
+
+//       {loading && <p className="text-primary font-medium">Loading transcript...</p>}
+//       {error && <p className="text-red-500 font-medium">{error}</p>}
+
+//       {!loading && !error && (
+//         <div className="transcript-box bg-white dark:bg-background-dark/50 p-6 rounded-xl shadow-lg whitespace-pre-wrap text-base">
+//           {transcript || "No transcript available"}
+//         </div>
+//       )}
+//     </div>
+//   );
+// }

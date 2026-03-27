@@ -190,3 +190,95 @@ const RecordingSessionPage = () => {
 };
 
 export default RecordingSessionPage;
+
+
+
+// //////////NEW CODE TO INTEGRATE WITH BACKEND TRANSCRIPTION//////////
+
+// import React, { useState, useRef } from "react";
+// import { useNavigate, useParams } from "react-router-dom";
+// //import "talk2system-frontend/src/css/RecordingSessionPage.css";
+
+// export default function RecordingSessionPage() {
+//   const [isRecording, setIsRecording] = useState(false);
+//   const [loading, setLoading] = useState(false);
+//   const mediaRecorderRef = useRef(null);
+//   const audioChunksRef = useRef([]);
+//   const navigate = useNavigate();
+//   const { sessionId } = useParams();
+
+//   const startRecording = async () => {
+//     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+//     const mediaRecorder = new MediaRecorder(stream);
+
+//     audioChunksRef.current = [];
+
+//     mediaRecorder.ondataavailable = (event) => {
+//       audioChunksRef.current.push(event.data);
+//     };
+
+//     mediaRecorder.onstop = handleStop;
+
+//     mediaRecorder.start();
+//     mediaRecorderRef.current = mediaRecorder;
+//     setIsRecording(true);
+//   };
+
+//   const stopRecording = () => {
+//     mediaRecorderRef.current.stop();
+//     setIsRecording(false);
+//   };
+
+//   const handleStop = async () => {
+//     const audioBlob = new Blob(audioChunksRef.current, {
+//       type: "audio/wav",
+//     });
+
+//     await uploadRecording(audioBlob);
+//   };
+
+//   const uploadRecording = async (audioBlob) => {
+//     try {
+//       setLoading(true);
+
+//       const formData = new FormData();
+//       formData.append("file", audioBlob, "recording.wav");
+
+//       const response = await fetch(
+//         `http://localhost:8000/sessions/${sessionId}/transcribe`,
+//         {
+//           method: "POST",
+//           body: formData,
+//         }
+//       );
+
+//       if (!response.ok) throw new Error("Upload failed");
+
+//       const data = await response.json();
+
+//       navigate(`/transcript/${sessionId}`, {
+//         state: { transcript: data.transcript },
+//       });
+//     } catch (err) {
+//       console.error(err);
+//       alert("Transcription failed");
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   return (
+//     <div className="recording-container">
+//       <h1>Recording Session</h1>
+
+//       <button
+//         className={`record-btn ${isRecording ? "stop" : ""}`}
+//         onClick={isRecording ? stopRecording : startRecording}
+//       >
+//         {isRecording ? "Stop Recording" : "Start Recording"}
+//       </button>
+
+//       {loading && <p className="loading-text">Processing audio...</p>}
+//     </div>
+//   );
+// }

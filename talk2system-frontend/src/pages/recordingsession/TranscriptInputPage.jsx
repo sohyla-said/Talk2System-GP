@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 const TranscriptInputPage = () => {
   const [transcript, setTranscript] = useState('');
-  const [sessionName, setSessionName] = useState('');
+  //const [sessionName, setSessionName] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [charCount, setCharCount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -14,9 +14,9 @@ const TranscriptInputPage = () => {
   const navigate = useNavigate();
   const { id: projectId } = useParams();
 
-  const today = new Date().toLocaleDateString('en-US', {
-    year: 'numeric', month: 'long', day: 'numeric'
-  });
+  // const today = new Date().toLocaleDateString('en-US', {
+  //   year: 'numeric', month: 'long', day: 'numeric'
+  // });
 
   useEffect(() => {
     setCharCount(transcript.length);

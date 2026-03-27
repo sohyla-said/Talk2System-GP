@@ -1,0 +1,96 @@
+/* Container */
+.recording-container {
+  width: 100%;
+  min-height: 100vh;
+  padding: 2rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--background-light, #f9fafb);
+  color: var(--text-dark, #111827);
+}
+
+/* Title */
+.recording-container h1 {
+  font-size: 2.5rem;
+  font-weight: 800;
+  margin-bottom: 2rem;
+}
+
+/* Button */
+.record-btn {
+  padding: 14px 28px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background-color: #2563eb; /* primary */
+  color: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Hover */
+.record-btn:hover {
+  transform: scale(1.05);
+  background-color: #1e40af;
+}
+
+/* Stop state */
+.record-btn.stop {
+  background-color: #dc2626;
+}
+
+.record-btn.stop:hover {
+  background-color: #991b1b;
+}
+
+/* Loading text */
+.loading-text {
+  margin-top: 1.5rem;
+  font-size: 1rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* Optional: pulse animation when recording */
+.record-btn.stop::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin-left: 10px;
+  border-radius: 50%;
+  background-color: white;
+  animation: pulse 1s infinite;
+}
+
+/* Pulse animation */
+@keyframes pulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+  70% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .recording-container {
+    background-color: #111827;
+    color: #f9fafb;
+  }
+
+  .loading-text {
+    color: #9ca3af;
+  }
+}
