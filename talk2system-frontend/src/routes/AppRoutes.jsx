@@ -72,8 +72,9 @@ export default function AppRoutes() {
 
 
         <Route path="/transcript">
-          <Route index element={<TranscriptView />} />
+          <Route path=":sessionId" element={<TranscriptView />} />
           <Route path="summary" element={<TranscriptSummary />} />
+        {/* <Route path=":sessionId/summary" element={<TranscriptSummary />} /> add it when you finish the implementation of the summary page */}
         </Route>
 
         {/* <Route path="/requirements" element={<RequirementsView />} /> */}

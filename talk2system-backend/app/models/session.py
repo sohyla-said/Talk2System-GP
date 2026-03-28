@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, ForeignKey, Integer, String, DateTime
 from datetime import datetime
 from sqlalchemy.orm import relationship
 
@@ -14,6 +14,10 @@ class Session(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+ 
+    project = relationship("Project", back_populates="sessions")
+    
     transcripts = relationship(
         "TranscriptSegment",
         back_populates="session",

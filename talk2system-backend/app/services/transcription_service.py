@@ -87,6 +87,8 @@ def transcribe_audio(file_path: str):
 
 
 def save_transcription(db: Session, session_id: int, diarization):
+    full_text = []
+
     for seg in diarization:
         segment = TranscriptSegment(
             session_id=session_id,
@@ -97,4 +99,27 @@ def save_transcription(db: Session, session_id: int, diarization):
         )
         db.add(segment)
 
+        full_text.append(f"Speaker {seg['speaker']}: {seg['text']}")
+
     db.commit()
+
+    return "\n".join(full_text) 
+
+def get_transcript_by_session(db: Session, session_id: int):
+    segments = (
+        db.query(TranscriptSegment)
+        .filter(TranscriptSegment.session_id == session_id)
+        .order_by(TranscriptSegment.start_time)
+        .all()
+    )
+
+    if not segments:
+        return []
+
+    return [
+        {
+            "speaker": f"Speaker {seg.speaker}",
+            "text": seg.text
+        }
+        for seg in segments
+    ]
