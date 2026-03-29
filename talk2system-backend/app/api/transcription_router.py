@@ -1,3 +1,5 @@
+from pydantic import BaseModel
+
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 import os
@@ -6,7 +8,7 @@ import uuid
 from app.db.session import get_db
 from app.models.session import Session as SessionModel
 from app.models.transcript import TranscriptSegment
-from app.services.transcription_service import transcribe_audio, save_transcription, get_transcript_by_session
+from app.services.transcription_service import transcribe_audio, save_transcription, get_transcript_by_session ,update_transcript_segment
 from app.models.project import Project
 
 router = APIRouter()
@@ -98,3 +100,32 @@ def get_transcript(session_id: int, db: Session = Depends(get_db)):
         "project_id": session.project_id,
         "transcript": transcript
     }
+
+class SegmentUpdate(BaseModel):
+    segment_index: int   # 0-based position in the ordered list (matches the frontend's id - 1)
+    speaker: str
+    text: str
+ 
+ 
+@router.patch("/sessions/{session_id}/transcript/segment")
+def update_segment(
+    session_id: int,
+    payload: SegmentUpdate,
+    db: Session = Depends(get_db)
+):
+    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+ 
+    updated = update_transcript_segment(
+        db,
+        session_id=session_id,
+        segment_index=payload.segment_index,
+        speaker=payload.speaker,
+        text=payload.text,
+    )
+ 
+    if not updated:
+        raise HTTPException(status_code=404, detail="Segment not found")
+ 
+    return {"ok": True, "segment_index": payload.segment_index}

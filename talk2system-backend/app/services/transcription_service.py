@@ -123,3 +123,29 @@ def get_transcript_by_session(db: Session, session_id: int):
         }
         for seg in segments
     ]
+
+
+def update_transcript_segment(
+    db: Session,
+    session_id: int,
+    segment_index: int,
+    speaker: str,
+    text: str,
+) -> bool:
+    segments = (
+        db.query(TranscriptSegment)
+        .filter(TranscriptSegment.session_id == session_id)
+        .order_by(TranscriptSegment.start_time)
+        .all()
+    )
+ 
+    if segment_index < 0 or segment_index >= len(segments):
+        return False
+ 
+    segment = segments[segment_index]
+    # Strip the "Speaker " prefix that the frontend adds back before saving
+    raw_speaker = speaker.removeprefix("Speaker ").strip()
+    segment.speaker = raw_speaker
+    segment.text = text
+    db.commit()
+    return True
