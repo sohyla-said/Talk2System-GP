@@ -105,6 +105,15 @@ def save_transcription(db: Session, session_id: int, diarization):
 
     return "\n".join(full_text) 
 
+
+def _ms_to_mmss(ms: int) -> str:
+    """Convert milliseconds (AssemblyAI format) to a human-readable mm:ss string."""
+    total_seconds = int(ms) // 1000
+    minutes = total_seconds // 60
+    seconds = total_seconds % 60
+    return f"{minutes:02d}:{seconds:02d}"
+ 
+ 
 def get_transcript_by_session(db: Session, session_id: int):
     segments = (
         db.query(TranscriptSegment)
@@ -112,18 +121,19 @@ def get_transcript_by_session(db: Session, session_id: int):
         .order_by(TranscriptSegment.start_time)
         .all()
     )
-
+ 
     if not segments:
         return []
-
+ 
     return [
         {
             "speaker": f"Speaker {seg.speaker}",
-            "text": seg.text
+            "text": seg.text,
+            "start_time": _ms_to_mmss(seg.start_time),
+            "end_time": _ms_to_mmss(seg.end_time),
         }
         for seg in segments
     ]
-
 
 def update_transcript_segment(
     db: Session,
