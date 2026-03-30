@@ -53,9 +53,10 @@ def transcribe_audio(file_path: str):
     # STEP 2: TRANSCRIBE
     # =========================
     config = aai.TranscriptionConfig(
-        speaker_labels=True,
-        punctuate=True,
-        format_text=True
+            speaker_labels=True,
+            punctuate=True,
+            format_text=True,
+            speech_models=["universal-2"]
     )
 
     transcriber = aai.Transcriber(config=config)

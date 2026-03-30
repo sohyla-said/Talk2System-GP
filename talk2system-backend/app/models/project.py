@@ -21,3 +21,8 @@ class Project(Base):
         back_populates="project",
         cascade="all, delete-orphan"
     )
+
+    artifacts = relationship(
+        "Artifact", 
+        back_populates="project"
+    )

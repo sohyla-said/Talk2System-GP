@@ -18,17 +18,23 @@ talk2system-backend/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py                       # FastAPI app entry point
+│   ├── .env                          # configuration file for environment variables and keys
 │   ├── api/
 │   │   ├── requirements.py           # API endpoints for requirement extraction
+│   │   ├── document.py               # API endpoints for uml diagrams and documentation generation
 │   ├── db/
 │   │   ├── base.py                   # Database base model
 │   │   ├── session.py                # Database session management
 │   ├── models/                       # Database models
 │   │   ├── requirement.py            # Requirement model
 │   │   ├── project.py                # Project model
+│   │   ├── artifact_type.py          # artifact type model
+│   │   ├── artifact.py               # artifact model
 │   ├── services/
-│   │   ├── requirement_service.py     # Business logic for requirements
+│   │   ├── requirement_service.py      # Business logic for requirements
 │   │   ├── project_service.py          # Business logic for projects
+│   │   ├── artifact_service.py         # Business logic for artifacts
+│   │   ├── uml_service.py              # Business logic for uml diagram generation
 │   └── nlp/
 │       ├── preprocessing.py          # Core preprocessing pipeline
 │       ├── rule_engine.py            # Rule-based requirement extraction
