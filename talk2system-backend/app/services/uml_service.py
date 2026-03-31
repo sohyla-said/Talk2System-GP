@@ -1,13 +1,21 @@
 import os
+import time
 import requests
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ==========================
 # CONFIG
 # ==========================
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    
+api_key = os.getenv("GEMINI_API_KEY")
+print(f"✅ GEMINI KEY LOADED: {api_key[:10] if api_key else '❌ NOT FOUND'}")
+
+client = genai.Client(api_key=api_key)
+
 KROKI_URL = "https://kroki.io"
 STORAGE_PATH = "storage/uml"
 
@@ -16,15 +24,49 @@ STORAGE_PATH = "storage/uml"
 # ==========================
 def generate_uml_code_with_ai(requirements_json: dict, diagram_type: str):
     grouped = requirements_json
-    model = genai.GenerativeModel("gemini-3-flash")
-
     prompt = build_prompt(grouped, diagram_type)
 
-    response = model.generate_content(prompt)
+    models_to_try = [
+        "gemini-2.0-flash",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash-lite",
+    ]
 
-    uml_code = clean_uml_output(response.text)
+    last_error = None
 
-    return uml_code
+    for model_name in models_to_try:
+        for attempt in range(2):
+            try:
+                print(f"🤖 Trying model: {model_name} (attempt {attempt + 1})")
+
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(temperature=0.2)
+                )
+
+                print(f"✅ Success with: {model_name}")
+                return clean_uml_output(response.text)
+
+            except Exception as e:
+                error_str = str(e)
+                last_error = error_str
+                print(f"⚠️ Error on {model_name} attempt {attempt + 1}: {error_str[:100]}")
+
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                    if attempt == 0:
+                        print(f"⏳ Waiting 15s before retry...")
+                        time.sleep(15)
+                    else:
+                        print(f"❌ {model_name} quota exhausted, trying next model...")
+                        break
+
+                else:
+                    # ANY other error (404, disconnected, timeout) → try next model
+                    print(f"❌ {model_name} failed ({error_str[:60]}), trying next model...")
+                    break
+
+    raise Exception(f"All models failed. Last error: {last_error}")
 
 # ==========================
 # PROMPT BUILDER
@@ -94,6 +136,8 @@ Functional Requirements:
 # CLEAN AI OUTPUT
 # ==========================
 def clean_uml_output(text: str):
+    text = text.replace("```plantuml", "").replace("```", "")
+
     start = text.find("@startuml")
     end = text.find("@enduml")
 
