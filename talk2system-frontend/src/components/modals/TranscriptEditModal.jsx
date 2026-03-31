@@ -61,6 +61,7 @@ export default function TranscriptEditModal({ open, onClose, onSave, speakerData
             </label>
             <input
               type="text"
+              disabled
               value={speakerName}
               onChange={(e) => setSpeakerName(e.target.value)}
               className="w-full px-4 py-3 rounded-lg bg-background-light dark:bg-background-dark/80 border border-gray-200 dark:border-white/10 text-text-dark dark:text-text-light focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
