@@ -1,7 +1,51 @@
 import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 
 export default function AddProjectDetailsPage() {
   const navigate = useNavigate();
+
+  // STATE
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [domain, setDomain] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // API CALL
+  const createProject = async () => {
+    const res = await fetch("http://127.0.0.1:8000/api/projects/createproject", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        description,
+        domain,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error("Failed to create project");
+    }
+
+    return res.json();
+  };
+
+  // SUBMIT HANDLER
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      setLoading(true);
+      await createProject();
+      navigate("/projects");
+    } catch (error) {
+      console.error("Error creating project:", error);
+      alert("Something went wrong!");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-display">
@@ -36,7 +80,7 @@ export default function AddProjectDetailsPage() {
         <div className="bg-white dark:bg-background-dark/50 border border-gray-200 dark:border-white/5 rounded-xl shadow">
           <div className="p-6 md:p-8">
 
-            <form className="space-y-6 max-w-3xl">
+            <form onSubmit={handleSubmit} className="space-y-6 max-w-3xl">
 
               {/* PROJECT NAME */}
               <div>
@@ -45,8 +89,11 @@ export default function AddProjectDetailsPage() {
                 </label>
                 <input
                   type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Talk2System Mobile App"
                   className="w-full rounded-lg bg-background-light dark:bg-background-dark/80 px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  required
                 />
               </div>
 
@@ -57,6 +104,8 @@ export default function AddProjectDetailsPage() {
                 </label>
                 <textarea
                   rows={5}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
                   placeholder="Describe the project scope, main features, and objectives..."
                   className="w-full rounded-lg bg-background-light dark:bg-background-dark/80 px-4 py-3 text-sm resize-none focus:ring-2 focus:ring-primary/20 transition-all"
                 />
@@ -69,6 +118,8 @@ export default function AddProjectDetailsPage() {
                 </label>
                 <input
                   type="text"
+                  value={domain}
+                  onChange={(e) => setDomain(e.target.value)}
                   placeholder="e.g. Healthcare, Fintech, Education"
                   className="w-full rounded-lg bg-background-light dark:bg-background-dark/80 px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all"
                 />
@@ -77,12 +128,14 @@ export default function AddProjectDetailsPage() {
               {/* ACTIONS */}
               <div className="flex gap-4 pt-4">
                 <button
-                  onClick={()=> navigate('/projects')}
                   type="submit"
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-primary text-white font-bold shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all"
+                  disabled={loading}
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-white font-bold shadow-lg transition-all
+                    ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-primary hover:bg-primary/90 shadow-primary/25"}
+                  `}
                 >
                   <span className="material-symbols-outlined">save</span>
-                  Create Project
+                  {loading ? "Creating..." : "Create Project"}
                 </button>
 
                 <a

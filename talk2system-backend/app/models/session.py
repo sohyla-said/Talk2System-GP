@@ -1,25 +1,22 @@
-from sqlalchemy import Column, ForeignKey, Integer, String, DateTime
-from datetime import datetime
+from sqlalchemy import Column, String, DateTime, ForeignKey, Text, JSON, Integer
 from sqlalchemy.orm import relationship
-
+from datetime import datetime
 from app.db.base import Base
+
 
 class Session(Base):
     __tablename__ = "sessions"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     title = Column(String, nullable=True)
-    audio_file_path = Column(String, nullable=False)
+    project_id = Column(Integer, ForeignKey("projects.id"))
     status = Column(String, default="processing")
-
+    audio_file_path = Column(String, nullable=True)
+    transcript_text = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
- 
+   
+ #relationships
     project = relationship("Project", back_populates="sessions")
-    
-    transcripts = relationship(
-        "TranscriptSegment",
-        back_populates="session",
-        cascade="all, delete"
-    )
+    artifacts = relationship("Artifact",back_populates="session")
+    requirements = relationship("Requirement",back_populates="session")
+    transcripts = relationship("TranscriptSegment",back_populates="session", cascade="all, delete")

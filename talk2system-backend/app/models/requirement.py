@@ -9,6 +9,7 @@ class Requirement(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=True)
 
     requirements_json = Column(JSON, nullable=False)
 
@@ -19,3 +20,4 @@ class Requirement(Base):
     version = Column(String(10), default='v1')
 
     project = relationship("Project", back_populates="requirements")
+    session = relationship("Session", back_populates="requirements")

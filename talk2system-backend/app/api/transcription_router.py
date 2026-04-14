@@ -59,7 +59,7 @@ async def transcribe(
 
         # Save transcript segments
         transcript_text = save_transcription(db, session.id, diarization)
-
+        session.transcript_text = transcript_text
         # Update status
         session.status = "completed"
         db.commit()

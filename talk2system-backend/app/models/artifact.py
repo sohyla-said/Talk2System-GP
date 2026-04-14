@@ -9,6 +9,7 @@ class Artifact(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=True)
     artifact_type_id = Column(Integer, ForeignKey("artifact_types.id"), nullable=False)
     file_path = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -16,4 +17,5 @@ class Artifact(Base):
     approval_status = Column(String(10), default="pending")
 
     project = relationship("Project", back_populates="artifacts")
+    session = relationship("Session", back_populates="artifacts")
     artifact_type = relationship("ArtifactType", back_populates="artifacts")

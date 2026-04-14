@@ -11,6 +11,7 @@ from app.db.session import engine
 from app.api import requirements
 from app.api.transcription_router import router as transcription_router
 from app.api.document import router as document_router
+from app.api import project_routes, session_routes
 
 app = FastAPI()
 
@@ -31,3 +32,7 @@ app.include_router(requirements.router, prefix="/api")
 app.include_router(transcription_router, prefix="/api")
 app.include_router(document_router, prefix="/api")
 app.mount("/storage", StaticFiles(directory="storage"), name="storage")
+# app.include_router(project_router, prefix="/projects")
+
+app.include_router(project_routes.router)
+app.include_router(session_routes.router)
