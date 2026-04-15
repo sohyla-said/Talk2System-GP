@@ -28,8 +28,16 @@ class SessionResponse(BaseModel):
 
 
 @router.post("/project/{project_id}", response_model=SessionResponse)
-def create_session(project_id: int, db: Session = Depends(get_db)):
-    return SessionService.create_session(db, project_id, SessionCreate())
+def create_session(
+    project_id: int,
+    data: Optional[SessionCreate] = None,
+    db: Session = Depends(get_db)
+):
+    return SessionService.create_session(
+        db,
+        project_id,
+        data.title if data else None
+    )
 
 
 

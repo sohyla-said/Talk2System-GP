@@ -4,14 +4,13 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.db.base import Base
 
-class Requirement(Base):
-    __tablename__ = "requirements"
+class ProjectRequirement(Base):
+    __tablename__ = "project_requirements"
 
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
-    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=True)
 
-    requirements_json = Column(JSON, nullable=False)
+    aggregated_req_json = Column(JSON, nullable=False)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -20,11 +19,5 @@ class Requirement(Base):
     version = Column(Integer, default=1)
 
 
-    session = relationship("Session", back_populates="requirements")
-
-    src_run_id = Column(Integer, ForeignKey("requirement_runs.id"), nullable=False)
-
-    project = relationship("Project", back_populates="requirements")
-    
-    requirement_run = relationship("RequirementRun", back_populates="requirements")
+    project = relationship("Project", back_populates="project_requirements")
 

@@ -9,6 +9,7 @@ class RequirementRun(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=True)
 
     run_type = Column(String)   # llm or hybrid
 
@@ -17,6 +18,7 @@ class RequirementRun(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     project = relationship("Project", back_populates="requirement_runs")
+    session = relationship("Session", back_populates="requirement_runs")
 
     requirement_raw = relationship(
         "RequirementRaw",
@@ -24,4 +26,7 @@ class RequirementRun(Base):
         cascade="all, delete-orphan"
     )
 
-    requirements = relationship("Requirement", back_populates="requirement_run")
+    session_requirements = relationship(
+        "SessionRequirement",
+        back_populates="requirement_run"
+    )

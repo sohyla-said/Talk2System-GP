@@ -1,8 +1,10 @@
 from sqlalchemy.orm import Session
-from app.models.requirement import Requirement
+from app.models.session_requirement import SessionRequirement
+from app.models.project_requirments import ProjectRequirement
 from app.models.requirement_raw import RequirementRaw
 from app.models.requirement_runs import RequirementRun
 from app.models.project import Project
+from app.models.session import Session
 from app.nlp.hybrid_engine import hybrid_inference
 from app.services.llm_service import extract_requirements
 
@@ -13,14 +15,18 @@ class RequirementService:
     def extract_and_store_requirements(
         db: Session,
         project_id: int,
+        session_id: int,
         transcript: str,
         engine: str = 'both'
     ):
-
-        # Step 0: Validate project exists
+        # Step 0: Validate project and session exists
         project = db.query(Project).filter(Project.id == project_id).first()
         if not project:
             raise ValueError("Project not found")
+        
+        session = db.query(Session).filter(Session.id == session_id).first()
+        if not session:
+            raise ValueError("Session not found")
 
         hybrid_results = None
         llm_results = None
@@ -41,10 +47,10 @@ class RequirementService:
         db_run_hybrid = None
 
         try:
-
             if grouped_llm:
                 db_run_llm = RequirementRun(
                     project_id=project_id,
+                    session_id = session_id,
                     run_type="llm",
                     grouped_json=grouped_llm
                 )
@@ -53,6 +59,7 @@ class RequirementService:
             if grouped_hybrid:
                 db_run_hybrid = RequirementRun(
                     project_id=project_id,
+                    session_id = session_id,
                     run_type="hybrid",
                     grouped_json=grouped_hybrid
                 )
@@ -86,46 +93,56 @@ class RequirementService:
             "llm": grouped_llm
         }
     
-    # method to choose preferred requirements
+    #################################################################################################
+
+    # method to choose preferred requirements -> save it to session requirements and append to project requirements
     @staticmethod
-    def set_preferred_requirements(db: Session, project_id: int, req_json, src_run_id: int):
+    def save_preferred_requirements(db: Session, project_id: int, session_id: int, req_json, src_run_id: int):
         # 1) check for project existance
         project = db.query(Project).filter(Project.id == project_id).first()
         if not project:
             raise ValueError("Project not found")
         
-        # 2) check for the existance of the src run
+        # 2) check for the existance of the session
+        session = db.query(Session).filter(Session.id == session_id).first()
+        if not session:
+            raise ValueError("Session not found")
+        
+        # 3) check for the existance of the src run
         src_run = db.query(RequirementRun).filter(RequirementRun.id == src_run_id, RequirementRun.project_id == project_id).first()
         if not src_run:
             raise ValueError("Source run not found")
         
-        # 3) create the requirement and save it
-        db_requirment = Requirement(
+        # 4) create the requirement and save it
+        db_session_requirment = SessionRequirement(
             project_id = project_id,
+            session_id = session_id,
             requirements_json = req_json,
             src_run_id = src_run_id
         )
 
-        db.add(db_requirment)
         try:
+            db.add(db_session_requirment)
             db.commit()
-        except:
+            db.refresh(db_session_requirment)
+        except Exception:
             db.rollback()
             raise
-        db.refresh(db_requirment)
 
         return {
             "project_id": project_id,
-            "req_id": db_requirment.id,
-            "preferred_type": src_run.run_type,
+            "session_id": session_id,
+            "session_req_id": db_session_requirment.id,
+            "preferred_type": src_run.run_type
         }
         
+        ############################################# Project Requirements ####################################################   
     
-    # get latest requirement version
+    # get latest project requirement version
     @staticmethod
-    def get_latest_requirement(db: Session, project_id: int):
-        req = db.query(Requirement).filter(Requirement.project_id == project_id)\
-        .order_by(Requirement.created_at.desc())\
+    def get_latest_project_requirement(db: Session, project_id: int):
+        req = db.query(ProjectRequirement).filter(ProjectRequirement.project_id == project_id)\
+        .order_by(ProjectRequirement.created_at.desc())\
         .first()
 
         if not req:
@@ -135,15 +152,18 @@ class RequirementService:
             "id": req.id,
             "version": req.version,
             "approval_status": req.approval_status,
-            "data": req.requirements_json
+            "data": req.aggregated_req_json
         }
     
+
+    #################################################################################################
+
     # get all requirements version of a project
     @staticmethod
-    def get_all_versions(db: Session, project_id: int):
-        reqs = db.query(Requirement)\
-            .filter(Requirement.project_id == project_id)\
-                .order_by(Requirement.created_at.desc())\
+    def get_all_project_req_versions(db: Session, project_id: int):
+        reqs = db.query(ProjectRequirement)\
+            .filter(ProjectRequirement.project_id == project_id)\
+                .order_by(ProjectRequirement.created_at.desc())\
                     .all()
 
         if not reqs:
@@ -159,12 +179,13 @@ class RequirementService:
                 for req in reqs
         ]
     
+    #################################################################################################
     
-    # get requirement by id
+    # get project requirement by id
     @staticmethod
-    def get_requirement_by_id(db: Session, req_id: int):
-        req = db.query(Requirement)\
-            .filter(Requirement.id == req_id).first()
+    def get_project_requirement_by_id(db: Session, req_id: int):
+        req = db.query(ProjectRequirement)\
+            .filter(ProjectRequirement.id == req_id).first()
         
         if not req:
             raise ValueError("Requirement not found")
@@ -174,15 +195,17 @@ class RequirementService:
             "id": req.id,
             "version": req.version,
             "approval_status": req.approval_status,
-            "data": req.requirements_json
+            "data": req.aggregated_req_json
         }
     
-    # edit/update requirement --> creates a new version
+    #################################################################################################
+
+    # edit/update session requirement --> creates a new version
     @staticmethod
-    def update_requirement(db: Session, req_id: int, grouped_data: dict):
+    def update_project_requirement(db: Session, req_id: int, grouped_data: dict):
         # get old requirement
-        old_req = db.query(Requirement)\
-            .filter(Requirement.id == req_id).first()
+        old_req = db.query(ProjectRequirement)\
+            .filter(ProjectRequirement.id == req_id).first()
         
         if not old_req:
             raise ValueError("Requirement not found")
@@ -191,16 +214,15 @@ class RequirementService:
         old_version = old_req.version
         new_version = old_version + 1
 
-        new_req = Requirement(
+        new_req = ProjectRequirement(
             project_id=old_req.project_id,
             requirements_json=grouped_data,
             version=new_version,
-            approval_status="pending",
-            src_run_id = old_req.src_run_id
+            approval_status="pending"
         )
-        db.query(Requirement).filter(
-            Requirement.project_id == old_req.project_id,
-            Requirement.approval_status == "pending"
+        db.query(ProjectRequirement).filter(
+            ProjectRequirement.project_id == old_req.project_id,
+            ProjectRequirement.approval_status == "pending"
         ).update({"approval_status": "superseded"})
 
         db.add(new_req)
@@ -213,11 +235,13 @@ class RequirementService:
             "approval_status": new_req.approval_status,
             "data": grouped_data
         }
+    #################################################################################################
 
-    # approve requirement
-    def approve_requirement(db: Session, req_id: int):
-        req = db.query(Requirement)\
-            .filter(Requirement.id == req_id).first()
+    # approve project requirement
+    @staticmethod
+    def approve_project_requirement(db: Session, req_id: int):
+        req = db.query(ProjectRequirement)\
+            .filter(ProjectRequirement.id == req_id).first()
         if not req:
             raise ValueError("Requirement not found")
         req.approval_status = "approved"
@@ -232,9 +256,163 @@ class RequirementService:
         }
     
 
+        ################################################# Session Requirements ################################################
+    
+    # get latest session requirement version
+    @staticmethod
+    def get_latest_session_requirement(db: Session, project_id: int, session_id: int):
+        req = db.query(SessionRequirement).filter(SessionRequirement.session_id == session_id, SessionRequirement.project_id == project_id)\
+        .order_by(SessionRequirement.created_at.desc())\
+        .first()
+
+        if not req:
+            raise ValueError("No requirements found")
+        
+        return{
+            "id": req.id,
+            "version": req.version,
+            "approval_status": req.approval_status,
+            "data": req.requirements_json
+        }
+    
+    #################################################################################################
+    
+    # get all requirements version of a session
+    @staticmethod
+    def get_all_session_req_versions(db: Session, project_id: int, session_id: int):
+        reqs = db.query(SessionRequirement)\
+            .filter(SessionRequirement.project_id == project_id, SessionRequirement.session_id == session_id)\
+                .order_by(SessionRequirement.created_at.desc())\
+                    .all()
+
+        if not reqs:
+            raise ValueError("No requirements found")
+        
+        return[
+            {
+                "id": req.id,
+                "version": req.version,
+                "approval_status": req.approval_status,
+                "created_at": req.created_at
+            }
+                for req in reqs
+        ]
+    
+    #################################################################################################
+    
+    # get session requirement by id
+    @staticmethod
+    def get_session_requirement_by_id(db: Session, req_id: int):
+        req = db.query(SessionRequirement)\
+            .filter(SessionRequirement.id == req_id).first()
+        
+        if not req:
+            raise ValueError("Requirement not found")
+
+        
+        return{
+            "id": req.id,
+            "version": req.version,
+            "approval_status": req.approval_status,
+            "data": req.requirements_json
+        }
+
+    #################################################################################################
+
+    # edit/update session requirement --> creates a new version
+    @staticmethod
+    def update_session_requirement(db: Session, req_id: int, grouped_data: dict):
+        # get old requirement
+        old_req = db.query(SessionRequirement)\
+            .filter(SessionRequirement.id == req_id).first()
+        
+        if not old_req:
+            raise ValueError("Requirement not found")
+        
+        # increment version
+        old_version = old_req.version
+        new_version = old_version + 1
+
+        new_req = SessionRequirement(
+            project_id=old_req.project_id,
+            session_id = old_req.session_id,
+            requirements_json=grouped_data,
+            version=new_version,
+            approval_status="pending",
+            src_run_id = old_req.src_run_id
+        )
+        db.query(SessionRequirement).filter(
+            SessionRequirement.project_id == old_req.project_id,
+            SessionRequirement.approval_status == "pending"
+        ).update({"approval_status": "superseded"})
+
+        db.add(new_req)
+        db.commit()
+        db.refresh(new_req)
+
+        return{
+            "id": new_req.id,
+            "version": new_req.version,
+            "approval_status": new_req.approval_status,
+            "data": grouped_data
+        }
+
+    #################################################################################################
+
+    # approve session requirement
+    @staticmethod
+    def approve_session_requirement(db: Session, req_id: int):
+        req = db.query(SessionRequirement)\
+            .filter(SessionRequirement.id == req_id).first()
+        if not req:
+            raise ValueError("Requirement not found")
+        req.approval_status = "approved"
+
+
+        # 5) get latest project_requirements
+        project_req = db.query(ProjectRequirement).filter(ProjectRequirement.project_id == req.project_id)\
+            .order_by(ProjectRequirement.created_at.desc()).first()
+        
+        merged_json = None
+        new_version = 1
+
+
+        # if there exist previous requirements for this project merge them and increase the version by 1
+        if project_req:
+            merged_json = merge_requirements(project_req.aggregated_req_json, req.requirements_json)
+            new_version = project_req.version + 1
+
+        # else the req_json will be the first requirement in the project
+        else:
+            merged_json = req.requirements_json
+            new_version = 1
+
+        # add new project requirement with increased version
+        db_project_req = ProjectRequirement(
+            project_id = req.project_id,
+            aggregated_req_json = merged_json,
+            version = new_version
+        )
+        db.add(db_project_req)
+        
+        try:
+            db.commit()
+        except:
+            db.rollback()
+            raise
+        db.refresh(req)
+
+        return{
+            "id": req.id,
+            "version": req.version,
+            "approval_status": req.approval_status
+        }
     
 
-# groupe extracted requirements into actors, FRs and NFRs for better UI display
+
+    ################################################# Helper functions ################################################
+
+# group extracted requirements into actors, FRs and NFRs for better UI display
 def group_requirements(results):
     grouped = {
         "actors": set(), 
@@ -293,3 +471,35 @@ def adapt_llm_output(llm_results):
 
     return adapted
 
+
+def merge_requirements(old, new):
+    merged = {
+        "actors": list(set(old.get("actors", []) + new.get("actors", []))),
+        "functional_requirements": [],
+        "nonfunctional_requirements": [],
+        "features": list(set(old.get("features", []) + new.get("features", [])))
+    }
+    # --- Helper to avoid duplicates ---
+    def unique_by_text(items):
+        seen = set()
+        result = []
+        for item in items:
+            text = item["text"].strip().lower()
+            if text not in seen:
+                seen.add(text)
+                result.append(item)
+        return result
+
+    # Merge FRs
+    merged["functional_requirements"] = unique_by_text(
+        old.get("functional_requirements", []) +
+        new.get("functional_requirements", [])
+    )
+
+    # Merge NFRs
+    merged["nonfunctional_requirements"] = unique_by_text(
+        old.get("nonfunctional_requirements", []) +
+        new.get("nonfunctional_requirements", [])
+    )
+
+    return merged

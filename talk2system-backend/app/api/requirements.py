@@ -19,19 +19,11 @@ class ChooseRequirementRequest(BaseModel):
     src_run_id: int
 
 
-@router.post("/projects")
-def create_project(name: str, db: Session = Depends(get_db)):
-    project = ProjectService.create_project(db, name)
-    return {
-        "message": "Project created",
-        "project_id": project.id,
-        "name": project.name
-    }
 
-
-@router.post("/projects/{project_id}/extract-requirements")
+@router.post("/projects/{project_id}/session/{session_id}/extract-requirements")
 def extract_requirements(
     project_id: int,
+    session_id: int,
     request: ExtractRequirementsRequest,
     db: Session = Depends(get_db)
 ):
@@ -39,6 +31,7 @@ def extract_requirements(
         result = RequirementService.extract_and_store_requirements(
             db=db,
             project_id=project_id,
+            session_id = session_id,
             transcript=request.transcript,
             engine= request.engine
         )
@@ -54,54 +47,97 @@ def extract_requirements(
         raise HTTPException(status_code=404, detail=str(e))
     
 # set the preferred requirements from llm or hybrid
-@router.post("/projects/{project_id}/choose-requirements")
+@router.post("/projects/{project_id}/session/{session_id}/choose-requirements")
 def choose_requirements(
     project_id: int, 
+    session_id: int,
     request: ChooseRequirementRequest, 
     db: Session = Depends(get_db)):
     try:
-        return RequirementService.set_preferred_requirements(db, project_id, request.requirements_json, request.src_run_id)
+        return RequirementService.save_preferred_requirements(db, project_id, session_id, request.requirements_json, request.src_run_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     
     
 # get latest requirement version for the project 
 @router.get("/projects/{project_id}/requirements")
-def get_latest(project_id: int, db: Session = Depends(get_db)):
+def get_latest_project(project_id: int, db: Session = Depends(get_db)):
     try:
-        return RequirementService.get_latest_requirement(db, project_id)
+        return RequirementService.get_latest_project_requirement(db, project_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     
-# get all versions    
+# get all project requirement versions    
 @router.get("/projects/{project_id}/requirements/versions")
-def get_versions(project_id: int, db: Session = Depends(get_db)):
+def get_versions_project(project_id: int, db: Session = Depends(get_db)):
     try:
-        return RequirementService.get_all_versions(db, project_id)
+        return RequirementService.get_all_project_req_versions(db, project_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     
-# get requirement by id
-@router.get("/requirements/{requirement_id}")
-def get_requirement_by_id(requirement_id: int, db: Session = Depends(get_db)):
+# get project requirement by id
+@router.get("/projects/requirements/{requirement_id}")
+def get_project_requirement_by_id(requirement_id: int, db: Session = Depends(get_db)):
     try:
-        return RequirementService.get_requirement_by_id(db, requirement_id)
+        return RequirementService.get_project_requirement_by_id(db, requirement_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     
 # edit requirement
-@ router.put("/requirements/{requirement_id}")
-def update_requirement(requirement_id, request: UpdateRequirementsRequest, db: Session = Depends(get_db)):
+@ router.put("/projects/requirements/{requirement_id}")
+def update_project_requirement(requirement_id, request: UpdateRequirementsRequest, db: Session = Depends(get_db)):
     try:
-        return RequirementService.update_requirement(db, requirement_id, request.grouped)
+        return RequirementService.update_project_requirement(db, requirement_id, request.grouped)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     
 # approve requirement
-@router.patch("/requirements/{requirement_id}/approve")
-def approve_requirement(requirement_id: int, db: Session = Depends(get_db)):
+@router.patch("/projects/requirements/{requirement_id}/approve")
+def approve_project_requirement(requirement_id: int, db: Session = Depends(get_db)):
     try:
-        return RequirementService.approve_requirement(db, requirement_id)
+        return RequirementService.approve_project_requirement(db, requirement_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    
+
+
+# get latest requirement version for the session 
+@router.get("/projects/{project_id}/session/{session_id}/requirements")
+def get_latest_session(project_id: int, session_id: int, db: Session = Depends(get_db)):
+    try:
+        return RequirementService.get_latest_session_requirement(db, project_id, session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    
+# get all session requirement versions    
+@router.get("/projects/{project_id}/session/{session_id}/requirements/versions")
+def get_versions_session(project_id: int, session_id: int, db: Session = Depends(get_db)):
+    try:
+        return RequirementService.get_all_session_req_versions(db, project_id, session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    
+# get session requirement by id
+@router.get("/sessions/requirements/{requirement_id}")
+def get_session_requirement_by_id(requirement_id: int, db: Session = Depends(get_db)):
+    try:
+        return RequirementService.get_session_requirement_by_id(db, requirement_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    
+# edit requirement
+@ router.put("/sessions/requirements/{requirement_id}")
+def update_session_requirement(requirement_id, request: UpdateRequirementsRequest, db: Session = Depends(get_db)):
+    try:
+        return RequirementService.update_session_requirement(db, requirement_id, request.grouped)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    
+# approve requirement
+@router.patch("/sessions/requirements/{requirement_id}/approve")
+def approve_session_requirement(requirement_id: int, db: Session = Depends(get_db)):
+    try:
+        return RequirementService.approve_session_requirement(db, requirement_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

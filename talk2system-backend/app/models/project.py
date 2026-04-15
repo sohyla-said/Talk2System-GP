@@ -16,7 +16,7 @@ class Project(Base):
 
     # relationships
     sessions = relationship("Session", back_populates="project")
-    requirements = relationship( "Requirement", back_populates="project",cascade="all, delete-orphan")
+    session_requirements = relationship( "SessionRequirement", back_populates="project",cascade="all, delete-orphan")
     artifacts = relationship("Artifact",back_populates="project")
 
     requirement_runs = relationship(
@@ -24,4 +24,6 @@ class Project(Base):
         back_populates="project",
         cascade="all, delete-orphan"
     )
+
+    project_requirements = relationship("ProjectRequirement", back_populates="project",cascade="all, delete-orphan")
 

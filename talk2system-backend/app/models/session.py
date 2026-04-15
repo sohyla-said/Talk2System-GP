@@ -18,5 +18,10 @@ class Session(Base):
  #relationships
     project = relationship("Project", back_populates="sessions")
     artifacts = relationship("Artifact",back_populates="session")
-    requirements = relationship("Requirement",back_populates="session")
+    session_requirements = relationship("SessionRequirement",back_populates="session")
     transcripts = relationship("TranscriptSegment",back_populates="session", cascade="all, delete")
+    requirement_runs = relationship(
+        "RequirementRun",
+        back_populates="session",
+        cascade="all, delete-orphan"
+    )
