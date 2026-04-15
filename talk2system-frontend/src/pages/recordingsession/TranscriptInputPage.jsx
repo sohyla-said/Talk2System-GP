@@ -13,6 +13,7 @@ const TranscriptInputPage = () => {
   const textareaRef = useRef(null);
   const navigate = useNavigate();
   const { id: projectId } = useParams();
+  const [sessionId, setSessionId] = useState(null);
 
   // const today = new Date().toLocaleDateString('en-US', {
   //   year: 'numeric', month: 'long', day: 'numeric'
@@ -21,6 +22,13 @@ const TranscriptInputPage = () => {
   useEffect(() => {
     setCharCount(transcript.length);
   }, [transcript]);
+
+  useEffect(() => {
+    if (projectId) {
+      createSession();
+    }
+  }, [projectId]);
+
 
   const handleTextChange = (e) => {
     setTranscript(e.target.value);
@@ -64,6 +72,33 @@ const TranscriptInputPage = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const createSession = async () => {
+    try{
+      const response = await fetch(
+        `http://127.0.0.1:8000/api/sessions/project/${projectId}`,
+        {
+          method: 'POST',
+            headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            project_id: projectId
+          }),
+        }
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Failed to get last session ID");
+      }
+
+      setSessionId(data.id);
+    }
+    catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!transcript.trim()) return;
 
@@ -71,7 +106,7 @@ const TranscriptInputPage = () => {
 
     try{
         const response = await fetch(
-            `http://127.0.0.1:8000/api/projects/${projectId}/extract-requirements`,
+            `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/extract-requirements`,
             {
                 method: 'POST',
                 headers: {
@@ -79,6 +114,7 @@ const TranscriptInputPage = () => {
                 },
                 body: JSON.stringify({
                     transcript: transcript,
+                  engine: "both"
                 }),
             }
         );
@@ -91,12 +127,13 @@ const TranscriptInputPage = () => {
 
         setSubmitted(true)
 
-        navigate(`/projects/${projectId}/requirements`,{
+        navigate(`/transcript/${sessionId}/requirements/choice`,{
             state: {
-                requirementId: data.requirement_id,
-                version: data.version,
-                approvalStatus: data.approval_status,
-                groupedData: data.data
+              projectId,
+              hybridRunId: data.Hybrid_run_id,
+              hybridData: data.Hybrid_data,
+              llmRunId: data.LLM_run_id,
+              llmData: data.LLM_data
             }
         });
     }catch (error) {

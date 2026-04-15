@@ -101,11 +101,11 @@ export default function TranscriptPage() {
       console.log("transcript:\n", transcriptText);
 
       const response = await fetch(
-        `http://127.0.0.1:8000/api/projects/${projectId}/extract-requirements`,
+        `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/extract-requirements`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ transcript: transcriptText }),
+          body: JSON.stringify({ transcript: transcriptText, engine:'both' }),
         }
       );
 
@@ -120,14 +120,15 @@ export default function TranscriptPage() {
         );
       }
 
-      navigate(`/projects/${projectId}/requirements`, {
-        state: {
-          requirementId: data.requirement_id,
-          version: data.version,
-          approvalStatus: data.approval_status,
-          groupedData: data.data,
-        },
-      });
+      navigate(`/transcript/${sessionId}/requirements/choice`,{
+            state: {
+              projectId,
+              hybridRunId: data.Hybrid_run_id,
+              hybridData: data.Hybrid_data,
+              llmRunId: data.LLM_run_id,
+              llmData: data.LLM_data
+            }
+        });
     } catch (error) {
       console.error(error);
       alert(error.message);

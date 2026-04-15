@@ -29,7 +29,9 @@ import TranscriptView from "../pages/transcript/TranscriptPage";
 import TranscriptSummary from "../pages/transcript/Summary";
 
 // Requirements & Artifacts
-import RequirementsView from "../pages/requirements/RequirementsView";
+import RequirementsSessionView from "../pages/requirements/Requirements_session_view";
+import RequirementsProjectView from "../pages/requirements/Requirements_project_view";
+import RequirementsChoicePage from "../pages/requirements/Requirements_choice_page";
 import SRSDocument from "../pages/artifacts/SrsPage";
 import UMLDiagrams from "../pages/artifacts/UmlPage";
 
@@ -65,7 +67,7 @@ export default function AppRoutes() {
           <Route path="empty" element={<EmptyProjectsPage />} />
           <Route path=":id/recording" element={<RecordingSession />} />
           <Route path=":id/transcript-input" element={<TranscriptInput />} />
-          <Route path=":id/requirements" element={<RequirementsView />} />
+          <Route path=":id/requirements" element={<RequirementsProjectView />} />
           <Route path=":id/artifacts/srs" element={<SRSDocument />} />
           <Route path=":id/artifacts/uml" element={<UMLDiagrams />} />
         </Route>
@@ -73,6 +75,8 @@ export default function AppRoutes() {
 
         <Route path="/transcript">
           <Route path=":sessionId" element={<TranscriptView />} />
+          <Route path=":sessionId/requirements" element={<RequirementsSessionView />} />
+          <Route path=":sessionId/requirements/choice" element={<RequirementsChoicePage />} />
           <Route path="summary" element={<TranscriptSummary />} />
         {/* <Route path=":sessionId/summary" element={<TranscriptSummary />} /> add it when you finish the implementation of the summary page */}
         </Route>

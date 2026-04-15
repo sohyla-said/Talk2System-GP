@@ -1,3 +1,4 @@
+import logging
 from sqlalchemy.orm import Session
 from app.models.session_requirement import SessionRequirement
 from app.models.project_requirments import ProjectRequirement
@@ -7,6 +8,9 @@ from app.models.project import Project
 from app.models.session import Session
 from app.nlp.hybrid_engine import hybrid_inference
 from app.services.llm_service import extract_requirements
+
+
+logger = logging.getLogger(__name__)
 
 class RequirementService:
 
@@ -36,12 +40,21 @@ class RequirementService:
             hybrid_results = hybrid_inference(transcript)
 
         if engine in ['llm', 'both']:
-            llm_raw = extract_requirements(transcript)
-            llm_results = adapt_llm_output(llm_raw)
+            try:
+                llm_raw = extract_requirements(transcript)
+                llm_results = adapt_llm_output(llm_raw)
+            except Exception as exc:
+                # In "both" mode we keep hybrid results even if Ollama fails.
+                if engine == 'llm':
+                    raise ValueError(f"LLM extraction failed: {exc}")
+                logger.exception("LLM extraction failed in both mode; continuing with hybrid output")
 
         # Step 2: Group/Transform resuts
         grouped_hybrid = group_requirements(hybrid_results) if hybrid_results else None
         grouped_llm = group_requirements(llm_results) if llm_results else None
+
+        if not grouped_hybrid and not grouped_llm:
+            raise ValueError("No requirements could be extracted from the selected engine")
 
         db_run_llm = None
         db_run_hybrid = None
@@ -216,7 +229,7 @@ class RequirementService:
 
         new_req = ProjectRequirement(
             project_id=old_req.project_id,
-            requirements_json=grouped_data,
+            aggregated_req_json=grouped_data,
             version=new_version,
             approval_status="pending"
         )

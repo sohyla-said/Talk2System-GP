@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import RequirementsApprovalModal from "../../components/modals/RequirementsApprovalModal";
 import RequirementsEditModal from "../../components/modals/RequirementsEditModal";
 
-export default function RequirementsView() {
+export default function RequirementsProjectView() {
   const [approved, setApproved] = useState(false);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState(null);
@@ -19,8 +19,10 @@ export default function RequirementsView() {
 
   const initialData = location.state?.groupedData;
   const [requirementId, setRequirementId] = useState(location.state?.requirementId ?? null);
+  const [projectName, setProjectName] = useState(null);
 
   useEffect(() => {
+    fetchProjectName();
     fetchVersions();
 
     if (initialData) {
@@ -31,13 +33,23 @@ export default function RequirementsView() {
     }
   }, [initialData]);
 
+  const fetchProjectName = async () =>{
+    try{
+        const projectRes = await fetch(`http://localhost:8000/api/projects/getproject/${projectId}`);
+        const projectData = await projectRes.json();
+        setProjectName(projectData.name)
+    }
+    catch (err) {
+        console.error(err);
+      } 
+  };
 
   const fetchLatestRequirements = async () => {
     if (!projectId) return;
 
     try{
-      const response = await fetch (
-        `http://127.0.0.1:8000/api/projects/${projectId}/requirements`
+          const response = await fetch (
+            `http://127.0.0.1:8000/api/projects/${projectId}/requirements`
       );
       const data = await response.json();
       if (!response.ok) {
@@ -47,7 +59,7 @@ export default function RequirementsView() {
       setRequirementId(data.id ?? null);
       setCurrentRequirementId(data.id ?? null);
       setApproved(data.approval_status === "approved");
-      mapBackendData(data.data || data.grouped_requirements || data);
+      mapBackendData(data.data || data);
     }
     catch (err) {
       console.error(err);
@@ -60,7 +72,8 @@ export default function RequirementsView() {
       setRequirements({
         functional: [],
         nonFunctional: [],
-        actors: []
+        actors: [],
+        features: []
       });
       return;
     }
@@ -74,12 +87,15 @@ export default function RequirementsView() {
         : [];
     const actorsList = Array.isArray(grouped.actors) ? grouped.actors : [];
 
+       const featuresList = Array.isArray(grouped.features) ? grouped.features : [];
+
     const functional = functionalList.map((fr, index) => ({
       id: `FR-${index + 1}`,
       description: fr.text,
-      tags: fr.actor
-        ? [{ label: `Actor: ${fr.actor}`, color: "blue" }]
-        : []
+      tags: [
+        ...(fr.actor ? [{ label: `Actor: ${fr.actor}`, color: "blue" }] : []),
+        ...(fr.feature ? [{ label: `Feature: ${fr.feature}`, color: "purple" }] : [])
+      ]
     }));
 
     const nonFunctional = nonFunctionalList.map((nfr, index) => ({
@@ -95,10 +111,16 @@ export default function RequirementsView() {
       description: actor
     }));
 
+    const features = featuresList.map((feature, index) => ({
+      id: `F-${index + 1}`,
+      description: feature
+    }));
+
     setRequirements({
       functional,
       nonFunctional,
-      actors
+      actors,
+      features
     });
   };
 
@@ -112,19 +134,26 @@ export default function RequirementsView() {
     return {
       functional_requirements: mergedRequirements.functional.map((fr) => ({
         text: fr.description,
-        actor: extractActor(fr.tags)
+        actor: extractActor(fr.tags),
+        feature: extractFeature(fr.tags)
       })),
       non_functional_requirements: mergedRequirements.nonFunctional.map((nfr) => ({
         text: nfr.description,
         category: extractCategory(nfr.tags)
       })),
-      actors: mergedRequirements.actors.map((a) => a.description)
+      actors: mergedRequirements.actors.map((a) => a.description),
+      features: mergedRequirements.features.map((f) => f.description)
     };
   };
 
   const extractActor = (tags) => {
     const tag = (tags || []).find(t => t.label.startsWith("Actor:"));
     return tag ? tag.label.replace("Actor: ", "") : null;
+  };
+
+  const extractFeature = (tags) => {
+    const tag = (tags || []).find(t => t.label.startsWith("Feature:"));
+    return tag ? tag.label.replace("Feature: ", "") : null;
   };
 
   const extractCategory = (tags) => {
@@ -136,7 +165,8 @@ export default function RequirementsView() {
   const [requirements, setRequirements] = useState({
     functional: [],
     nonFunctional: [],
-    actors: []
+    actors: [],
+    features: []
   });
 
   // Handle navigation with approval check
@@ -160,7 +190,7 @@ export default function RequirementsView() {
 
     try{
       const response = await fetch(
-        `http://localhost:8000/api/requirements/${targetRequirementId}/approve`,
+        `http://localhost:8000/api/projects/requirements/${targetRequirementId}/approve`,
         { method: 'PATCH' }
       );
 
@@ -204,7 +234,7 @@ export default function RequirementsView() {
       const updatedGrouped = buildGroupedFromUI(sectionType, updatedData);
 
       const res = await fetch(
-        `http://localhost:8000/api/requirements/${currentRequirementId}`,
+        `http://localhost:8000/api/projects/requirements/${currentRequirementId}`,
         {
           method: "PUT",
           headers: {
@@ -278,7 +308,7 @@ export default function RequirementsView() {
   const fetchRequirementById = async (id) => {
     try{
       const response = await fetch (
-        `http://localhost:8000/api/requirements/${id}`
+        `http://localhost:8000/api/projects/requirements/${id}`
       );
       const data = await response.json();
       if (!response.ok) {
@@ -310,7 +340,7 @@ export default function RequirementsView() {
                 onClick={() => navigate(`/projects/${projectId}`)}
                 className="text-primary-accent dark:text-secondary-accent font-medium leading-normal"
               >
-                E-commerce App Redesign
+                {projectName}
               </button>
               <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
               <span className="text-text-dark dark:text-text-light font-medium leading-normal">Requirements</span>
@@ -319,7 +349,7 @@ export default function RequirementsView() {
         <div className="flex flex-wrap justify-between gap-3 p-4">
           <div className="flex min-w-72 flex-col gap-3">
             <h1 className="text-slate-900 dark:text-white text-4xl font-black leading-tight tracking-[-0.033em]">
-              E-commerce App Redesign - Requirements
+              {projectName} - Requirements
             </h1>
             <p className="text-slate-500 dark:text-slate-400 text-base font-normal leading-normal">
               Review, filter, and manage project requirements generated from your brainstorming session.
@@ -557,7 +587,7 @@ export default function RequirementsView() {
               </span>
             </summary>
             
-            <div className="flex flex-col gap-3 pb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
               {requirements.actors.map((actor) => (
                 <div key={actor.id} className="p-4 rounded-lg bg-background-light dark:bg-background-dark/50 border border-transparent dark:border-white/5">
                   <p className="text-slate-500 dark:text-slate-400 font-mono text-xs mb-1">
@@ -565,6 +595,47 @@ export default function RequirementsView() {
                   </p>
                   <p className="text-slate-800 dark:text-slate-200 text-sm">
                     {actor.description}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </details>
+
+          {/* Features */}
+          <details className="flex flex-col rounded-xl border border-[#d3cee8]/50 dark:border-white/10 bg-white dark:bg-background-dark px-4 group">
+            <summary className="flex cursor-pointer items-center justify-between gap-6 py-4 list-none">
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
+                    Features
+                  </p>
+                  <span 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditSection('features');
+                    }}
+                    className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
+                  >
+                    edit
+                  </span>
+                </div>
+                <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal">
+                  High-level capabilities of the system.
+                </p>
+              </div>
+              <span className="material-symbols-outlined text-slate-500 dark:text-slate-400 group-open:rotate-180 transition-transform">
+                expand_more
+              </span>
+            </summary>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
+              {requirements.features.map((feature) => (
+                <div key={feature.id} className="p-4 rounded-lg bg-background-light dark:bg-background-dark/50 border border-transparent dark:border-white/5">
+                  <p className="text-slate-500 dark:text-slate-400 font-mono text-xs mb-1">
+                    {feature.id}
+                  </p>
+                  <p className="text-slate-800 dark:text-slate-200 text-sm">
+                    {feature.description}
                   </p>
                 </div>
               ))}
