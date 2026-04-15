@@ -15,9 +15,16 @@ class Requirement(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    approval_status = Column(String(10), default='pending')
+    approval_status = Column(String, default='pending')
 
-    version = Column(String(10), default='v1')
+    version = Column(Integer, default=1)
+
+
+    session = relationship("Session", back_populates="requirements")
+
+    src_run_id = Column(Integer, ForeignKey("requirement_runs.id"), nullable=False)
 
     project = relationship("Project", back_populates="requirements")
-    session = relationship("Session", back_populates="requirements")
+    
+    requirement_run = relationship("RequirementRun", back_populates="requirements")
+

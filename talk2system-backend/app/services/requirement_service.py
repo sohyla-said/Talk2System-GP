@@ -1,7 +1,10 @@
 from sqlalchemy.orm import Session
 from app.models.requirement import Requirement
+from app.models.requirement_raw import RequirementRaw
+from app.models.requirement_runs import RequirementRun
 from app.models.project import Project
 from app.nlp.hybrid_engine import hybrid_inference
+from app.services.llm_service import extract_requirements
 
 class RequirementService:
 
@@ -10,7 +13,8 @@ class RequirementService:
     def extract_and_store_requirements(
         db: Session,
         project_id: int,
-        transcript: str
+        transcript: str,
+        engine: str = 'both'
     ):
 
         # Step 0: Validate project exists
@@ -18,41 +22,104 @@ class RequirementService:
         if not project:
             raise ValueError("Project not found")
 
+        hybrid_results = None
+        llm_results = None
+
+        if engine in ['hybrid', 'both']:
         # Step 1: Run NLP pipeline
-        results = hybrid_inference(transcript)
+            hybrid_results = hybrid_inference(transcript)
+
+        if engine in ['llm', 'both']:
+            llm_raw = extract_requirements(transcript)
+            llm_results = adapt_llm_output(llm_raw)
 
         # Step 2: Group/Transform resuts
-        grouped = group_requirements(results)
+        grouped_hybrid = group_requirements(hybrid_results) if hybrid_results else None
+        grouped_llm = group_requirements(llm_results) if llm_results else None
 
-        # Step 3: Structure JSON
-        structured_json = {
-            # "project_id": project_id,
-            "total_requirements": len(results),
-            "raw_requirements": results,     # store results from the hybrid inference as is --> useful for debugging
-            "grouped_requirements": grouped     # store grouped results --> useful for UI display of requirements, 
-                                                # instead of transforming with each get request
-        }
+        db_run_llm = None
+        db_run_hybrid = None
 
-        # Step 4: Save to DB
-        db_requirement = Requirement(
-            project_id=project_id,
-            requirements_json=structured_json
-        )
-        
-        db.add(db_requirement)
-        db.commit()
-        db.refresh(db_requirement)
+        try:
 
-        # Step 5: Return response
+            if grouped_llm:
+                db_run_llm = RequirementRun(
+                    project_id=project_id,
+                    run_type="llm",
+                    grouped_json=grouped_llm
+                )
+                db.add(db_run_llm)
+
+            if grouped_hybrid:
+                db_run_hybrid = RequirementRun(
+                    project_id=project_id,
+                    run_type="hybrid",
+                    grouped_json=grouped_hybrid
+                )
+                db.add(db_run_hybrid)
+
+            db.flush()  # REQUIRED for IDs
+
+            if db_run_llm and llm_results:
+                db.add(RequirementRaw(
+                    run_id=db_run_llm.id,
+                    raw_json=llm_results
+                ))
+
+            if db_run_hybrid and hybrid_results:
+                db.add(RequirementRaw(
+                    run_id=db_run_hybrid.id,
+                    raw_json=hybrid_results
+                ))
+
+            db.commit()
+
+        except Exception:
+            db.rollback()
+            raise
+
         return {
-            "id": db_requirement.id,
             "project_id": project_id,
-            "requirements": results,
-            "approval_status": db_requirement.approval_status,  # used in the UI to display status and enable/diable buttons
-            "version": db_requirement.version,  # used in the UI to display the requirements version
-            "total_requirements": len(results),
-            "requirements_grouped": grouped
+            "hybrid_run_id": db_run_hybrid.id if db_run_hybrid else None,
+            "hybrid": grouped_hybrid,
+            "llm_run_id": db_run_llm.id if db_run_llm else None,
+            "llm": grouped_llm
         }
+    
+    # method to choose preferred requirements
+    @staticmethod
+    def set_preferred_requirements(db: Session, project_id: int, req_json, src_run_id: int):
+        # 1) check for project existance
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            raise ValueError("Project not found")
+        
+        # 2) check for the existance of the src run
+        src_run = db.query(RequirementRun).filter(RequirementRun.id == src_run_id, RequirementRun.project_id == project_id).first()
+        if not src_run:
+            raise ValueError("Source run not found")
+        
+        # 3) create the requirement and save it
+        db_requirment = Requirement(
+            project_id = project_id,
+            requirements_json = req_json,
+            src_run_id = src_run_id
+        )
+
+        db.add(db_requirment)
+        try:
+            db.commit()
+        except:
+            db.rollback()
+            raise
+        db.refresh(db_requirment)
+
+        return {
+            "project_id": project_id,
+            "req_id": db_requirment.id,
+            "preferred_type": src_run.run_type,
+        }
+        
     
     # get latest requirement version
     @staticmethod
@@ -63,14 +130,12 @@ class RequirementService:
 
         if not req:
             raise ValueError("No requirements found")
-
-        grouped = RequirementService._extract_grouped_requirements(req.requirements_json)
         
         return{
             "id": req.id,
             "version": req.version,
             "approval_status": req.approval_status,
-            "data": grouped
+            "data": req.requirements_json
         }
     
     # get all requirements version of a project
@@ -94,27 +159,6 @@ class RequirementService:
                 for req in reqs
         ]
     
-
-    @staticmethod
-    def _extract_grouped_requirements(requirements_json: dict):
-        if not isinstance(requirements_json, dict):
-            return {
-                "actors": [],
-                "functional_requirements": [],
-                "nonfunctional_requirements": [],
-            }
-
-        grouped = requirements_json.get("grouped_requirements") or requirements_json.get("grouped") or {}
-
-        # Normalize key spelling for UI compatibility.
-        if "non_functional_requirements" in grouped and "nonfunctional_requirements" not in grouped:
-            grouped["nonfunctional_requirements"] = grouped.get("non_functional_requirements", [])
-
-        grouped.setdefault("actors", [])
-        grouped.setdefault("functional_requirements", [])
-        grouped.setdefault("nonfunctional_requirements", [])
-        return grouped
-    
     
     # get requirement by id
     @staticmethod
@@ -125,13 +169,12 @@ class RequirementService:
         if not req:
             raise ValueError("Requirement not found")
 
-        grouped = RequirementService._extract_grouped_requirements(req.requirements_json)
         
         return{
             "id": req.id,
             "version": req.version,
             "approval_status": req.approval_status,
-            "data": grouped
+            "data": req.requirements_json
         }
     
     # edit/update requirement --> creates a new version
@@ -145,18 +188,20 @@ class RequirementService:
             raise ValueError("Requirement not found")
         
         # increment version
-        old_version = int(old_req.version.replace("v", ""))
-        new_version = f"v{old_version + 1}"
+        old_version = old_req.version
+        new_version = old_version + 1
 
         new_req = Requirement(
             project_id=old_req.project_id,
-            requirements_json={
-                # "project_id": old_req.project_id,
-                "grouped_requirements": grouped_data
-            },
+            requirements_json=grouped_data,
             version=new_version,
-            approval_status="pending"
+            approval_status="pending",
+            src_run_id = old_req.src_run_id
         )
+        db.query(Requirement).filter(
+            Requirement.project_id == old_req.project_id,
+            Requirement.approval_status == "pending"
+        ).update({"approval_status": "superseded"})
 
         db.add(new_req)
         db.commit()
@@ -194,31 +239,57 @@ def group_requirements(results):
     grouped = {
         "actors": set(), 
         "functional_requirements": [],
-        "nonfunctional_requirements": []
+        "nonfunctional_requirements": [],
+        "features": set()
     }
 
     for r in results:
         structure = r.get("structure", {})
         actor = structure.get("actor")
+        feature = structure.get("action")  # NEW
         nfr_category = r.get("nfr_category")
 
-        # collect actors
         if actor:
             grouped["actors"].add(actor)
 
-            # FRs
-            if r['requirement_type'] == "FR":
-                grouped['functional_requirements'].append({
-                    "text": r['cleaned_sentence'],
-                    "actor": actor
-                })
-            # NFR
-            elif r['requirement_type'] == "NFR":
-                grouped['nonfunctional_requirements'].append({
-                    "text": r['cleaned_sentence'],
-                    "category": nfr_category
-                })
+        if r['requirement_type'] == "FR":
+            grouped['functional_requirements'].append({
+                "text": r['cleaned_sentence'],
+                "actor": actor,
+                "feature": feature   # NEW
+            })
+
+        elif r['requirement_type'] == "NFR":
+            grouped['nonfunctional_requirements'].append({
+                "text": r['cleaned_sentence'],
+                "category": nfr_category
+            })
+        if feature:
+            grouped['features'].add(feature)
 
     grouped["actors"] = list(grouped["actors"])
+    grouped['features'] = list(grouped['features'])
     return grouped
+
+
+def adapt_llm_output(llm_results):
+    adapted = []
+
+    for item in llm_results:
+        adapted.append({
+            "sentence_id": None,
+            "speaker": None,
+            "cleaned_sentence": item["text"],
+            "requirement_type": item["type"],
+            "nfr_category": item["category"],
+            "structure": {
+                "actor": item["actor"],
+                "action": item['feature'],
+                "object": None,
+                "is_negative": None
+            },
+            "confidence": None
+        })
+
+    return adapted
 

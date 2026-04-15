@@ -18,3 +18,10 @@ class Project(Base):
     sessions = relationship("Session", back_populates="project")
     requirements = relationship( "Requirement", back_populates="project",cascade="all, delete-orphan")
     artifacts = relationship("Artifact",back_populates="project")
+
+    requirement_runs = relationship(
+        "RequirementRun",
+        back_populates="project",
+        cascade="all, delete-orphan"
+    )
+

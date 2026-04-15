@@ -9,9 +9,14 @@ router = APIRouter()
 
 class ExtractRequirementsRequest(BaseModel):
     transcript: str
+    engine: str
 
 class UpdateRequirementsRequest(BaseModel):
     grouped: dict
+
+class ChooseRequirementRequest(BaseModel):
+    requirements_json: dict
+    src_run_id: int
 
 
 @router.post("/projects")
@@ -34,17 +39,31 @@ def extract_requirements(
         result = RequirementService.extract_and_store_requirements(
             db=db,
             project_id=project_id,
-            transcript=request.transcript
+            transcript=request.transcript,
+            engine= request.engine
         )
         return {
             "message": "Requirements extracted and stored successfully",
-            "requirement_id": result["id"],
-            "version": result['version'],
-            "approval_status": result['approval_status'],
-            "data": result["requirements_grouped"]
+            "LLM_run_id": result['llm_run_id'],
+            "LLM_data": result["llm"],
+            "Hybrid_run_id": result['hybrid_run_id'],
+            "Hybrid_data": result['hybrid']
+
         }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    
+# set the preferred requirements from llm or hybrid
+@router.post("/projects/{project_id}/choose-requirements")
+def choose_requirements(
+    project_id: int, 
+    request: ChooseRequirementRequest, 
+    db: Session = Depends(get_db)):
+    try:
+        return RequirementService.set_preferred_requirements(db, project_id, request.requirements_json, request.src_run_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    
     
 # get latest requirement version for the project 
 @router.get("/projects/{project_id}/requirements")
