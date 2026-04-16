@@ -3,7 +3,6 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 export default function CheckoutSummary() {
-  const [approved, setApproved] = useState(false);
   const [summary, setSummary] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -129,18 +128,6 @@ export default function CheckoutSummary() {
             </span>
           </div>
           View Full Transcript
-        </button>
-
-        <button
-          onClick={() => setApproved(true)}
-          disabled={approved}
-          className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold text-white
-            ${approved ? "bg-green-600" : "bg-primary hover:bg-primary/90"}`}
-        >
-          <span className="material-symbols-outlined">
-            {approved ? "check_circle" : "approval"}
-          </span>
-          {approved ? "Approved" : "Approve"}
         </button>
 
       </div>
