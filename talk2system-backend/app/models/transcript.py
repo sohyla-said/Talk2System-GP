@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String, ForeignKey, Text
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -13,6 +13,6 @@ class TranscriptSegment(Base):
     speaker = Column(String)
     start_time = Column(Integer)
     end_time = Column(Integer)
-    text = Column(String)
+    text = Column(Text)
 
     session = relationship("Session", back_populates="transcripts")

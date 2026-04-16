@@ -12,7 +12,7 @@ from app.api import requirements
 from app.api.transcription_router import router as transcription_router
 from app.api.document import router as document_router
 from app.api import project_routes, session_routes
-
+from app.api import summary
 app = FastAPI()
 
 app.add_middleware(
@@ -36,3 +36,4 @@ app.mount("/storage", StaticFiles(directory="storage"), name="storage")
 
 app.include_router(project_routes.router)
 app.include_router(session_routes.router)
+app.include_router(summary.router, prefix="/api")

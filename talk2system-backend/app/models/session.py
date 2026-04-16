@@ -25,3 +25,8 @@ class Session(Base):
         back_populates="session",
         cascade="all, delete-orphan"
     )
+    summaries = relationship(
+    "Summary",
+    back_populates="session",
+    cascade="all, delete-orphan"
+   )
