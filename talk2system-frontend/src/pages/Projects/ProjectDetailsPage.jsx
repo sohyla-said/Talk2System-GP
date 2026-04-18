@@ -130,7 +130,7 @@ const ProjectDetailsPage = () => {
                 sessions.map((session) => (
                   <div
                     key={session.id}
-                    onClick={() => navigate(`/transcript/${session.id}`)}
+                    onClick={() => navigate(`/transcript/${session.id}/requirements`)}
                     className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
                   >
                     <div className="flex justify-between items-start">

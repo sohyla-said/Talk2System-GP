@@ -21,7 +21,8 @@ import ProjectDetails from "../pages/projects/ProjectDetailsPage";
 import AddProject from "../pages/projects/AddProjectDetailsPage";
 import AddParticipant from "../pages/projects/AddParticipantPage";
 import EmptyProjectsPage from "../pages/projects/EmptyProjectsPage";
-
+ //sessions
+// import SessionDetailsPage from "../pages/sessions/SessionDetailsPage";
 // Recording & Transcript
 import RecordingSession from "../pages/recordingsession/RecordingSessionPage";
 import TranscriptInput from "../pages/recordingsession/TranscriptInputPage"
@@ -87,7 +88,9 @@ export default function AppRoutes() {
         <Route path="/summary/:sessionId" element={<TranscriptSummary />} />
         
         <Route path="/results" element={<Results />} />
+        {/* <Route path=":projectId/sessions/:sessionId" element={<SessionDetailsPage />} /> */}
         
+                
       </Route>
     </Routes>
   );
