@@ -61,6 +61,19 @@ def predict_fr_nfr(sentence: str):
 
     return pred, confidence
 
+nfr_mapping = {
+    "PE": "Performance",
+    "SE": "Security",
+    "US": "Usability",
+    "MN": "Maintainability",
+    "A": "Availability",
+    "SC": "Scalability"
+}
+
+def map_nfr_category(short_code: str):
+    return nfr_mapping.get(short_code, "Unknown")
+
+
 def predict_nfr_category(sentence: str):
     # preprocess and convert into tf-idf vectors
     X_vec = nfr_vectorizer.transform([preprocess_for_ml(sentence)])
@@ -74,8 +87,9 @@ def predict_nfr_category(sentence: str):
         decision_scores = decision_scores.reshape(1, -1)
     conf = softmax(decision_scores, axis=1)[0]
     max_conf = np.max(conf)
+    mapped_pred = map_nfr_category(pred)
 
-    return pred, max_conf
+    return mapped_pred, max_conf
 
 ############################    Hybrid Inference  ############################
 def hybrid_inference(transcript: str) -> List[dict]:

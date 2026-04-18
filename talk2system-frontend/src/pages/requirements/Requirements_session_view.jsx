@@ -459,7 +459,7 @@ export default function RequirementsSessionView() {
             Documents
           </button>
           <button 
-            onClick={() => navigate("/transcript")}
+            onClick={() => navigate(`/transcript/${sessionId}`)}
             className="text-slate-500 dark:text-slate-400 pb-3 text-sm font-medium leading-normal hover:text-slate-800 dark:hover:text-slate-200 transition-colors whitespace-nowrap"
           >
             Transcript
