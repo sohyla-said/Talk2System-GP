@@ -13,7 +13,6 @@ const TranscriptInputPage = () => {
   const textareaRef = useRef(null);
   const navigate = useNavigate();
   const { id: projectId } = useParams();
-  const [sessionId, setSessionId] = useState(null);
 
   // const today = new Date().toLocaleDateString('en-US', {
   //   year: 'numeric', month: 'long', day: 'numeric'
@@ -22,13 +21,6 @@ const TranscriptInputPage = () => {
   useEffect(() => {
     setCharCount(transcript.length);
   }, [transcript]);
-
-  useEffect(() => {
-    if (projectId) {
-      createSession();
-    }
-  }, [projectId]);
-
 
   const handleTextChange = (e) => {
     setTranscript(e.target.value);
@@ -72,75 +64,73 @@ const TranscriptInputPage = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const createSession = async () => {
-    try{
-      const response = await fetch(
-        `http://127.0.0.1:8000/api/sessions/project/${projectId}`,
-        {
-          method: 'POST',
-            headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            project_id: projectId
-          }),
-        }
-      );
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || "Failed to get last session ID");
-      }
-
-      setSessionId(data.id);
-    }
-    catch (err) {
-      console.error(err);
-    }
-  };
-
   const handleSubmit = async () => {
     if (!transcript.trim()) return;
 
     setIsSubmitting(true);
 
-    try{
-        const response = await fetch(
-            `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/extract-requirements`,
-            {
-                method: 'POST',
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    transcript: transcript,
-                  engine: "both"
-                }),
-            }
-        );
-        const data = await response.json()
-        console.log(data)
-
-        if(!response.ok){
-            throw new Error(data.detail || "Something went wrong");
+    try {
+      // ---------------------------------------------------------------
+      // STEP 1 — Parse & save the transcript text, get back a session_id
+      // ---------------------------------------------------------------
+      const transcriptResponse = await fetch(
+        `http://127.0.0.1:8000/api/projects/${projectId}/UploadTranscript`,
+        {
+          method: 'POST',
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transcript: transcript,
+            title: uploadedFileName || "Uploaded Transcript",
+          }),
         }
+      );
 
-        setSubmitted(true)
+      const transcriptData = await transcriptResponse.json();
 
-        navigate(`/transcript/${sessionId}/requirements/choice`,{
-            state: {
-              projectId,
-              hybridRunId: data.Hybrid_run_id,
-              hybridData: data.Hybrid_data,
-              llmRunId: data.LLM_run_id,
-              llmData: data.LLM_data
-            }
-        });
-    }catch (error) {
-        console.error(error);
-        alert(error.message);
+      if (!transcriptResponse.ok) {
+        throw new Error(transcriptData.detail || "Failed to save transcript");
+      }
+
+      const sessionId = transcriptData.session_id;
+
+      // ---------------------------------------------------------------
+      // STEP 2 — Extract requirements (same call as before)
+      // ---------------------------------------------------------------
+      const requirementsResponse = await fetch(
+        `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/extract-requirements`,
+        {
+          method: 'POST',
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transcript: transcript,
+            engine: "both",
+          }),
+        }
+      );
+
+      const requirementsData = await requirementsResponse.json();
+
+      if (!requirementsResponse.ok) {
+        throw new Error(requirementsData.detail || "Something went wrong");
+      }
+
+      setSubmitted(true);
+
+      navigate(`/transcript/${sessionId}/requirements/choice`, {
+        state: {
+          projectId,
+          hybridRunId: requirementsData.Hybrid_run_id,
+          hybridData: requirementsData.Hybrid_data,
+          llmRunId: requirementsData.LLM_run_id,
+          llmData: requirementsData.LLM_data,
+        },
+      });
+
+    } catch (error) {
+      console.error(error);
+      alert(error.message);
     } finally {
-        setIsSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 

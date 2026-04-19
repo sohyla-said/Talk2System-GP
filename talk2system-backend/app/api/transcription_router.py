@@ -8,7 +8,13 @@ import uuid
 from app.db.session import get_db
 from app.models.session import Session as SessionModel
 from app.models.transcript import TranscriptSegment
-from app.services.transcription_service import transcribe_audio, save_transcription, get_transcript_by_session ,update_transcript_segment
+from app.services.transcription_service import (
+    transcribe_audio,
+    save_transcription,
+    get_transcript_by_session,
+    update_transcript_segment,
+    save_transcript_text,         
+)
 from app.models.project import Project
 
 router = APIRouter()
@@ -18,6 +24,10 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_TYPES = ["audio/wav", "audio/mpeg", "audio/mp3", "audio/webm"]
 
+
+# ---------------------------------------------------------------------------
+# AUDIO UPLOAD FLOW  
+# ---------------------------------------------------------------------------
 
 @router.post("/projects/{project_id}/transcribe")
 async def transcribe(
@@ -65,8 +75,12 @@ async def transcribe(
         db.commit()
 
     except Exception as e:
-        session.status = "failed"
+        # Roll back any partial writes, hard-delete the session and the file
+        db.rollback()
+        db.delete(session)
         db.commit()
+        if os.path.exists(file_path):
+            os.remove(file_path)
         raise HTTPException(status_code=500, detail=str(e))
 
     return {
@@ -75,6 +89,70 @@ async def transcribe(
         "transcript": transcript_text
     }
 
+
+# ---------------------------------------------------------------------------
+# TEXT TRANSCRIPT UPLOAD FLOW  (new)
+# ---------------------------------------------------------------------------
+
+class TranscriptTextPayload(BaseModel):
+    transcript: str          # raw text e.g. "Speaker A: Hello. Speaker B: Hi."
+    title: str = "Uploaded Transcript"
+
+
+@router.post("/projects/{project_id}/UploadTranscript")
+def upload_transcript_text(
+    project_id: int,
+    payload: TranscriptTextPayload,
+    db: Session = Depends(get_db),
+):
+ 
+    # Validate project exists
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if not payload.transcript.strip():
+        raise HTTPException(status_code=400, detail="Transcript text is empty")
+
+    # Create a DB session for this transcript (no audio file)
+    session = SessionModel(
+        title=payload.title,
+        audio_file_path=None,
+        status="processing",
+        project_id=project_id,
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    try:
+        transcript_text = save_transcript_text(db, session.id, payload.transcript)
+        session.transcript_text = transcript_text
+        session.status = "completed"
+        db.commit()
+
+    except ValueError as ve:
+        db.rollback()
+        db.delete(session)
+        db.commit()
+        raise HTTPException(status_code=422, detail=str(ve))
+
+    except Exception as e:
+        db.rollback()
+        db.delete(session)
+        db.commit()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {
+        "session_id": session.id,
+        "project_id": project_id,
+        "transcript": transcript_text,
+    }
+
+
+# ---------------------------------------------------------------------------
+# GET TRANSCRIPT  (existing — unchanged)
+# ---------------------------------------------------------------------------
 
 @router.get("/sessions/{session_id}/transcript")
 def get_transcript(session_id: int, db: Session = Depends(get_db)):
@@ -100,6 +178,11 @@ def get_transcript(session_id: int, db: Session = Depends(get_db)):
         "project_id": session.project_id,
         "transcript": transcript
     }
+
+
+# ---------------------------------------------------------------------------
+# PATCH SEGMENT  (existing — unchanged)
+# ---------------------------------------------------------------------------
 
 class SegmentUpdate(BaseModel):
     segment_index: int   # 0-based position in the ordered list (matches the frontend's id - 1)

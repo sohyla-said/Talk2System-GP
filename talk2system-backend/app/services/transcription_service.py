@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 import librosa
@@ -94,8 +95,8 @@ def save_transcription(db: Session, session_id: int, diarization):
         segment = TranscriptSegment(
             session_id=session_id,
             speaker=str(seg["speaker"]),
-            start_time=seg["start"],
-            end_time=seg["end"],
+            start_time=seg.get("start"),   # None is stored as NULL for text-upload segments
+            end_time=seg.get("end"),       # None is stored as NULL for text-upload segments
             text=seg["text"]
         )
         db.add(segment)
@@ -104,7 +105,7 @@ def save_transcription(db: Session, session_id: int, diarization):
 
     db.commit()
 
-    return "\n".join(full_text) 
+    return "\n".join(full_text)
 
 
 def _ms_to_mmss(ms: int) -> str:
@@ -116,25 +117,32 @@ def _ms_to_mmss(ms: int) -> str:
  
  
 def get_transcript_by_session(db: Session, session_id: int):
+    # Use start_time for ordering when it exists (audio flow), fall back to id
+    # (insertion order) for text-upload segments that have NULL timestamps.
     segments = (
         db.query(TranscriptSegment)
         .filter(TranscriptSegment.session_id == session_id)
-        .order_by(TranscriptSegment.start_time)
+        .order_by(TranscriptSegment.start_time.nulls_last(), TranscriptSegment.id)
         .all()
     )
- 
+
     if not segments:
         return []
- 
-    return [
-        {
+
+    result = []
+    for seg in segments:
+        entry = {
             "speaker": f"Speaker {seg.speaker}",
             "text": seg.text,
-            "start_time": _ms_to_mmss(seg.start_time),
-            "end_time": _ms_to_mmss(seg.end_time),
         }
-        for seg in segments
-    ]
+        # Only include timestamps when they were actually recorded (audio flow)
+        if seg.start_time is not None:
+            entry["start_time"] = _ms_to_mmss(seg.start_time)
+        if seg.end_time is not None:
+            entry["end_time"] = _ms_to_mmss(seg.end_time)
+        result.append(entry)
+
+    return result
 
 def update_transcript_segment(
     db: Session,
@@ -146,7 +154,7 @@ def update_transcript_segment(
     segments = (
         db.query(TranscriptSegment)
         .filter(TranscriptSegment.session_id == session_id)
-        .order_by(TranscriptSegment.start_time)
+        .order_by(TranscriptSegment.start_time.nulls_last(), TranscriptSegment.id)
         .all()
     )
  
@@ -160,3 +168,56 @@ def update_transcript_segment(
     segment.text = text
     db.commit()
     return True
+
+
+# =============================================================================
+# TEXT TRANSCRIPT PARSING  (used by the "Upload Transcript" flow)
+# =============================================================================
+
+def parse_transcript_text(raw_text: str) -> list[dict]:
+    # Split on every occurrence of "SomeLabel SomeId:" that looks like a speaker tag.
+    pattern = re.compile(r'([A-Za-z][A-Za-z0-9_]*(?:\s+[A-Za-z0-9_]+)?)\s*:')
+
+    parts = pattern.split(raw_text.strip())
+    # pattern.split → ['', speaker1, text1, speaker2, text2, ...]
+
+    segments = []
+
+    it = iter(parts)
+    next(it, None)  # skip the leading empty string before the first speaker tag
+
+    for speaker_label, text_chunk in zip(it, it):
+        speaker_label = speaker_label.strip()
+        text_chunk = text_chunk.strip()
+
+        if not text_chunk:
+            continue
+
+        # Strip "Speaker " prefix → store just "A", "B", etc.
+        raw_speaker = re.sub(r'^Speaker\s+', '', speaker_label, flags=re.IGNORECASE).strip()
+
+        segments.append({
+            "speaker": raw_speaker,
+            "text": text_chunk,
+            "start": None,   # no timing available for text transcripts
+            "end": None,
+            "chunk": 0,
+        })
+
+    return segments
+
+
+def save_transcript_text(db: Session, session_id: int, raw_text: str) -> str:
+    """
+    Parse raw transcript text and persist segments using the existing
+    save_transcription() pipeline.  Returns the full joined transcript string.
+    """
+    diarization = parse_transcript_text(raw_text)
+
+    if not diarization:
+        raise ValueError(
+            "Could not parse any speaker segments from the provided transcript. "
+            "Make sure it follows the format  'Speaker X: <text>'."
+        )
+
+    return save_transcription(db, session_id, diarization)
