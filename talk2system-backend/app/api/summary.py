@@ -12,11 +12,13 @@ router = APIRouter()
 
 
 def build_transcript_text(segments):
-    return "\n".join(
-        f"{seg['speaker']}: \"{seg['text']}\""
-        for seg in segments
-    )
-
+    lines = []
+    for seg in segments:
+        speaker = seg.get("speaker")
+        text = seg["text"]
+        line = f"{speaker}: \"{text}\"" if speaker else text
+        lines.append(line)
+    return "\n".join(lines)
 
 @router.post("/summarize/{session_id}")
 def summarize(session_id: int, db: Session = Depends(get_db)):

@@ -67,6 +67,25 @@ export default function SessionResults() {
           </div>
         </div>
 
+        {/* Summary CARD */}
+        <div
+          onClick={() => navigate(`/summary/${sessionId}`)}
+          className="bg-card-light dark:bg-card-dark rounded-xl border p-5 shadow-sm hover:shadow-lg transition cursor-pointer"
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <span className="material-symbols-outlined text-purple-500">account_tree</span>
+            <h3 className="font-bold">Summary</h3>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">
+            View the summary for this session
+          </p>
+          <div className="flex justify-end">
+            <button className="text-primary font-bold flex items-center gap-1">
+              View <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   );

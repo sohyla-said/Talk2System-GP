@@ -1,6 +1,6 @@
 import os
-import re
 from pathlib import Path
+import re
 
 import librosa
 from pydub import AudioSegment
@@ -30,9 +30,8 @@ def _configure_assemblyai_key() -> None:
 def transcribe_audio(file_path: str):
     _configure_assemblyai_key()
 
-    # =========================
+
     # STEP 1: CHECK AUDIO LENGTH
-    # =========================
     audio, sr = librosa.load(file_path, sr=None)
     duration_minutes = len(audio) / sr / 60
 
@@ -50,9 +49,8 @@ def transcribe_audio(file_path: str):
     else:
         chunk_files.append(file_path)
 
-    # =========================
+  
     # STEP 2: TRANSCRIBE
-    # =========================
     config = aai.TranscriptionConfig(
             speaker_labels=True,
             punctuate=True,
@@ -92,16 +90,19 @@ def save_transcription(db: Session, session_id: int, diarization):
     full_text = []
 
     for seg in diarization:
+        raw_speaker = seg.get("speaker")  
+
         segment = TranscriptSegment(
             session_id=session_id,
-            speaker=str(seg["speaker"]),
-            start_time=seg.get("start"),   # None is stored as NULL for text-upload segments
-            end_time=seg.get("end"),       # None is stored as NULL for text-upload segments
+            speaker=str(raw_speaker) if raw_speaker is not None else None,
+            start_time=seg.get("start"),
+            end_time=seg.get("end"),
             text=seg["text"]
         )
         db.add(segment)
 
-        full_text.append(f"Speaker {seg['speaker']}: {seg['text']}")
+        line = f"Speaker {raw_speaker}: {seg['text']}" if raw_speaker else seg["text"]
+        full_text.append(line)
 
     db.commit()
 
@@ -131,10 +132,10 @@ def get_transcript_by_session(db: Session, session_id: int):
 
     result = []
     for seg in segments:
-        entry = {
-            "speaker": f"Speaker {seg.speaker}",
-            "text": seg.text,
-        }
+        entry = {"text": seg.text}
+        # Only include speaker when it was recorded (omitted for speakerless transcripts)
+        if seg.speaker is not None:
+            entry["speaker"] = f"Speaker {seg.speaker}"
         # Only include timestamps when they were actually recorded (audio flow)
         if seg.start_time is not None:
             entry["start_time"] = _ms_to_mmss(seg.start_time)
@@ -174,50 +175,72 @@ def update_transcript_segment(
 # TEXT TRANSCRIPT PARSING  (used by the "Upload Transcript" flow)
 # =============================================================================
 
-def parse_transcript_text(raw_text: str) -> list[dict]:
-    # Split on every occurrence of "SomeLabel SomeId:" that looks like a speaker tag.
-    pattern = re.compile(r'([A-Za-z][A-Za-z0-9_]*(?:\s+[A-Za-z0-9_]+)?)\s*:')
+# Matches labels like "Speaker A:", "Speaker B:", "Speaker 1:" at the start
+# of a line or inline. Captures only the label suffix (A, B, 1…).
+_SPEAKER_TAG_RE = re.compile(
+    r'(?:^|\n)\s*Speaker\s+([A-Za-z0-9_]+)\s*:',
+    re.IGNORECASE,
+)
 
-    parts = pattern.split(raw_text.strip())
-    # pattern.split → ['', speaker1, text1, speaker2, text2, ...]
+
+def _has_speaker_tags(text: str) -> bool:
+    """Return True if the text contains at least one 'Speaker X:' label."""
+    return bool(_SPEAKER_TAG_RE.search(text))
+
+
+def parse_transcript_text(raw_text: str) -> list[dict]:
+    raw_text = raw_text.strip()
+
+    # Strip wrapping quotes:  "..." → ...
+    if raw_text.startswith('"') and raw_text.endswith('"') and len(raw_text) > 2:
+        raw_text = raw_text[1:-1].strip()
+
+    # ── Mode B: no speaker tags → one segment, speaker NULL ──────────────
+    if not _has_speaker_tags(raw_text):
+        return [
+            {
+                "speaker": None,
+                "text": raw_text,
+                "start": None,
+                "end": None,
+                "chunk": 0,
+            }
+        ]
+
+    # ── Mode A: split on every "Speaker X:" occurrence ───────────────────
+    # Replace newlines with spaces first so inline and newline formats both work.
+    normalised = raw_text.replace("\n", " ").replace("\r", " ")
+
+    # Split pattern: "Speaker <label>:"
+    split_re = re.compile(r'Speaker\s+([A-Za-z0-9_]+)\s*:', re.IGNORECASE)
+    parts = split_re.split(normalised)
+    # split() with one capture group → ['pre', label1, text1, label2, text2, …]
 
     segments = []
-
     it = iter(parts)
-    next(it, None)  # skip the leading empty string before the first speaker tag
+    next(it, None)  # discard any text before the first speaker tag
 
-    for speaker_label, text_chunk in zip(it, it):
-        speaker_label = speaker_label.strip()
+    for label, text_chunk in zip(it, it):
+        label = label.strip()
         text_chunk = text_chunk.strip()
-
         if not text_chunk:
             continue
-
-        # Strip "Speaker " prefix → store just "A", "B", etc.
-        raw_speaker = re.sub(r'^Speaker\s+', '', speaker_label, flags=re.IGNORECASE).strip()
-
-        segments.append({
-            "speaker": raw_speaker,
-            "text": text_chunk,
-            "start": None,   # no timing available for text transcripts
-            "end": None,
-            "chunk": 0,
-        })
+        segments.append(
+            {
+                "speaker": label,   # e.g. "A", "B", "1"
+                "text": text_chunk,
+                "start": None,
+                "end": None,
+                "chunk": 0,
+            }
+        )
 
     return segments
 
 
 def save_transcript_text(db: Session, session_id: int, raw_text: str) -> str:
-    """
-    Parse raw transcript text and persist segments using the existing
-    save_transcription() pipeline.  Returns the full joined transcript string.
-    """
+    if not raw_text.strip():
+        raise ValueError("Transcript text is empty.")
+
     diarization = parse_transcript_text(raw_text)
-
-    if not diarization:
-        raise ValueError(
-            "Could not parse any speaker segments from the provided transcript. "
-            "Make sure it follows the format  'Speaker X: <text>'."
-        )
-
     return save_transcription(db, session_id, diarization)

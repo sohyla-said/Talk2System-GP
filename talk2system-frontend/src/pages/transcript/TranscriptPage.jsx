@@ -59,11 +59,13 @@ export default function TranscriptPage() {
 
         const mapped = data.transcript.map((item, index) => ({
           id: index + 1,
-          name: item.speaker,
-          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(item.speaker)}`,
+          name: item.speaker ?? null,
+          avatar: item.speaker
+            ? `https://ui-avatars.com/api/?name=${encodeURIComponent(item.speaker)}`
+            : null,
           text: item.text,
-          startTime: item.start_time,
-          endTime: item.end_time,
+          startTime: item.start_time ?? null,
+          endTime: item.end_time ?? null,
         }));
 
         setTranscriptData(mapped);

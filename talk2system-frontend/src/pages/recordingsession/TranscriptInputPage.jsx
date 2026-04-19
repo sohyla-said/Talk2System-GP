@@ -110,8 +110,13 @@ const TranscriptInputPage = () => {
 
       const requirementsData = await requirementsResponse.json();
 
+      // if (!requirementsResponse.ok) {
+      //   throw new Error(requirementsData.detail || "Something went wrong");
+      // }
       if (!requirementsResponse.ok) {
-        throw new Error(requirementsData.detail || "Something went wrong");
+        // Requirements extraction failed — fall back to transcript view
+        navigate(`/transcript/${sessionId}`);
+        return;
       }
 
       setSubmitted(true);
