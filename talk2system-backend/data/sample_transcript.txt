@@ -64,3 +64,75 @@ We may want to build a mobile app later, so the API should be ready for that. No
    PostgreSQL for the database. We want a working prototype in four weeks and a full launch in three months. 
    And one more thing, we need the platform to be fully responsive. A large portion of our customers shop on mobile devices. 
    No? Perfect. I have everything I need to get started on a proposal. I'll send it over by end of the week.
+
+
+
+
+[Speaker 1 – Product Manager]
+Alright team, today we’re defining the system for our unified platform that serves students, teachers, and customers. Let’s make sure we capture all roles clearly.
+
+[Speaker 2 – Business Analyst]
+Yes, so at a high level, the system must allow students to register, log in, enroll in courses, and view their progress.
+
+[Speaker 3 – Teacher Representative]
+Teachers should be able to create courses, upload materials, and track student performance. Also, they need to communicate with students through messages or announcements.
+
+[Speaker 4 – Customer Representative]
+From the customer side, customers must be able to browse available courses without logging in, but they need an account to purchase courses.
+
+[Speaker 1 – Product Manager]
+Good point. So browsing is a shared action between customers and students, right?
+
+[Speaker 2 – Business Analyst]
+Yes, both students and customers can browse courses. But only registered users can enroll or purchase.
+
+[Speaker 5 – System Architect]
+The system must enforce authentication before any sensitive action like enrollment, purchasing, or accessing private content.
+
+[Speaker 3 – Teacher Representative]
+Teachers must also log in before managing courses. And they should only access courses they created.
+
+[Speaker 2 – Business Analyst]
+Admins will manage the whole system. They should be able to create, update, or delete users and courses.
+
+[Speaker 1 – Product Manager]
+Let’s define shared actions: login, logout, and profile management should be common for students, teachers, and customers.
+
+[Speaker 4 – Customer Representative]
+Customers also need a payment feature. The system must support secure online payments.
+
+[Speaker 5 – System Architect]
+Yes, and the system must ensure all payment transactions are encrypted and processed within 2 seconds.
+
+[Speaker 2 – Business Analyst]
+Students should be able to rate and review courses after completing them.
+
+[Speaker 3 – Teacher Representative]
+And teachers should be able to respond to reviews or feedback.
+
+[Speaker 1 – Product Manager]
+What about notifications?
+
+[Speaker 5 – System Architect]
+The system should send notifications to students and customers when new courses are available, and to teachers when students enroll.
+
+[Speaker 2 – Business Analyst]
+Also, the system must handle at least 10,000 concurrent users without performance degradation.
+
+[Speaker 4 – Customer Representative]
+Customers should be able to request refunds within 7 days of purchase.
+
+[Speaker 3 – Teacher Representative]
+Teachers must approve or reject refund requests.
+
+[Speaker 1 – Product Manager]
+Admins should oversee refund disputes in case of conflicts.
+
+[Speaker 5 – System Architect]
+We also need role-based access control. The system must restrict actions based on user roles.
+
+[Speaker 2 – Business Analyst]
+Finally, all users should be able to update their profiles and reset passwords.
+
+[Speaker 1 – Product Manager]
+Great, I think this covers a complex interaction scenario between all actors.

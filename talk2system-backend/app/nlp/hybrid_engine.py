@@ -6,10 +6,12 @@ import numpy as np
 from scipy.special import softmax
 from typing import List
 import sys, os
+import time
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from app.nlp.preprocessing import RequirementPreprocessingPipeline
+# from app.nlp.preprocessing import RequirementPreprocessingPipeline
 from app.nlp.rule_engine import RuleBasedRequirementEngine
+from app.nlp.llm_preprocessing import extract_sentences
 
 # nltk.download("punkt")
 # nltk.download("stopwords")
@@ -31,7 +33,7 @@ nfr_selector = joblib.load("ML/models/nfr_selector.pkl")
 nfr_classifier = joblib.load("ML/models/nfr_category_classifier.pkl")
 
 ############################    Initialize Preprocessing and Rule Engine  ############################
-preprocessor = RequirementPreprocessingPipeline()
+# preprocessor = RequirementPreprocessingPipeline()
 rule_engine = RuleBasedRequirementEngine()
 
 ############################    ML helpers  ############################
@@ -94,23 +96,26 @@ def predict_nfr_category(sentence: str):
 ############################    Hybrid Inference  ############################
 def hybrid_inference(transcript: str) -> List[dict]:
     # Step 1: Preprocess transcript
-    preprocessed_sentences = preprocessor.process(transcript)
+    # preprocessed_sentences = preprocessor.process(transcript)
+    preprocessed_sentences = extract_sentences(transcript)
     results = []
     # Step 2: for each sentence, predict its type using both ML models and Rule-based engine
-    for sentence_obj in preprocessed_sentences:
-        cleaned_sentence = sentence_obj["cleaned_sentence"]
+    # for sentence_obj in preprocessed_sentences:
+    #     cleaned_sentence = sentence_obj["cleaned_sentence"]
+    print("Hybrid engine classification starts...")
+    start_time = time.time()
+    for sentence in preprocessed_sentences:
 
         # 2A: ML Prediction
-        ml_type, ml_conf = predict_fr_nfr(cleaned_sentence)
+        ml_type, ml_conf = predict_fr_nfr(sentence)
         ml_nfr_category = None
         ml_nfr_conf = None
         if ml_type == "NFR":
-            ml_nfr_category, ml_nfr_conf = predict_nfr_category(cleaned_sentence)
+            ml_nfr_category, ml_nfr_conf = predict_nfr_category(sentence)
 
         # 2B: Rule Engine Prediction
-        rule_result = rule_engine.process_sentence(sentence_obj)
-        if not rule_result:
-            continue
+        rule_result = rule_engine.process_sentence(sentence)
+
         # Step 3: Compare confidences and select the higher one
         if rule_result and ml_conf < rule_result["req_type_confidence"]:
             # Use rule engine
@@ -136,16 +141,16 @@ def hybrid_inference(transcript: str) -> List[dict]:
                 final_conf = rule_cat_conf
 
         result = {
-            "sentence_id": sentence_obj["id"],
-            "speaker": sentence_obj["speaker"],
-            "cleaned_sentence": cleaned_sentence,
+            # "sentence_id": sentence_obj["id"],
+            # "speaker": sentence_obj["speaker"],
+            "cleaned_sentence": sentence,
             "requirement_type": final_type,     # core classification
             "nfr_category": final_nfr_cat,      # NFR grouping
             "structure":{
                 "actor": rule_result["actor"] if rule_result else None,     # needed for grouping and UML
                 "action": rule_result["action"] if rule_result else None,   # usefyl for UML/SRS
                 "object": rule_result["direct_object"] if rule_result else None,    # useful for understanding
-                "is_negative": rule_result["is_negative"] if rule_result else None  # affects meaning
+                # "is_negative": rule_result["is_negative"] if rule_result else None  # affects meaning
             },
             "confidence":{  # useful for debugging
                 "final": round(final_conf, 3),
@@ -162,6 +167,9 @@ def hybrid_inference(transcript: str) -> List[dict]:
 
         results.append(result)
 
+    end_time = time.time()
+    execution_time = start_time - end_time
+    print(f"\nHybrid engine classification Execution Time: {execution_time:.4f} seconds", flush=True)
     return results
 
 

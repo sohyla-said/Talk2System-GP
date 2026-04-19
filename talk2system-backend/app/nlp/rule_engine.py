@@ -82,7 +82,7 @@ class RuleBasedRequirementEngine:
     # ===============================
     # Step 1: Requirement Trigger Detection
     # ===============================
-    def detect_requirement_trigger(self, lemmas: List[str]) -> (bool, str, float):
+    def detect_requirement_trigger(self, lemmas: List[str]) -> tuple[bool, str, float]:
 
         lemma_set = set(lemmas)
 
@@ -481,11 +481,21 @@ class RuleBasedRequirementEngine:
     # ===============================
     # Step 6: Process Single Sentence
     # ===============================
-    def process_sentence(self, sentence_obj: Dict) -> Optional[Dict]:
+    def process_sentence(self, sentence: str) -> Optional[Dict]:
 
-        cleaned_sentence = sentence_obj["cleaned_sentence"]
-        lemmas = sentence_obj["lemmas"]
+        if isinstance(sentence, dict):
+            cleaned_sentence = sentence.get("cleaned_sentence") or sentence.get("sentence") or ""
+            lemmas = sentence.get("lemmas")
+        else:
+            cleaned_sentence = sentence
+            lemmas = None
+
+        if not cleaned_sentence:
+            return None
+
         doc = nlp(cleaned_sentence)
+        if lemmas is None:
+            lemmas = [token.lemma_.lower() for token in doc if token.is_alpha]
 
         # 1. Detect trigger
         is_req, trigger_type, req_confidence = self.detect_requirement_trigger(lemmas)
@@ -510,9 +520,9 @@ class RuleBasedRequirementEngine:
 
         # 4. Build output
         return {
-            "sentence_id": sentence_obj["id"],
-            "speaker": sentence_obj["speaker"],
-            "cleaned_sentence": sentence_obj["cleaned_sentence"],
+            # "sentence_id": sentence_obj["id"],
+            # "speaker": sentence_obj["speaker"],
+            "cleaned_sentence": sentence,
             "req_confidence": req_confidence,
             "req_type_confidence": type_confidence,
             "req_type": req_type,
@@ -522,13 +532,13 @@ class RuleBasedRequirementEngine:
             "action": action,
             "direct_object": direct_object,
             "prepositional_objects": prepositional_objects,
-            "is_negative": sentence_obj["negation"],
+            # "is_negative": sentence_obj["negation"],
         }
 
     # ===============================
     # Step 7: Process Whole Transcript
     # ===============================
-    def process_transcript(self, preprocessed_output: List[Dict]) -> List[Dict]:
+    def process_transcript(self, preprocessed_output) -> List[Dict]:
 
         requirements = []
 

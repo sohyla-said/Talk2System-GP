@@ -91,8 +91,14 @@ def extract_requirements(transcript: str):
     {transcript}
 
     """
+    print("Calling Ollama model for LLM direct classification...", flush=True)
     # Run inference
-    response = llm.invoke(prompt)
+    try:
+        response = llm.invoke(prompt)
+    except Exception as exc:
+        print(f"LLM call failed: {exc!r}", flush=True)
+        raise
+    print("Ollama model for LLM direct classification call completed.", flush=True)
 
     # Print result
     # print("\nModel Output:\n")
@@ -102,7 +108,7 @@ def extract_requirements(transcript: str):
 
     execution_time = end_time - start_time
 
-    print(f"\nExecution Time: {execution_time:.4f} seconds")
+    print(f"\nLLM classification Execution Time: {execution_time:.4f} seconds")
 
 
 
