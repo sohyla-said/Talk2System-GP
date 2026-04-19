@@ -35,9 +35,10 @@ import RequirementsProjectView from "../pages/requirements/Requirements_project_
 import RequirementsChoicePage from "../pages/requirements/Requirements_choice_page";
 import SRSDocument from "../pages/artifacts/SrsPage";
 import UMLDiagrams from "../pages/artifacts/UmlPage";
-
-// Results
-import Results from "../pages/results/Results";
+import UmlProjectViewPage from "../pages/artifacts/UmlProjectView";
+import UmlSessionViewPage from "../pages/artifacts/UmlSessionView";
+import ProjectResults from "../pages/results/ProjectResults";
+import SessionResults from "../pages/results/SessionResults";
 
 export default function AppRoutes() {
   return (
@@ -71,6 +72,8 @@ export default function AppRoutes() {
           <Route path=":id/requirements" element={<RequirementsProjectView />} />
           <Route path=":id/artifacts/srs" element={<SRSDocument />} />
           <Route path=":id/artifacts/uml" element={<UMLDiagrams />} />
+          <Route path=":id/results" element={<ProjectResults />} />
+          <Route path=":id/artifacts/uml-view" element={<UmlProjectViewPage />} />
         </Route>
 
 
@@ -82,12 +85,16 @@ export default function AppRoutes() {
 
         </Route>
 
+        <Route path="/projects/:projectId/sessions/:sessionId">
+          <Route path="artifacts" element={<SessionResults />} />
+          <Route path="artifacts/uml" element={<UmlSessionViewPage />} />
+        </Route>
+
         {/* <Route path="/requirements" element={<RequirementsView />} /> */}
         
         {/* Summary */}
         <Route path="/summary/:sessionId" element={<TranscriptSummary />} />
         
-        <Route path="/results" element={<Results />} />
         {/* <Route path=":projectId/sessions/:sessionId" element={<SessionDetailsPage />} /> */}
         
                 

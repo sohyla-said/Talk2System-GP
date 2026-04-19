@@ -1,7 +1,6 @@
-
 import { useEffect, useState } from "react";
 import UMLApprovalModal from "../../components/modals/UMLApprovalModal";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom"; // ✅ add useLocation
 
 import {
   generateUML,
@@ -21,58 +20,111 @@ export default function UmlPage() {
   const [diagramUrl, setDiagramUrl] = useState(null);
   const [artifactId, setArtifactId] = useState(null);
   const [versions, setVersions] = useState([]);
+  const [sessionId, setSessionId] = useState(null);
 
   const navigate = useNavigate();
-  const { id: projectId } = useParams(); // 🔥 dynamic project id
+  const location = useLocation(); // ✅ NEW
+  const { id: projectId } = useParams();
   const [loading, setLoading] = useState(false);
 
   // ===============================
-  // GENERATE UML
+  // RESOLVE SESSION ID
+  // Priority: route state (came from a specific session) > latest session fallback
   // ===============================
-const handleGenerate = async () => {
-  try {
-    setLoading(true); // 🔥 START LOADING
+  useEffect(() => {
+    const stateSessionId = location.state?.sessionId;
 
-    const res = await generateUML(projectId, diagramType);
+    if (stateSessionId) {
+      // ✅ Came from a specific session — use it directly, no fetch needed
+      setSessionId(stateSessionId);
+    } else {
+      // ✅ Accessed directly (e.g. from project Artifacts tab) — use latest session
+      const fetchLatestSession = async () => {
+        try {
+          const res = await fetch(`${BASE_URL}/api/sessions/project/${projectId}`);
+          const data = await res.json();
+          if (data && data.length > 0) {
+            setSessionId(data[0].id);
+          }
+        } catch (err) {
+          console.error("Failed to fetch sessions:", err);
+        }
+      };
+      fetchLatestSession();
+    }
+  }, [projectId, location.state]);
 
-    const filePath = res.data.file_path;
-    const artifact = res.data.artifact;
+  const fetchVersions = async (resolvedSessionId = sessionId) => {
+    if (!resolvedSessionId) return;
 
-    setDiagramUrl(`${BASE_URL}/${filePath}`);
-    setArtifactId(artifact.id);
-    setApproved(false);
-
-    fetchVersions();
-  } catch (err) {
-    console.error(err);
-  } finally {
-    setLoading(false); // 🔥 STOP LOADING
-  }
-};
-
-  // ===============================
-  // FETCH VERSIONS
-  // ===============================
-  const fetchVersions = async () => {
     try {
-      const res = await getVersions(projectId, diagramType);
-      setVersions(res.data.versions);
+      const res = await fetch(
+        `${BASE_URL}/api/projects/${projectId}/sessions/${resolvedSessionId}/artifacts/${diagramType}/versions`
+      );
+
+      if (!res.ok) {
+        console.error(`Versions fetch failed: ${res.status}`);
+        setVersions([]);
+        setDiagramUrl(null);
+        setArtifactId(null);
+        setApproved(false);
+        return;
+      }
+
+      const data = await res.json();
+      const fetchedVersions = data.versions || [];
+      setVersions(fetchedVersions);
+
+      if (fetchedVersions.length > 0) {
+        const latest = fetchedVersions[0];
+        setDiagramUrl(`${BASE_URL}/${latest.file_path}`);
+        setArtifactId(latest.id);
+        setApproved(latest.approval_status === "approved");
+      } else {
+        setDiagramUrl(null);
+        setArtifactId(null);
+        setApproved(false);
+      }
     } catch (err) {
-      console.error(err);
+      console.error("fetchVersions error:", err);
     }
   };
 
+  // In handleGenerate, pass sessionId explicitly:
+  const handleGenerate = async () => {
+    if (!sessionId) {
+      alert("No session found for this project. Please start a meeting session first.");
+      return;
+    }
+    try {
+      setLoading(true);
+      const res = await generateUML(projectId, sessionId, diagramType);
+      const filePath = res.data.file_path;
+      const artifact = res.data.artifact;
+      setDiagramUrl(`${BASE_URL}/${filePath}`);
+      setArtifactId(artifact.id);
+      setApproved(false);
+      fetchVersions(sessionId); // ✅ pass explicitly, no stale closure risk
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Re-fetch when diagramType changes OR when sessionId is first resolved
   useEffect(() => {
-    fetchVersions();
-  }, [diagramType]);
+    if (sessionId) {
+      fetchVersions();
+    }
+  }, [diagramType, sessionId]); // ✅ sessionId in deps ensures fetch waits for resolution
 
   // ===============================
-  //  SELECT VERSION
+  // SELECT VERSION
   // ===============================
   const handleSelectVersion = async (artifactId) => {
     try {
       const res = await getArtifact(artifactId);
-
       setDiagramUrl(`${BASE_URL}/${res.data.file_path}`);
       setArtifactId(res.data.id);
       setApproved(res.data.approval_status === "approved");
@@ -100,17 +152,9 @@ const handleGenerate = async () => {
   // ===============================
   const handleExportClick = async (e) => {
     e.preventDefault();
-
-    if (!approved) {
-      setShowApprovalModal(true);
-      return;
-    }
-
-  if (!artifactId) return;
-
-  // DIRECT DOWNLOAD
-  window.open(`http://localhost:8000/api/artifacts/${artifactId}/download`);
-};
+    if (!artifactId) return;
+    window.open(`${BASE_URL}/api/artifacts/${artifactId}/download`);
+  };
 
   return (
     <div className="font-display bg-background-light dark:bg-background-dark min-h-screen text-[#100d1c] dark:text-white">
@@ -139,6 +183,11 @@ const handleGenerate = async () => {
         {/* TITLE */}
         <div className="mb-6">
           <h1 className="text-4xl font-black">UML Diagrams</h1>
+          {sessionId && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Session #{sessionId}
+            </p>
+          )}
         </div>
 
         {/* DIAGRAM TYPE */}
@@ -174,7 +223,7 @@ const handleGenerate = async () => {
               {/* GENERATE */}
               <button
                 onClick={handleGenerate}
-                disabled={loading}
+                disabled={loading || !sessionId}
                 className="h-10 px-4 rounded-lg bg-primary text-white disabled:opacity-50"
               >
                 {loading ? "Generating..." : "Generate UML"}
@@ -184,11 +233,12 @@ const handleGenerate = async () => {
               <select
                 onChange={(e) => handleSelectVersion(e.target.value)}
                 className="border px-8 py-2 rounded-lg"
+                value={artifactId || ""}
               >
-                <option>Select Version</option>
+                <option value="" disabled>Select Version</option>
                 {versions.map((v) => (
                   <option key={v.id} value={v.id}>
-                    {v.version} ({v.approval_status})
+                    {v.version} — {v.approval_status}
                   </option>
                 ))}
               </select>
@@ -235,19 +285,14 @@ const handleGenerate = async () => {
             <p className="text-gray-400">No diagram generated yet</p>
           )}
         </div>
+
         {loading && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            
             <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-2xl flex flex-col items-center gap-4">
-              
-              {/* Spinner */}
               <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-
-              {/* Text */}
               <p className="text-sm text-gray-600 dark:text-gray-300 font-medium">
                 Generating UML Diagram...
               </p>
-
             </div>
           </div>
         )}

@@ -112,7 +112,7 @@ const ProjectDetailsPage = () => {
                 </button>
 
                 <button 
-                  onClick={() => navigate('/results')}
+                  onClick={() => navigate(`/projects/${projectId}/results`)}
                   className="flex flex-col items-center justify-center border-b-[3px] border-b-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 pb-[13px] pt-4"
                 >
                   <p className="text-sm font-bold leading-normal tracking-[0.015em]">Artifacts</p>

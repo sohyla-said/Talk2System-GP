@@ -249,51 +249,52 @@ export default function RequirementsSessionView() {
 
 
   
-  // Handle navigation with approval check
-  const handleNavigation = (path) => {
-    if (!approved) {
-      setPendingNavigation(path);
-      setShowApprovalModal(true);
-    } else {
-      navigate(path);
+ // CHANGE 1: Update pendingNavigation to support an object with path + state
+const handleNavigation = (path, state = null) => {
+  if (!approved) {
+    setPendingNavigation({ path, state });
+    setShowApprovalModal(true);
+  } else {
+    navigate(path, state ? { state } : undefined);
+  }
+};
+
+// CHANGE 2: Update handleApprove to use the new object shape
+const handleApprove = async () => {
+  const targetRequirementId = currentRequirementId ?? requirementId;
+
+  if (!targetRequirementId) {
+    console.error("No requirement ID available for approval");
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `http://localhost:8000/api/sessions/requirements/${targetRequirementId}/approve`,
+      { method: 'PATCH' }
+    );
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.detail || "Failed to approve requirements");
     }
-  };
-    
-  // Handle approval: Approves currently selected requirement version
-  const handleApprove = async () => {
-    const targetRequirementId = currentRequirementId ?? requirementId;
 
-    if (!targetRequirementId) {
-      console.error("No requirement ID available for approval");
-      return;
+    setApproved(true);
+    setRequirementId(targetRequirementId);
+    setCurrentRequirementId(targetRequirementId);
+    setShowApprovalModal(false);
+
+    if (pendingNavigation) {
+      const { path, state } = typeof pendingNavigation === "string"
+        ? { path: pendingNavigation, state: null }
+        : pendingNavigation;
+      navigate(path, state ? { state } : undefined);
+      setPendingNavigation(null);
     }
-
-    try{
-      const response = await fetch(
-        `http://localhost:8000/api/sessions/requirements/${targetRequirementId}/approve`,
-        { method: 'PATCH' }
-      );
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || "Failed to approve requirements");
-      }
-
-      setApproved(true);
-      setRequirementId(targetRequirementId);
-      setCurrentRequirementId(targetRequirementId);
-      setShowApprovalModal(false);
-
-      if (pendingNavigation) {
-        navigate(pendingNavigation);
-        setPendingNavigation(null);
-      }
-    }
-    catch (err) {
-      console.error(err);
-    }
-   
-  };
+  } catch (err) {
+    console.error(err);
+  }
+};
 
   // Closes approval modal and clears pending navigation.
   const handleCloseModal = () => {
@@ -447,13 +448,13 @@ export default function RequirementsSessionView() {
             Requirements
           </button>
           <button 
-            onClick={() => handleNavigation(`/projects/${projectId}/artifacts/uml`)}
+            onClick={() => handleNavigation(`/projects/${projectId}/artifacts/uml`, { sessionId })}
             className="text-slate-500 dark:text-slate-400 pb-3 text-sm font-medium leading-normal hover:text-slate-800 dark:hover:text-slate-200 transition-colors whitespace-nowrap"
           >
             Diagrams
           </button>
           <button 
-            onClick={() => handleNavigation(`/projects/${projectId}/artifacts/srs`)}
+            onClick={() => handleNavigation(`/projects/${projectId}/artifacts/srs`, { sessionId })}
             className="text-slate-500 dark:text-slate-400 pb-3 text-sm font-medium leading-normal hover:text-slate-800 dark:hover:text-slate-200 transition-colors whitespace-nowrap"
           >
             Documents
@@ -463,6 +464,12 @@ export default function RequirementsSessionView() {
             className="text-slate-500 dark:text-slate-400 pb-3 text-sm font-medium leading-normal hover:text-slate-800 dark:hover:text-slate-200 transition-colors whitespace-nowrap"
           >
             Transcript
+          </button>
+          <button 
+            onClick={() => navigate(`/projects/${projectId}/sessions/${sessionId}/artifacts`)}
+            className="text-slate-500 dark:text-slate-400 pb-3 text-sm font-medium leading-normal hover:text-slate-800 dark:hover:text-slate-200 transition-colors whitespace-nowrap"
+          >
+            Artifacts
           </button>
         </div>
 
