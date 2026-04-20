@@ -6,7 +6,7 @@ from datetime import datetime
 class SessionService:
 
     @staticmethod
-    def create_session(db:Session, project_id: int, title: str | None = None):
+    def create_session(db:Session, project_id: int, title: str):
         session = SessionModel(
             title=title,
             project_id=project_id,

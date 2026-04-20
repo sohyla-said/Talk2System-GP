@@ -8,7 +8,7 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    title = Column(String, nullable=True)
+    title = Column(String, nullable=False)
     project_id = Column(Integer, ForeignKey("projects.id"))
     status = Column(String, default="processing")
     audio_file_path = Column(String, nullable=True)

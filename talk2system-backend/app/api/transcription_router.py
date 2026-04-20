@@ -16,6 +16,7 @@ from app.services.transcription_service import (
     save_transcript_text,         
 )
 from app.models.project import Project
+from typing import Optional
 
 router = APIRouter()
 
@@ -33,6 +34,7 @@ ALLOWED_TYPES = ["audio/wav", "audio/mpeg", "audio/mp3", "audio/webm"]
 async def transcribe(
     project_id: int,
     file: UploadFile = File(...),
+    title: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     # Validate project exists
@@ -54,7 +56,7 @@ async def transcribe(
 
     # Create DB session linked to project
     session = SessionModel(
-        title=file.filename,
+        title=title if title else file.filename,
         audio_file_path=file_path,
         status="processing",
         project_id=project_id

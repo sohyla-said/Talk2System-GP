@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams,useLocation } from "react-router-dom";
 
 export default function RecordingSessionPage() {
   const [isRecording, setIsRecording] = useState(false);
@@ -14,7 +14,8 @@ export default function RecordingSessionPage() {
 
   const navigate = useNavigate();
   const { id: projectId } = useParams();
-
+  const location = useLocation();
+  const sessionTitle = location.state?.sessionTitle || "Untitled Session";
   // ========================
   // ⏱ TIMER
   // ========================
@@ -96,8 +97,10 @@ export default function RecordingSessionPage() {
 
       if (audioBlobOrFile instanceof File) {
         formData.append("file", audioBlobOrFile);
+        formData.append("title", sessionTitle);
       } else {
         formData.append("file", audioBlobOrFile, "recording.webm");
+        formData.append("title", sessionTitle);
       }
 
       const res = await fetch(`http://localhost:8000/api/projects/${projectId}/transcribe`, {
@@ -150,12 +153,14 @@ export default function RecordingSessionPage() {
                   SESSION NAME
                 </p>
                 <h3 className="text-xl font-bold text-[#100d1c] dark:text-white mt-1">
-                  My Brainstorming Session -{" "}
+                  {/* My Brainstorming Session -{" "}
                   {new Date().toLocaleDateString("en-US", {
                     month: "short",
                     day: "numeric",
                     year: "numeric",
-                  })}
+                  })} */}
+                  {sessionTitle}
+
                 </h3>
               </div>
 
@@ -231,7 +236,7 @@ export default function RecordingSessionPage() {
 
                 {/* Upload Transcript */}
                 <button
-                  onClick={() => navigate(`/projects/${projectId}/transcript-input`)}
+                  onClick={() => navigate(`/projects/${projectId}/transcript-input`, { state: { sessionTitle } })}
                   disabled={isRecording || loading}
                   className="flex flex-col items-center justify-center gap-2 p-4 bg-[#e9e7f4] dark:bg-primary/20 text-primary dark:text-indigo-300 rounded-lg hover:bg-[#dcd9f0] dark:hover:bg-primary/30 transition-colors duration-200 h-28 disabled:opacity-50 disabled:cursor-not-allowed"
                 >

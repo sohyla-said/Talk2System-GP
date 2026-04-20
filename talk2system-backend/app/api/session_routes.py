@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
 from sqlalchemy.orm import Session
-from typing import Optional, Dict, Any
+from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel
 from app.db.session import get_db
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api/sessions", tags=["Sessions"])
 
 
 class SessionCreate(BaseModel):
-     title: Optional[str] = None
+     title: str
 
 class SessionResponse(BaseModel):
     id: int
@@ -28,16 +28,8 @@ class SessionResponse(BaseModel):
 
 
 @router.post("/project/{project_id}", response_model=SessionResponse)
-def create_session(
-    project_id: int,
-    data: Optional[SessionCreate] = None,
-    db: Session = Depends(get_db)
-):
-    return SessionService.create_session(
-        db,
-        project_id,
-        data.title if data else None
-    )
+def create_session(project_id: int,data: SessionCreate = None,db: Session = Depends(get_db)):
+    return SessionService.create_session(db,project_id,data.title )
 
 
 
