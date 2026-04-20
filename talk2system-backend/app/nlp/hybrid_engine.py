@@ -168,7 +168,7 @@ def hybrid_inference(transcript: str) -> List[dict]:
         results.append(result)
 
     end_time = time.time()
-    execution_time = start_time - end_time
+    execution_time = end_time - start_time
     print(f"\nHybrid engine classification Execution Time: {execution_time:.4f} seconds", flush=True)
     return results
 

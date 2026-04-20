@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 export default function RequirementsChoicePage() {
@@ -7,6 +7,7 @@ export default function RequirementsChoicePage() {
 	const { sessionId } = useParams();
 
 	const [submittingType, setSubmittingType] = useState(null);
+	const [sessionName, setSessionName] = useState(null);
 
 	const {
 		projectId,
@@ -16,8 +17,28 @@ export default function RequirementsChoicePage() {
 		hybridData
 	} = location.state || {};
 
+	const hasLLMResults = !!llmData;
+	const hasHybridResults = !!hybridData;
+
 	const normalizedLlm = useMemo(() => normalizeGrouped(llmData), [llmData]);
 	const normalizedHybrid = useMemo(() => normalizeGrouped(hybridData), [hybridData]);
+
+	useEffect(() => {
+		fetchSessionMeta();
+	  }, [sessionId]);
+
+	const fetchSessionMeta = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/sessions/${sessionId}`);
+      const data = await response.json();
+        if (!response.ok) {
+         throw new Error(data.detail || "Failed to load session data");
+       }
+      setSessionName(data.title ?? null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
 	const handlePrefer = async (type) => {
 		const selectedData = type === "llm" ? normalizedLlm : normalizedHybrid;
@@ -69,13 +90,24 @@ export default function RequirementsChoicePage() {
 
 	if (!projectId || !sessionId || (!llmData && !hybridData)) {
 		return (
-			<div className="w-full max-w-5xl mx-auto p-6">
-				<div className="rounded-xl border border-[#d3cee8]/50 bg-white dark:bg-background-dark p-6">
-					<p className="text-slate-800 dark:text-slate-200 text-base font-semibold">
-						No extraction results found. Please return to transcript input and generate requirements again.
-					</p>
-				</div>
-			</div>
+			<div className="px-4 pb-4">
+            <div className="rounded-xl border border-[#d3cee8]/50 dark:border-white/10 bg-white dark:bg-background-dark p-8 text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <span className="material-symbols-outlined">info</span>
+              </div>
+              <h3 className="text-slate-900 dark:text-white text-xl font-bold mb-2">No requirements extracted yet</h3>
+              <p className="text-slate-500 dark:text-slate-400 mb-6">
+                This session does not have extracted requirements yet. Go to the transcript page to extract and review requirements first.
+              </p>
+              <button
+                onClick={() => navigate(`/transcript/${sessionId}`)}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 font-bold text-white transition-colors hover:bg-primary/90"
+              >
+                <span className="material-symbols-outlined text-lg">description</span>
+                Go To Transcript
+              </button>
+            </div>
+          </div>
 		);
 	}
 
@@ -83,7 +115,7 @@ export default function RequirementsChoicePage() {
 		<div className="w-full max-w-7xl mx-auto p-4 space-y-4">
 			<div className="rounded-xl border border-[#d3cee8]/50 bg-white dark:bg-background-dark p-5">
 				<h1 className="text-slate-900 dark:text-white text-3xl font-black leading-tight tracking-[-0.02em]">
-					Choose Preferred Extraction
+					{sessionName} session - Choose Preferred Extraction
 				</h1>
 				<p className="text-slate-500 dark:text-slate-400 text-sm mt-2">
 					Compare LLM and Hybrid outputs, then choose the result you want to continue with.
@@ -91,33 +123,59 @@ export default function RequirementsChoicePage() {
 			</div>
 
 			<div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-				<ResultPane
-					title="LLM Extraction"
-					grouped={normalizedLlm}
-					accent="purple"
-					buttonLabel="I prefer this"
-					isLoading={submittingType === "llm"}
-					onPrefer={() => handlePrefer("llm")}
-				/>
+				{hasLLMResults ? (
+					<ResultPane
+						title="LLM Extraction"
+						grouped={normalizedLlm}
+						accent="purple"
+						buttonLabel="I prefer this"
+						isLoading={submittingType === "llm"}
+						onPrefer={() => handlePrefer("llm")}
+					/>
+				) : (
+					<div className="px-4 pb-4">
+						<div className="rounded-xl border border-[#d3cee8]/50 dark:border-white/10 bg-white dark:bg-background-dark p-8 text-center">
+						<div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+							<span className="material-symbols-outlined">info</span>
+						</div>
+						<h3 className="text-slate-900 dark:text-white text-xl font-bold mb-2">No requirements extracted yet</h3>
+						<p className="text-slate-500 dark:text-slate-400 mb-6">
+							LLM requirement extraction failed.
+						</p>
+						</div>
+					</div>
+				)}
+				
 
-				<ResultPane
-					title="Hybrid Extraction"
-					grouped={normalizedHybrid}
-					accent="blue"
-					buttonLabel="I prefer this"
-					isLoading={submittingType === "hybrid"}
-					onPrefer={() => handlePrefer("hybrid")}
-				/>
+				{hasHybridResults ? (
+					<ResultPane
+						title="Hybrid Extraction"
+						grouped={normalizedHybrid}
+						accent="purple"
+						buttonLabel="I prefer this"
+						isLoading={submittingType === "hybrid"}
+						onPrefer={() => handlePrefer("hybrid")}
+					/>
+				) : (
+					<div className="px-4 pb-4">
+						<div className="rounded-xl border border-[#d3cee8]/50 dark:border-white/10 bg-white dark:bg-background-dark p-8 text-center">
+							<div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+								<span className="material-symbols-outlined">info</span>
+							</div>
+							<h3 className="text-slate-900 dark:text-white text-xl font-bold mb-2">No requirements extracted yet</h3>
+							<p className="text-slate-500 dark:text-slate-400 mb-6">
+								Hybrid requirement extraction failed.
+							</p>
+						</div>
+					</div>
+				)}
 			</div>
 		</div>
 	);
 }
 
 function ResultPane({ title, grouped, accent, buttonLabel, isLoading, onPrefer }) {
-	const buttonClass =
-		accent === "purple"
-			? "bg-[#6c5fc7] hover:bg-[#5a4fb5]"
-			: "bg-[#3b82f6] hover:bg-[#2563eb]";
+	const buttonClass = "bg-primary text-white hover:bg-primary/90";
 
 	return (
 		<div className="rounded-xl border border-[#d3cee8]/50 dark:border-white/10 bg-white dark:bg-background-dark p-4 space-y-4">

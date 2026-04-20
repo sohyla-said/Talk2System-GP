@@ -27,25 +27,11 @@ export default function RequirementsSessionView() {
     features: []
   }); // Normalized UI data object used for rendering sections: functional, nonFunctional, actors and features
   const [projectName, setProjectName] = useState(null);
+  const [sessionName, setSessionName] = useState(null);
 
 
   useEffect(() => {
     if (projectId || !sessionId) return;
-
-    // if project id is missed but session id exists, call an endpoint to ftech project id
-    const fetchSessionMeta = async () => {
-      try {
-        const response = await fetch(`http://127.0.0.1:8000/api/sessions/${sessionId}`);
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.detail || "Failed to load session data");
-        }
-        setProjectId(data.project_id ?? null);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
     fetchSessionMeta();
   }, [projectId, sessionId]);
 
@@ -63,6 +49,29 @@ export default function RequirementsSessionView() {
     }
   }, [initialData, projectId, sessionId]);
 
+  useEffect(() => {
+    if (versions.length > 0) {
+      const latest = versions[0]; // already sorted DESC
+      setSelectedVersionId(latest.id);
+      fetchRequirementById(latest.id);
+    }
+  }, [versions]);
+
+
+// if project id is missed but session id exists, call an endpoint to fetch project id
+  const fetchSessionMeta = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/sessions/${sessionId}`);
+      const data = await response.json();
+        if (!response.ok) {
+         throw new Error(data.detail || "Failed to load session data");
+       }
+      setProjectId(data.project_id ?? null);
+      setSessionName(data.title ?? null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const fetchProjectName = async () =>{
     try{
@@ -75,7 +84,7 @@ export default function RequirementsSessionView() {
       } 
   };
 
-
+  // fetch the latest requirement version in the session
   const fetchLatestRequirements = async () => {
     if (!projectId || !sessionId) return;
 
@@ -98,7 +107,7 @@ export default function RequirementsSessionView() {
     }
   };
 
-    // Loads session requirement versions list for the dropdown.
+  // Loads session requirement versions list for the dropdown.
   const fetchVersions = async () => {
     if (!projectId || !sessionId) return;
 
@@ -118,13 +127,6 @@ export default function RequirementsSessionView() {
     }
   };
 
-  useEffect(() => {
-    if (versions.length > 0) {
-      const latest = versions[0]; // already sorted DESC
-      setSelectedVersionId(latest.id);
-      fetchRequirementById(latest.id);
-    }
-  }, [versions]);
 
   // Loads one specific version by requirement id and updates UI accordingly.
   const fetchRequirementById = async (id) => {
@@ -146,6 +148,13 @@ export default function RequirementsSessionView() {
       console.error(err);
     }
   };
+
+
+    const hasExtractedRequirements =
+    requirements.functional.length > 0 ||
+    requirements.nonFunctional.length > 0 ||
+    requirements.actors.length > 0 ||
+    requirements.features.length > 0;
 
   // Transforms backend grouped payload into UI shape
   const mapBackendData = (grouped) => {
@@ -248,18 +257,6 @@ export default function RequirementsSessionView() {
   };
 
 
-  
- // CHANGE 1: Update pendingNavigation to support an object with path + state
-const handleNavigation = (path, state = null) => {
-  if (!approved) {
-    setPendingNavigation({ path, state });
-    setShowApprovalModal(true);
-  } else {
-    navigate(path, state ? { state } : undefined);
-  }
-};
-
-// CHANGE 2: Update handleApprove to use the new object shape
 const handleApprove = async () => {
   const targetRequirementId = currentRequirementId ?? requirementId;
 
@@ -349,6 +346,26 @@ const handleApprove = async () => {
     }
   };
 
+  const handleNavigation = (path, state = null) => {
+    if (!approved) {
+      setPendingNavigation({ path, state });
+      setShowApprovalModal(true);
+    } else {
+      navigate(path, state ? { state } : undefined);
+    }
+  };
+
+
+  const handleGenerate = (type) => {
+    if (!approved) {
+      setPendingNavigation(type);
+      setShowModal(true);
+      return;
+    }
+    if (type == 'uml') handleNavigation(`/projects/${projectId}/artifacts/uml`);
+    if (type == 'srs') handleNavigation(`/projects/${projectId}/artifacts/srs`);
+  };
+
   // Get tag color classes
   const getTagColorClasses = (color) => {
     const colors = {
@@ -358,8 +375,6 @@ const handleApprove = async () => {
     };
     return colors[color] || colors.blue;
   };
-
-
 
   return (
     <>
@@ -379,16 +394,23 @@ const handleApprove = async () => {
                 {projectName}
               </button>
               <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
+              <button 
+                onClick={() => navigate(`/transcript/${sessionId}`)}
+                className="text-primary-accent dark:text-secondary-accent font-medium leading-normal"
+              >
+                {sessionName}
+              </button>
+              <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
               <span className="text-text-dark dark:text-text-light font-medium leading-normal">Requirements</span>
             </div>
         {/* Page Header */}
         <div className="flex flex-wrap justify-between gap-3 p-4">
           <div className="flex min-w-72 flex-col gap-3">
             <h1 className="text-slate-900 dark:text-white text-4xl font-black leading-tight tracking-[-0.033em]">
-              {projectName} - Requirements
+              {sessionName} - Requirements
             </h1>
             <p className="text-slate-500 dark:text-slate-400 text-base font-normal leading-normal">
-              Review, filter, and manage project requirements generated from your brainstorming session.
+              Review, filter, and manage requirements generated from your brainstorming session.
             </p>
           </div>
           <div className="flex items-start gap-3">
@@ -438,6 +460,7 @@ const handleApprove = async () => {
               </div>
             </div>
           </div>
+          
         </div>
 
         {/* Tabs Navigation */}
@@ -447,18 +470,7 @@ const handleApprove = async () => {
           >
             Requirements
           </button>
-          <button 
-            onClick={() => handleNavigation(`/projects/${projectId}/artifacts/uml`, { sessionId })}
-            className="text-slate-500 dark:text-slate-400 pb-3 text-sm font-medium leading-normal hover:text-slate-800 dark:hover:text-slate-200 transition-colors whitespace-nowrap"
-          >
-            Diagrams
-          </button>
-          <button 
-            onClick={() => handleNavigation(`/projects/${projectId}/artifacts/srs`, { sessionId })}
-            className="text-slate-500 dark:text-slate-400 pb-3 text-sm font-medium leading-normal hover:text-slate-800 dark:hover:text-slate-200 transition-colors whitespace-nowrap"
-          >
-            Documents
-          </button>
+          
           <button 
             onClick={() => navigate(`/transcript/${sessionId}`)}
             className="text-slate-500 dark:text-slate-400 pb-3 text-sm font-medium leading-normal hover:text-slate-800 dark:hover:text-slate-200 transition-colors whitespace-nowrap"
@@ -472,220 +484,256 @@ const handleApprove = async () => {
             Artifacts
           </button>
         </div>
-
-        {/* Search and Filter Bar */}
-        <div className="flex flex-col md:flex-row gap-4 p-4 pt-0">
-          <label className="flex flex-col h-12 w-full md:flex-1">
-            <div className="flex w-full flex-1 items-stretch rounded-lg h-full">
-              <div className="text-slate-500 dark:text-slate-400 flex border-none bg-white dark:bg-background-dark dark:border dark:border-white/10 items-center justify-center pl-4 rounded-l-lg border-r-0">
-                <span className="material-symbols-outlined">search</span>
-              </div>
-              <input 
-                className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-r-lg text-slate-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border-none bg-white dark:bg-background-dark dark:border dark:border-l-0 dark:border-white/10 h-full placeholder:text-slate-500 dark:placeholder:text-slate-400 px-4 pl-2 text-base font-normal leading-normal" 
-                placeholder="Search requirements by ID or keyword..." 
-              />
+        {hasExtractedRequirements ? (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-4 pb-4">
+              <button
+                onClick={() => handleGenerate("uml")}
+                className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary px-4 py-3 font-bold text-white shadow-soft transition-colors hover:bg-primary/90"
+              >
+                <span className="material-symbols-outlined text-xl">schema</span>
+                Generate UML Diagrams
+              </button>
+              <button
+                onClick={() => handleGenerate("srs")}
+                className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary px-4 py-3 font-bold text-white shadow-soft transition-colors hover:bg-primary/90"
+              >
+                <span className="material-symbols-outlined text-xl">description</span>
+                Generate SRS
+              </button>
             </div>
-          </label>
-          
-          <div className="flex gap-3 overflow-x-auto pb-2">
-            <button className="flex h-12 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-white dark:bg-background-dark dark:border dark:border-white/10 px-4">
-              <span className="material-symbols-outlined text-slate-500 dark:text-slate-400">filter_list</span>
-              <p className="text-slate-900 dark:text-white text-sm font-medium leading-normal">Type: All</p>
-              <span className="material-symbols-outlined text-slate-500 dark:text-slate-400">expand_more</span>
-            </button>
-            
+
+            {/* Search and Filter Bar */}
+            <div className="flex flex-col md:flex-row gap-4 p-4 pt-0">
+              <label className="flex flex-col h-12 w-full md:flex-1">
+                <div className="flex w-full flex-1 items-stretch rounded-lg h-full">
+                  <div className="text-slate-500 dark:text-slate-400 flex border-none bg-white dark:bg-background-dark dark:border dark:border-white/10 items-center justify-center pl-4 rounded-l-lg border-r-0">
+                    <span className="material-symbols-outlined">search</span>
+                  </div>
+                  <input
+                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-r-lg text-slate-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border-none bg-white dark:bg-background-dark dark:border dark:border-l-0 dark:border-white/10 h-full placeholder:text-slate-500 dark:placeholder:text-slate-400 px-4 pl-2 text-base font-normal leading-normal"
+                    placeholder="Search requirements by ID or keyword..."
+                  />
+                </div>
+              </label>
+
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                <button className="flex h-12 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-white dark:bg-background-dark dark:border dark:border-white/10 px-4">
+                  <span className="material-symbols-outlined text-slate-500 dark:text-slate-400">filter_list</span>
+                  <p className="text-slate-900 dark:text-white text-sm font-medium leading-normal">Type: All</p>
+                  <span className="material-symbols-outlined text-slate-500 dark:text-slate-400">expand_more</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Requirements Sections */}
+            <div className="flex flex-col p-4 gap-4">
+
+              {/* Functional Requirements */}
+              <details className="flex flex-col rounded-xl border border-[#d3cee8]/50 dark:border-white/10 bg-white dark:bg-background-dark px-4 group" open>
+                <summary className="flex cursor-pointer items-center justify-between gap-6 py-4 list-none">
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                      <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
+                        Functional Requirements
+                      </p>
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditSection('functional');
+                        }}
+                        className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
+                      >
+                        edit
+                      </span>
+                    </div>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal">
+                      User-facing features and system behaviors.
+                    </p>
+                  </div>
+                  <span className="material-symbols-outlined text-slate-500 dark:text-slate-400 group-open:rotate-180 transition-transform">
+                    expand_more
+                  </span>
+                </summary>
+
+                <div className="flex flex-col gap-3 pb-4">
+                  {requirements.functional.map((req) => (
+                    <div key={req.id} className="p-4 rounded-lg bg-background-light dark:bg-background-dark/50 border border-transparent dark:border-white/5">
+                      <p className="text-slate-500 dark:text-slate-400 font-mono text-xs mb-1">
+                        {req.id}
+                      </p>
+                      <p className="text-slate-800 dark:text-slate-200 text-sm mb-3">
+                        {req.description}
+                      </p>
+                      <div className="flex gap-2 flex-wrap">
+                        {req.tags.map((tag, idx) => (
+                          <span
+                            key={idx}
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getTagColorClasses(tag.color)}`}
+                          >
+                            {tag.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+
+              {/* Non-Functional Requirements */}
+              <details className="flex flex-col rounded-xl border border-[#d3cee8]/50 dark:border-white/10 bg-white dark:bg-background-dark px-4 group">
+                <summary className="flex cursor-pointer items-center justify-between gap-6 py-4 list-none">
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                      <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
+                        Non-Functional Requirements
+                      </p>
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditSection('nonFunctional');
+                        }}
+                        className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
+                      >
+                        edit
+                      </span>
+                    </div>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal">
+                      System qualities like performance, security, and usability.
+                    </p>
+                  </div>
+                  <span className="material-symbols-outlined text-slate-500 dark:text-slate-400 group-open:rotate-180 transition-transform">
+                    expand_more
+                  </span>
+                </summary>
+
+                <div className="flex flex-col gap-3 pb-4">
+                  {requirements.nonFunctional.map((req) => (
+                    <div key={req.id} className="p-4 rounded-lg bg-background-light dark:bg-background-dark/50 border border-transparent dark:border-white/5">
+                      <p className="text-slate-500 dark:text-slate-400 font-mono text-xs mb-1">
+                        {req.id}
+                      </p>
+                      <p className="text-slate-800 dark:text-slate-200 text-sm mb-3">
+                        {req.description}
+                      </p>
+                      <div className="flex gap-2 flex-wrap">
+                        {req.tags.map((tag, idx) => (
+                          <span
+                            key={idx}
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getTagColorClasses(tag.color)}`}
+                          >
+                            {tag.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+
+              {/* Actors */}
+              <details className="flex flex-col rounded-xl border border-[#d3cee8]/50 dark:border-white/10 bg-white dark:bg-background-dark px-4 group">
+                <summary className="flex cursor-pointer items-center justify-between gap-6 py-4 list-none">
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                      <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
+                        Actors
+                      </p>
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditSection('actors');
+                        }}
+                        className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
+                      >
+                        edit
+                      </span>
+                    </div>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal">
+                      Roles that interact with the system.
+                    </p>
+                  </div>
+                  <span className="material-symbols-outlined text-slate-500 dark:text-slate-400 group-open:rotate-180 transition-transform">
+                    expand_more
+                  </span>
+                </summary>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
+                  {requirements.actors.map((actor) => (
+                    <div key={actor.id} className="p-4 rounded-lg bg-background-light dark:bg-background-dark/50 border border-transparent dark:border-white/5">
+                      <p className="text-slate-500 dark:text-slate-400 font-mono text-xs mb-1">
+                        {actor.id}
+                      </p>
+                      <p className="text-slate-800 dark:text-slate-200 text-sm">
+                        {actor.description}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </details>
+
+              {/* Features */}
+              <details className="flex flex-col rounded-xl border border-[#d3cee8]/50 dark:border-white/10 bg-white dark:bg-background-dark px-4 group">
+                <summary className="flex cursor-pointer items-center justify-between gap-6 py-4 list-none">
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                      <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
+                        Features
+                      </p>
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditSection('features');
+                        }}
+                        className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
+                      >
+                        edit
+                      </span>
+                    </div>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal">
+                      High-level capabilities of the system.
+                    </p>
+                  </div>
+                  <span className="material-symbols-outlined text-slate-500 dark:text-slate-400 group-open:rotate-180 transition-transform">
+                    expand_more
+                  </span>
+                </summary>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
+                  {requirements.features.map((feature) => (
+                    <div key={feature.id} className="p-4 rounded-lg bg-background-light dark:bg-background-dark/50 border border-transparent dark:border-white/5">
+                      <p className="text-slate-500 dark:text-slate-400 font-mono text-xs mb-1">
+                        {feature.id}
+                      </p>
+                      <p className="text-slate-800 dark:text-slate-200 text-sm">
+                        {feature.description}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </div>
+          </>
+        ) : (
+          <div className="px-4 pb-4">
+            <div className="rounded-xl border border-[#d3cee8]/50 dark:border-white/10 bg-white dark:bg-background-dark p-8 text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <span className="material-symbols-outlined">info</span>
+              </div>
+              <h3 className="text-slate-900 dark:text-white text-xl font-bold mb-2">No requirements extracted yet</h3>
+              <p className="text-slate-500 dark:text-slate-400 mb-6">
+                This session does not have extracted requirements yet. Go to the transcript page to extract and review requirements first.
+              </p>
+              <button
+                onClick={() => navigate(`/transcript/${sessionId}`)}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 font-bold text-white transition-colors hover:bg-primary/90"
+              >
+                <span className="material-symbols-outlined text-lg">description</span>
+                Go To Transcript
+              </button>
+            </div>
           </div>
-        </div>
-
-        {/* Requirements Sections */}
-        <div className="flex flex-col p-4 gap-4">
-          
-          {/* Functional Requirements */}
-          <details className="flex flex-col rounded-xl border border-[#d3cee8]/50 dark:border-white/10 bg-white dark:bg-background-dark px-4 group" open>
-            <summary className="flex cursor-pointer items-center justify-between gap-6 py-4 list-none">
-              <div className="flex flex-col">
-                <div className="flex items-center gap-2">
-                  <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
-                    Functional Requirements
-                  </p>
-                  <span 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditSection('functional');
-                    }}
-                    className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
-                  >
-                    edit
-                  </span>
-                </div>
-                <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal">
-                  User-facing features and system behaviors.
-                </p>
-              </div>
-              <span className="material-symbols-outlined text-slate-500 dark:text-slate-400 group-open:rotate-180 transition-transform">
-                expand_more
-              </span>
-            </summary>
-            
-            <div className="flex flex-col gap-3 pb-4">
-              {requirements.functional.map((req) => (
-                <div key={req.id} className="p-4 rounded-lg bg-background-light dark:bg-background-dark/50 border border-transparent dark:border-white/5">
-                  <p className="text-slate-500 dark:text-slate-400 font-mono text-xs mb-1">
-                    {req.id}
-                  </p>
-                  <p className="text-slate-800 dark:text-slate-200 text-sm mb-3">
-                    {req.description}
-                  </p>
-                  <div className="flex gap-2 flex-wrap">
-                    {req.tags.map((tag, idx) => (
-                      <span 
-                        key={idx}
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getTagColorClasses(tag.color)}`}
-                      >
-                        {tag.label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </details>
-
-          {/* Non-Functional Requirements */}
-          <details className="flex flex-col rounded-xl border border-[#d3cee8]/50 dark:border-white/10 bg-white dark:bg-background-dark px-4 group">
-            <summary className="flex cursor-pointer items-center justify-between gap-6 py-4 list-none">
-              <div className="flex flex-col">
-                <div className="flex items-center gap-2">
-                  <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
-                    Non-Functional Requirements
-                  </p>
-                  <span 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditSection('nonFunctional');
-                    }}
-                    className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
-                  >
-                    edit
-                  </span>
-                </div>
-                <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal">
-                  System qualities like performance, security, and usability.
-                </p>
-              </div>
-              <span className="material-symbols-outlined text-slate-500 dark:text-slate-400 group-open:rotate-180 transition-transform">
-                expand_more
-              </span>
-            </summary>
-            
-            <div className="flex flex-col gap-3 pb-4">
-              {requirements.nonFunctional.map((req) => (
-                <div key={req.id} className="p-4 rounded-lg bg-background-light dark:bg-background-dark/50 border border-transparent dark:border-white/5">
-                  <p className="text-slate-500 dark:text-slate-400 font-mono text-xs mb-1">
-                    {req.id}
-                  </p>
-                  <p className="text-slate-800 dark:text-slate-200 text-sm mb-3">
-                    {req.description}
-                  </p>
-                  <div className="flex gap-2 flex-wrap">
-                    {req.tags.map((tag, idx) => (
-                      <span 
-                        key={idx}
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getTagColorClasses(tag.color)}`}
-                      >
-                        {tag.label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </details>
-
-          {/* Actors */}
-          <details className="flex flex-col rounded-xl border border-[#d3cee8]/50 dark:border-white/10 bg-white dark:bg-background-dark px-4 group">
-            <summary className="flex cursor-pointer items-center justify-between gap-6 py-4 list-none">
-              <div className="flex flex-col">
-                <div className="flex items-center gap-2">
-                  <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
-                    Actors
-                  </p>
-                  <span 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditSection('actors');
-                    }}
-                    className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
-                  >
-                    edit
-                  </span>
-                </div>
-                <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal">
-                  Roles that interact with the system.
-                </p>
-              </div>
-              <span className="material-symbols-outlined text-slate-500 dark:text-slate-400 group-open:rotate-180 transition-transform">
-                expand_more
-              </span>
-            </summary>
-            
-            <div className="flex flex-col gap-3 pb-4">
-              {requirements.actors.map((actor) => (
-                <div key={actor.id} className="p-4 rounded-lg bg-background-light dark:bg-background-dark/50 border border-transparent dark:border-white/5">
-                  <p className="text-slate-500 dark:text-slate-400 font-mono text-xs mb-1">
-                    {actor.id}
-                  </p>
-                  <p className="text-slate-800 dark:text-slate-200 text-sm">
-                    {actor.description}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </details>
-
-          {/* Features */}
-          <details className="flex flex-col rounded-xl border border-[#d3cee8]/50 dark:border-white/10 bg-white dark:bg-background-dark px-4 group">
-            <summary className="flex cursor-pointer items-center justify-between gap-6 py-4 list-none">
-              <div className="flex flex-col">
-                <div className="flex items-center gap-2">
-                  <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
-                    Features
-                  </p>
-                  <span 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditSection('features');
-                    }}
-                    className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
-                  >
-                    edit
-                  </span>
-                </div>
-                <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal">
-                  High-level capabilities of the system.
-                </p>
-              </div>
-              <span className="material-symbols-outlined text-slate-500 dark:text-slate-400 group-open:rotate-180 transition-transform">
-                expand_more
-              </span>
-            </summary>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
-              {requirements.features.map((feature) => (
-                <div key={feature.id} className="p-4 rounded-lg bg-background-light dark:bg-background-dark/50 border border-transparent dark:border-white/5">
-                  <p className="text-slate-500 dark:text-slate-400 font-mono text-xs mb-1">
-                    {feature.id}
-                  </p>
-                  <p className="text-slate-800 dark:text-slate-200 text-sm">
-                    {feature.description}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </details>
-
-          
-        </div>
+        )}
       </div>
 
       {/* Approval Modal */}
