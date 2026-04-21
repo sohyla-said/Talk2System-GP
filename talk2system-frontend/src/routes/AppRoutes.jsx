@@ -1,7 +1,8 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 
 import AppLayout from "../components/layout/AppLayout";
 import AuthLayout from "../components/layout/AuthLayout";
+import { isLoggedIn } from "../api/authApi";
 
 // Pages
 import Home from "../pages/Home";
@@ -40,6 +41,24 @@ import UmlSessionViewPage from "../pages/artifacts/UmlSessionView";
 import ProjectResults from "../pages/results/ProjectResults";
 import SessionResults from "../pages/results/SessionResults";
 
+// If not logged in → redirect to /login
+// If logged in → render the page
+function ProtectedRoute({ children }) {
+  if (!isLoggedIn()) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
+
+//  Auth guard 
+// If already logged in → redirect to /dashboard (no need to see login again)
+function GuestRoute({ children }) {
+  if (isLoggedIn()) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return children;
+}
+
 export default function AppRoutes() {
   return (
     <Routes>
@@ -49,13 +68,24 @@ export default function AppRoutes() {
       </Route>
       
 
-      {/* Auth */}
+       {/* Auth pages */}
       <Route element={<AuthLayout />}>
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
+        <Route path="/login" element={
+          <GuestRoute><Login /></GuestRoute>      
+        } />
+        <Route path="/signup" element={
+          <GuestRoute><Signup /></GuestRoute>     
+        } />
         <Route path="/pending-approval" element={<PendingApproval />} />
-        <Route path="/role-approval" element={<RoleApproval />} />
+        <Route path="/role-approval" element={
+          <ProtectedRoute><RoleApproval /></ProtectedRoute>  
+        } />
       </Route>
+      
+      {/* Protected app pages — redirect to /login if not logged in */}
+      <Route element={
+        <ProtectedRoute><AppLayout /></ProtectedRoute>
+      }></Route>
 
       {/* App */}
       <Route element={<AppLayout />}>
@@ -81,8 +111,6 @@ export default function AppRoutes() {
           <Route path=":sessionId" element={<TranscriptView />} />
           <Route path=":sessionId/requirements" element={<RequirementsSessionView />} />
           <Route path=":sessionId/requirements/choice" element={<RequirementsChoicePage />} />
-        
-
         </Route>
 
         <Route path="/projects/:projectId/sessions/:sessionId">
@@ -95,10 +123,16 @@ export default function AppRoutes() {
         {/* Summary */}
         <Route path="/summary/:sessionId" element={<TranscriptSummary />} />
         
-        {/* <Route path=":projectId/sessions/:sessionId" element={<SessionDetailsPage />} /> */}
-        
-                
+        {/* <Route path=":projectId/sessions/:sessionId" element={<SessionDetailsPage />} /> */}     
       </Route>
+      {/* Catch-all */}
+      <Route path="*" element={
+        isLoggedIn()
+          ? <Navigate to="/dashboard" replace />
+          : <Navigate to="/login" replace />
+      } />
+
     </Routes>
+    
   );
 }

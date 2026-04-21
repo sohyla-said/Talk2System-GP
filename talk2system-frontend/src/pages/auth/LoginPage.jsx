@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { loginApi } from "../../api/authApi";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -22,13 +23,12 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const response = await fakeLoginApi(form);
-      // response: { status: "success" | "failed", role: "Admin" | "Project Manager" | "Participant" }
-      if (response.status === "success") {
-        if (response.role === "Admin") navigate("/role-approval");
-        else navigate("/dashboard");
+      const data = await loginApi(form);
+
+      if (data.role === "admin") {
+        navigate("/role-approval");
       } else {
-        setError("Invalid email or password");
+        navigate("/dashboard");
       }
     } catch (err) {
       setError(err.message || "Login failed");
@@ -57,11 +57,9 @@ export default function LoginPage() {
                       'url("https://lh3.googleusercontent.com/aida-public/AB6AXuD0NIMW4MWdDil-LHDEL3XatVr5eSsIfuw1M8cIEbCy-VYKh-u77pUvuIYE8TNkqKvUlxLNhSNHc5_98AFyEank96nRHON9mFkvaQb7wom4ef9pZ-tvBYq0dZCtEZDl_RqJHAegC0DtdjF9rBhRpWq59nB0SKoC1bbk6PHpRGmsIYq6VE3dbP5XNLI0cYpaUVX5JxMuiNxUP-IuixHg9I4M_bciW-OJq1jVwjAPvwDNohie3mqm0rVecNtLgBqnftEVNjK-H6YVUwoT")',
                   }}
                 />
-
                 <h1 className="text-4xl font-bold text-[#100d1c] dark:text-white mb-3">
                   From Voice to Vision
                 </h1>
-
                 <p className="text-[#100d1c]/80 dark:text-white/80">
                   Log in to instantly transform your ideas into tangible designs and documents.
                 </p>
@@ -77,7 +75,11 @@ export default function LoginPage() {
                 </h2>
 
                 <form className="space-y-6" onSubmit={handleSubmit}>
-                  {error && <p className="text-red-600 text-sm">{error}</p>}
+                  {error && (
+                    <p className="text-red-600 text-sm bg-red-50 dark:bg-red-900/20 px-4 py-2 rounded-lg">
+                      {error}
+                    </p>
+                  )}
 
                   <div>
                     <label className="text-sm font-medium text-[#100d1c] dark:text-white">
@@ -89,6 +91,7 @@ export default function LoginPage() {
                       placeholder="you@example.com"
                       value={form.email}
                       onChange={handleChange}
+                      required
                       className="w-full h-12 mt-1 px-4 border rounded-lg focus:ring-2 focus:ring-primary"
                     />
                   </div>
@@ -103,13 +106,14 @@ export default function LoginPage() {
                       placeholder="Enter your password"
                       value={form.password}
                       onChange={handleChange}
+                      required
                       className="w-full h-12 mt-1 px-4 border rounded-lg focus:ring-2 focus:ring-primary"
                     />
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full h-12 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90"
+                    className="w-full h-12 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
                     disabled={loading}
                   >
                     {loading ? "Logging in..." : "Log In"}
@@ -117,7 +121,7 @@ export default function LoginPage() {
                 </form>
 
                 <p className="mt-6 text-center text-sm">
-                  Don’t have an account?{" "}
+                  Don't have an account?{" "}
                   <Link
                     to="/signup"
                     className="text-primary font-semibold hover:underline"
@@ -134,19 +138,4 @@ export default function LoginPage() {
       </div>
     </div>
   );
-}
-
-// Fake login API simulation
-function fakeLoginApi(form) {
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      // any email with "admin" will be Admin, else Participant
-      if (form.email && form.password) {
-        if (form.email.includes("admin")) resolve({ status: "success", role: "Admin" });
-        else resolve({ status: "success", role: "Participant" });
-      } else {
-        resolve({ status: "failed" });
-      }
-    }, 1000);
-  });
 }

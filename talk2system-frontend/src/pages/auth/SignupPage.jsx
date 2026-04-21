@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { signupApi } from "../../api/authApi";
 
 export default function SignupPage() {
   const navigate = useNavigate();
 
-  // ================= State =================
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -15,7 +15,6 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // ================= Handlers =================
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
@@ -24,27 +23,31 @@ export default function SignupPage() {
     e.preventDefault();
     setError("");
 
-    // Validate passwords match
     if (form.password !== form.confirmPassword) {
       setError("Passwords do not match");
       return;
     }
 
-    // Validate role selected
     if (!form.role) {
       setError("Please select a role");
       return;
     }
 
+    if (form.password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await SignupApi(form);
-      // ================= Routing Logic =================
-      if (response.status === "approved") {
-          // Admin → RoleApprovalPage
-        if (response.role === "Admin") navigate("/role-approval");
-          // Other roles → Dashboard
-        else navigate("/pending-approval");
+      const data = await signupApi(form);
+
+      if (data.role === "admin") {
+        navigate("/role-approval");        // admin → approval page
+      } else if (data.status === "pending") {
+        navigate("/pending-approval");     // waiting for admin approval
+      } else {
+        navigate("/dashboard");             // approved → dashboard
       }
     } catch (err) {
       setError(err.message || "Signup failed");
@@ -53,10 +56,9 @@ export default function SignupPage() {
     }
   };
 
-  // ================= Render =================
   return (
     <div className="font-display min-h-screen bg-background-light dark:bg-background-dark flex flex-col lg:flex-row">
-      
+
       {/* LEFT SIDE */}
       <div className="lg:w-1/2 w-full flex flex-col items-center justify-center bg-primary/10 dark:bg-primary/20 p-8 relative overflow-hidden">
         <div className="absolute -top-20 -left-20 w-72 h-72 bg-primary/20 rounded-full opacity-50" />
@@ -70,7 +72,6 @@ export default function SignupPage() {
                 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuD0NIMW4MWdDil-LHDEL3XatVr5eSsIfuw1M8cIEbCy-VYKh-u77pUvuIYE8TNkqKvUlxLNhSNHc5_98AFyEank96nRHON9mFkvaQb7wom4ef9pZ-tvBYq0dZCtEZDl_RqJHAegC0DtdjF9rBhRpWq59nB0SKoC1bbk6PHpRGmsIYq6VE3dbP5XNLI0cYpaUVX5JxMuiNxUP-IuixHg9I4M_bciW-OJq1jVwjAPvwDNohie3mqm0rVecNtLgBqnftEVNjK-H6YVUwoT")',
             }}
           />
-
           <div className="flex flex-col gap-3 mt-8">
             <p className="text-primary dark:text-white text-4xl font-black">
               From Voice to Vision, Instantly.
@@ -94,9 +95,12 @@ export default function SignupPage() {
             </p>
           </div>
 
-          {/* ================= Signup Form ================= */}
           <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-            {error && <p className="text-red-600">{error}</p>}
+            {error && (
+              <p className="text-red-600 text-sm bg-red-50 dark:bg-red-900/20 px-4 py-2 rounded-lg">
+                {error}
+              </p>
+            )}
 
             <input
               type="text"
@@ -104,6 +108,7 @@ export default function SignupPage() {
               placeholder="Full Name"
               value={form.name}
               onChange={handleChange}
+              required
               className="w-full h-12 px-4 rounded-lg bg-slate-100 dark:bg-slate-800"
             />
             <input
@@ -112,14 +117,16 @@ export default function SignupPage() {
               placeholder="Email"
               value={form.email}
               onChange={handleChange}
+              required
               className="w-full h-12 px-4 rounded-lg bg-slate-100 dark:bg-slate-800"
             />
             <input
               type="password"
               name="password"
-              placeholder="Password"
+              placeholder="Password (min 8 characters)"
               value={form.password}
               onChange={handleChange}
+              required
               className="w-full h-12 px-4 rounded-lg bg-slate-100 dark:bg-slate-800"
             />
             <input
@@ -128,12 +135,14 @@ export default function SignupPage() {
               placeholder="Confirm Password"
               value={form.confirmPassword}
               onChange={handleChange}
+              required
               className="w-full h-12 px-4 rounded-lg bg-slate-100 dark:bg-slate-800"
             />
             <select
               name="role"
               value={form.role}
               onChange={handleChange}
+              required
               className="w-full h-12 px-4 rounded-lg bg-slate-100 dark:bg-slate-800"
             >
               <option value="">Select your role</option>
@@ -144,7 +153,7 @@ export default function SignupPage() {
 
             <button
               type="submit"
-              className="h-12 bg-primary text-white rounded-lg font-bold"
+              className="h-12 bg-primary text-white rounded-lg font-bold disabled:opacity-60 disabled:cursor-not-allowed transition-all"
               disabled={loading}
             >
               {loading ? "Creating..." : "Create Free Account"}
@@ -161,17 +170,4 @@ export default function SignupPage() {
       </div>
     </div>
   );
-}
-
-// Signup API simulation
-function SignupApi(form) {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      if (form.email.includes("pending")) {
-        resolve({ status: "pending", role: form.role });
-      } else {
-        resolve({ status: "approved", role: form.role });
-      }
-    }, 1000);
-  });
 }

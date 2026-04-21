@@ -13,6 +13,9 @@ from app.api.transcription_router import router as transcription_router
 from app.api.document import router as document_router
 from app.api import project_routes, session_routes
 from app.api import summary
+from app.api.auth_routes import router as auth_router
+from app.api.admin_routes import router as admin_router
+
 app = FastAPI()
 
 app.add_middleware(
@@ -27,7 +30,8 @@ app.add_middleware(
 )
 
 Base.metadata.create_all(bind=engine)
-
+app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(requirements.router, prefix="/api")
 app.include_router(transcription_router, prefix="/api")
 app.include_router(document_router, prefix="/api")
