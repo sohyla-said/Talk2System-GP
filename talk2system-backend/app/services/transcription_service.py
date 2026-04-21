@@ -55,7 +55,7 @@ def transcribe_audio(file_path: str):
             speaker_labels=True,
             punctuate=True,
             format_text=True,
-            # speech_models=["universal-2"]
+            speech_models=["universal-2"]
     )
 
     transcriber = aai.Transcriber(config=config)
@@ -236,6 +236,32 @@ def parse_transcript_text(raw_text: str) -> list[dict]:
         )
 
     return segments
+
+
+def delete_transcript_segments(
+    db: Session,
+    session_id: int,
+    segment_indices: list[int],
+) -> int:
+    """
+    Delete multiple transcript segments by their 0-based indices.
+    Returns the number of segments actually deleted.
+    """
+    segments = (
+        db.query(TranscriptSegment)
+        .filter(TranscriptSegment.session_id == session_id)
+        .order_by(TranscriptSegment.start_time.nulls_last(), TranscriptSegment.id)
+        .all()
+    )
+
+    deleted = 0
+    for idx in segment_indices:
+        if 0 <= idx < len(segments):
+            db.delete(segments[idx])
+            deleted += 1
+
+    db.commit()
+    return deleted
 
 
 def save_transcript_text(db: Session, session_id: int, raw_text: str) -> str:

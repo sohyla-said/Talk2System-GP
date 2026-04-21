@@ -1,5 +1,4 @@
 
-
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import TranscriptApprovalModal from "../../components/modals/TranscriptApprovalModal";
@@ -21,11 +20,21 @@ export default function TranscriptPage() {
   // so we never depend on it being in the URL
   const [projectId, setProjectId] = useState(null);
 
+  // Session title — populated from the backend response
+  const [sessionTitle, setSessionTitle] = useState("");
+
   // Extract Requirements loading state
   const [isSubmittingReq, setIsSubmittingReq] = useState(false);
 
   // Summarize loading state
   const [isSummarizing, setIsSummarizing] = useState(false);
+
+  // -----------------------------
+  // Multi-select & delete state
+  // -----------------------------
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // -----------------------------
   // Fetch transcript + resolve projectId from session
@@ -45,10 +54,13 @@ export default function TranscriptPage() {
 
         const data = await res.json();
 
-        // project_id is stored as FK on the session model —
-        // backend returns it alongside the transcript
+        // project_id and title are stored on the session model —
+        // backend returns them alongside the transcript
         if (data.project_id) {
           setProjectId(data.project_id);
+        }
+        if (data.title) {
+          setSessionTitle(data.title);
         }
 
         if (!data.transcript || !data.transcript.length) {
@@ -251,6 +263,72 @@ export default function TranscriptPage() {
   };
 
   // -----------------------------
+  // Multi-select & delete handlers
+  // -----------------------------
+  const toggleSelectionMode = () => {
+    setSelectionMode((prev) => !prev);
+    setSelectedIds(new Set());
+  };
+
+  const toggleSegmentSelection = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === transcriptData.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(transcriptData.map((s) => s.id)));
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+
+    // segment_index is 0-based; frontend id = index + 1
+    const indices = Array.from(selectedIds).map((id) => id - 1);
+
+    setIsDeleting(true);
+    try {
+      const res = await fetch(
+        `http://localhost:8000/api/sessions/${sessionId}/transcript/segments`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ segment_indices: indices }),
+        }
+      );
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail ?? "Failed to delete segments");
+      }
+
+      // Remove deleted segments from local state and re-assign sequential ids
+      const remaining = transcriptData
+        .filter((s) => !selectedIds.has(s.id))
+        .map((s, i) => ({ ...s, id: i + 1 }));
+
+      setTranscriptData(remaining);
+      setSelectedIds(new Set());
+      setSelectionMode(false);
+    } catch (error) {
+      console.error("Error deleting segments:", error);
+      alert(error.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // -----------------------------
   // UI Rendering
   // -----------------------------
   if (loading) {
@@ -320,9 +398,24 @@ export default function TranscriptPage() {
             {/* Title and Actions */}
             <div className="flex flex-wrap items-center justify-between gap-4">
               <h1 className="text-text-dark dark:text-text-light text-4xl font-black leading-tight tracking-[-0.033em] flex-1">
-                Session Transcript #{sessionId}
+                {sessionTitle || `Session Transcript #${sessionId}`}
               </h1>
               <div className="flex items-center gap-3">
+                {/* Selection mode toggle */}
+                <button
+                  onClick={toggleSelectionMode}
+                  className={`flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold shadow-soft transition-colors
+                    ${selectionMode
+                      ? "bg-gray-200 dark:bg-white/10 text-text-dark dark:text-text-light hover:bg-gray-300 dark:hover:bg-white/20"
+                      : "bg-surface-light dark:bg-white/10 text-text-dark dark:text-text-light border border-border-light dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/20"
+                    }`}
+                >
+                  <span className="material-symbols-outlined text-lg">
+                    {selectionMode ? "close" : "checklist"}
+                  </span>
+                  {selectionMode ? "Cancel" : "Select"}
+                </button>
+
                 <button
                   onClick={() => setApproved(true)}
                   disabled={approved}
@@ -341,9 +434,68 @@ export default function TranscriptPage() {
           <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             {/* LEFT CONTENT - Speaker Bubbles */}
             <div className="lg:col-span-2 flex flex-col gap-6">
+
+              {/* Selection action bar */}
+              {selectionMode && (
+                <div className="flex items-center justify-between gap-3 bg-white dark:bg-background-dark/70 border border-border-light dark:border-white/10 rounded-xl px-4 py-3 shadow-soft">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size === transcriptData.length && transcriptData.length > 0}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 accent-primary rounded cursor-pointer"
+                    />
+                    <span className="text-sm font-medium text-text-dark dark:text-text-light">
+                      {selectedIds.size === 0
+                        ? "Select segments to delete"
+                        : `${selectedIds.size} segment${selectedIds.size > 1 ? "s" : ""} selected`}
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleDeleteSelected}
+                    disabled={selectedIds.size === 0 || isDeleting}
+                    className="flex items-center gap-2 rounded-lg bg-red-500 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2 text-sm font-bold text-white transition-colors"
+                  >
+                    {isDeleting ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                        </svg>
+                        Deleting…
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-base">delete</span>
+                        Delete Selected
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
               <div className="flex flex-col gap-8 bg-surface-light dark:bg-background-dark/50 rounded-xl p-4 sm:p-6 shadow-soft">
                 {transcriptData.map((speaker) => (
-                  <div key={speaker.id} className="flex gap-4 group/speaker">
+                  <div
+                    key={speaker.id}
+                    className={`flex gap-4 group/speaker rounded-lg transition-colors
+                      ${selectionMode ? "cursor-pointer p-2 -mx-2 hover:bg-black/5 dark:hover:bg-white/5" : ""}
+                      ${selectionMode && selectedIds.has(speaker.id) ? "bg-red-50 dark:bg-red-900/20 ring-1 ring-red-300 dark:ring-red-700 rounded-lg p-2 -mx-2" : ""}
+                    `}
+                    onClick={selectionMode ? () => toggleSegmentSelection(speaker.id) : undefined}
+                  >
+                    {/* Checkbox shown only in selection mode */}
+                    {selectionMode && (
+                      <div className="flex items-start pt-1 flex-shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(speaker.id)}
+                          onChange={() => toggleSegmentSelection(speaker.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-4 h-4 accent-primary rounded cursor-pointer"
+                        />
+                      </div>
+                    )}
                     <div
                       className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 flex-shrink-0"
                       style={{ backgroundImage: `url("${speaker.avatar}")` }}
@@ -363,13 +515,15 @@ export default function TranscriptPage() {
                               </span>
                             )}
                           </div>
-                          <button
-                            onClick={() => handleEditClick(speaker)}
-                            className="flex items-center text-text-dark/40 hover:text-primary dark:text-text-light/40 dark:hover:text-primary transition-colors p-1"
-                            title="Edit this line"
-                          >
-                            <span className="material-symbols-outlined text-lg">edit</span>
-                          </button>
+                          {!selectionMode && (
+                            <button
+                              onClick={() => handleEditClick(speaker)}
+                              className="flex items-center text-text-dark/40 hover:text-primary dark:text-text-light/40 dark:hover:text-primary transition-colors p-1"
+                              title="Edit this line"
+                            >
+                              <span className="material-symbols-outlined text-lg">edit</span>
+                            </button>
+                          )}
                         </div>
                         <p className="text-text-dark/90 dark:text-text-light/90 text-base font-normal leading-relaxed">
                           {speaker.text}

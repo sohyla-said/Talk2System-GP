@@ -1,21 +1,19 @@
-import os
-from google import genai
+import requests
 from sqlalchemy.orm import Session
 from app.models.summaries import Summary
 
+OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_MODEL = "qwen2.5:7b"
 
 
-
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
-def generate_summary(transcript: str):
+def generate_summary(transcript: str) -> str:
     prompt = f"""
     You are a business analyst assistant.
 
     Summarize the following transcript into:
 
-    1. Short Summary (2-3 sentences)
-    2. Key Points (bullet points) Max 7
+    1. Short Summary (3-4 sentences)
+    2. Key Points (bullet points) Max 6
     
     Return plain text only. Do not use markdown, hashtags, or any special formatting symbols.
 
@@ -23,13 +21,17 @@ def generate_summary(transcript: str):
     {transcript}
     """
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt
+    response = requests.post(
+        OLLAMA_URL,
+        json={
+            "model": OLLAMA_MODEL,
+            "prompt": prompt,
+            "stream": False
+        }
     )
 
-    return response.text
-
+    response.raise_for_status()
+    return response.json()["response"]
 
 
 def save_summary(db: Session, session_id: int, summary_text: str):

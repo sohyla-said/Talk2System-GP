@@ -13,7 +13,8 @@ from app.services.transcription_service import (
     save_transcription,
     get_transcript_by_session,
     update_transcript_segment,
-    save_transcript_text,         
+    save_transcript_text,
+    delete_transcript_segments,
 )
 from app.models.project import Project
 from typing import Optional
@@ -182,9 +183,34 @@ def get_transcript(session_id: int, db: Session = Depends(get_db)):
     }
 
 
+
 # ---------------------------------------------------------------------------
-# PATCH SEGMENT  (existing — unchanged)
+# DELETE SEGMENTS  (bulk)
 # ---------------------------------------------------------------------------
+
+class SegmentsDeletePayload(BaseModel):
+    segment_indices: list[int]   # 0-based indices matching the ordered segment list
+
+
+@router.delete("/sessions/{session_id}/transcript/segments")
+def delete_segments(
+    session_id: int,
+    payload: SegmentsDeletePayload,
+    db: Session = Depends(get_db),
+):
+    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if not payload.segment_indices:
+        raise HTTPException(status_code=400, detail="No segment indices provided")
+
+    deleted_count = delete_transcript_segments(db, session_id, payload.segment_indices)
+
+    if deleted_count == 0:
+        raise HTTPException(status_code=404, detail="No matching segments found")
+
+    return {"ok": True, "deleted": deleted_count}
 
 class SegmentUpdate(BaseModel):
     segment_index: int   # 0-based position in the ordered list (matches the frontend's id - 1)
