@@ -118,8 +118,27 @@ Strict rules:
 - NEVER include "System" as an actor — omit any use case whose only actor is System
 - Draw a system boundary (frame) that contains all use cases
 - Place all actors OUTSIDE the system boundary
-- When using inheritance (generalization) between use cases, the arrow must point from the child (sub-use case) to the parent (base use case)
 
+Use case naming rules:
+- Every use case name MUST follow the format: "Verb + Subject" (e.g., "Manage Users", "Submit Report") or "Verb only" (e.g., "Login", "Register")
+- Never name a use case with a noun phrase alone (e.g., avoid "User Authentication" — use "Authenticate User" instead)
+
+Inheritance (Generalization) rules:
+- Inheritance is ONLY allowed between actors, never between use cases
+- To show one actor is a specialization of another, use: ChildActor --|> ParentActor
+- Example: "Admin --|> User" means Admin inherits from User
+- Do NOT use --|> between use cases under any circumstances
+
+Extend relationship rules:
+- Use «extend» to show that one use case optionally extends another
+- The arrow goes FROM the extending use case TO the base use case, as a dashed arrow
+- Syntax: ExtendingUseCase .down.> BaseUseCase : «extend»
+- Example: "Edit Transcript" extends "View Transcript" meaning the user CAN edit after viewing, but it is optional
+- Use extend only for optional/conditional behavior that is not part of the main flow
+
+Include relationship rules:
+- Use «include» when a use case always calls another as a mandatory sub-step
+- Syntax: BaseUseCase .down.> IncludedUseCase : «include»
 
 Actors:
 {actors}
@@ -206,7 +225,7 @@ def save_uml_file(image_bytes, project_id, diagram_type, session_id=None):
         filename = f"{diagram_type}_P{project_id}_S{session_id}_{int(datetime.utcnow().timestamp())}.png"
     else:
         filename = f"{diagram_type}_P{project_id}_{int(datetime.utcnow().timestamp())}.png"
-
+ 
     path = os.path.join(STORAGE_PATH, filename)
 
     with open(path, "wb") as f:

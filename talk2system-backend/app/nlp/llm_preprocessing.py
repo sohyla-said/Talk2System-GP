@@ -121,7 +121,16 @@ Return only the JSON array."""
 
 
 # if __name__ == "__main__":
-#     transcript = """
+#     transcript = """Speaker A: Hi, everyone. Good morning.
+# Speaker B: Good morning. How are you?
+# Speaker A: I'm good, thanks. So. Yeah, let's start.
+# Speaker B: The system must allow users to sign in and register. Do you mean login and sign up? Yes, exactly. It should allow them to log in using email and password.
+# Speaker C: The system must be highly secure and must not store passwords in plain text. The user interface should be simple, clean and responsive.
+# Speaker D: The user can reset password if they forget it.
+# Speaker A: The system should not crash if the database goes down. It must prevent unauthorized access.
+# Speaker D: It should Support up to 10,000 concurrent users.
+# Speaker A: The system should generate an audit log. Alright, that's everything for today.
+# Speaker D: Thanks, everyone.
 # """
 #     response = extract_sentences(transcript)
     # output_file = Path(__file__).with_name("llm_preprocessing_output.json")

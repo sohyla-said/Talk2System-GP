@@ -676,6 +676,34 @@ const ProjectDetailsPage = () => {
             </div>
           </div>
 
+          {/* Tabs */}
+          <div className="flex flex-col mt-4">
+            <div className="border-b border-gray-200 dark:border-gray-700 px-4">
+              <div className="flex gap-8">
+                <button
+                  onClick={() => navigate(`/projects/${projectId}`)}
+                  className="flex flex-col items-center justify-center border-b-[3px] border-b-primary text-gray-900 dark:text-white pb-[13px] pt-4"
+                >
+                  <p className="text-sm font-bold leading-normal tracking-[0.015em]">Sessions</p>
+                </button>
+
+                <button
+                  onClick={() => navigate(`/projects/${projectId}/requirements`)}
+                  className="flex flex-col items-center justify-center border-b-[3px] border-b-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 pb-[13px] pt-4"
+                >
+                  <p className="text-sm font-bold leading-normal tracking-[0.015em]">Requirements</p>
+                </button>
+
+                <button
+                  onClick={() => navigate(`/projects/${projectId}/results`)}
+                  className="flex flex-col items-center justify-center border-b-[3px] border-b-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 pb-[13px] pt-4"
+                >
+                  <p className="text-sm font-bold leading-normal tracking-[0.015em]">Artifacts</p>
+                </button>
+              </div>
+            </div> {/* ✅ closes border-b div */}
+          </div> {/* ✅ closes flex flex-col mt-4 div */}
+
           {/* Sessions */}
           <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {loading ? (
@@ -686,7 +714,7 @@ const ProjectDetailsPage = () => {
               sessions.map((session) => (
                 <div
                   key={session.id}
-                  onClick={() => navigate(`/transcript/${session.id}`)}
+                  onClick={() => navigate(`/transcript/${session.id}/requirements`)}
                   className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border shadow-sm hover:shadow-md cursor-pointer"
                 >
                   <h3 className="font-bold text-lg">
