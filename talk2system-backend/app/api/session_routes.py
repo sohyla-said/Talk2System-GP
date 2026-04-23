@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime
@@ -44,7 +44,15 @@ def get_session(session_id: int, db: Session = Depends(get_db)):
     session = SessionService.get_session(db, session_id)
 
     if not session:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Session not found")
 
     return session
+
+@router.delete("/{session_id}")
+def delete_session(session_id: int, db: Session = Depends(get_db)):
+    session = SessionService.delete_session(db, session_id)
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return {"message": "Session deleted successfully"}

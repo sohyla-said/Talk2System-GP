@@ -27,7 +27,7 @@ class ProjectResponse(BaseModel):
     project_status: str
 
     class Config:
-        from_attributes = True   # (Pydantic v2 compatible)
+        from_attributes = True  
 
 
 
@@ -51,3 +51,12 @@ def get_project(project_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Project not found")
 
     return project
+
+@router.delete("/deleteproject/{project_id}")
+def delete_project(project_id: int, db: Session = Depends(get_db)):
+    project = ProjectService.delete_project(db, project_id)
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    return {"message": "Project deleted successfully"}

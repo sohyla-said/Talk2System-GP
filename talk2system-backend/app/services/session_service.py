@@ -34,25 +34,6 @@ class SessionService:
             .all()
         )
 
-
-    # @staticmethod
-    # def update_session(db: Session, session_id: int, data: SessionUpdate):
-    #     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-
-    #     if not session:
-    #         return None
-
-    #     if data.title is not None:
-    #         session.title = data.title
-
-    #     if data.status is not None:
-    #         session.status = data.status
-
-    #     db.commit()
-    #     db.refresh(session)
-    #     return session
-
-
     @staticmethod
     def delete_session(db: Session, session_id: int):
         session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
@@ -63,3 +44,4 @@ class SessionService:
         db.delete(session)
         db.commit()
         return True
+    
