@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { isAdmin } from "../../api/authApi";
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -128,7 +129,7 @@ export default function DashboardPage() {
             Ready to transform your ideas? Create new project to start converting voice sessions into professional documentation.
           </p>
           <button
-              onClick={() => navigate("/projects/new")}
+              onClick={() => navigate(isAdmin() ? "/projects/new-admin" : "/projects/new")}
               className="flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-white font-bold"
             >
               <span className="material-symbols-outlined">add</span>

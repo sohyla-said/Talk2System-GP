@@ -8,6 +8,8 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 
 from app.db.base import Base
 from app.db.session import engine
+from app.models import user, project
+from app.models import project_membership, invitation
 from app.api import requirements
 from app.api.transcription_router import router as transcription_router
 from app.api.document import router as document_router

@@ -1,47 +1,25 @@
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { createProject } from "../../api/projectApi"; 
 
 export default function AddProjectDetailsPage() {
   const navigate = useNavigate();
 
-  // STATE
-  const [name, setName] = useState("");
+  const [name, setName]             = useState("");
   const [description, setDescription] = useState("");
-  const [domain, setDomain] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [domain, setDomain]         = useState("");
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState("");
 
-  // API CALL
-  const createProject = async () => {
-    const res = await fetch("http://127.0.0.1:8000/api/projects/createproject", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name,
-        description,
-        domain,
-      }),
-    });
-
-    if (!res.ok) {
-      throw new Error("Failed to create project");
-    }
-
-    return res.json();
-  };
-
-  // SUBMIT HANDLER
   const handleSubmit = async (e) => {
     e.preventDefault();
-
+    setError("");
+    setLoading(true);
     try {
-      setLoading(true);
-      await createProject();
+      await createProject({ name, description, domain });  
       navigate("/projects");
-    } catch (error) {
-      console.error("Error creating project:", error);
-      alert("Something went wrong!");
+    } catch (err) {
+      setError(err.message || "Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -49,24 +27,20 @@ export default function AddProjectDetailsPage() {
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-display">
-
-      {/* PAGE CONTAINER */}
       <div className="max-w-[960px] mx-auto px-4 sm:px-8 py-6">
 
-        {/* BACK LINK */}
         <div className="mb-6">
-          <a
-            href="/projects"
+          <button
+            onClick={() => navigate("/projects")}
             className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-primary transition-colors group"
           >
             <span className="material-symbols-outlined group-hover:-translate-x-1 transition-transform">
               arrow_back
             </span>
             Back to Projects List
-          </a>
+          </button>
         </div>
 
-        {/* TITLE */}
         <div className="mb-6">
           <h1 className="text-3xl font-black text-[#100d1c] dark:text-white">
             Add Project Details
@@ -76,32 +50,30 @@ export default function AddProjectDetailsPage() {
           </p>
         </div>
 
-        {/* FORM CARD */}
         <div className="bg-white dark:bg-background-dark/50 border border-gray-200 dark:border-white/5 rounded-xl shadow">
           <div className="p-6 md:p-8">
-
             <form onSubmit={handleSubmit} className="space-y-6 max-w-3xl">
 
-              {/* PROJECT NAME */}
+              {error && (
+                <p className="text-red-600 text-sm bg-red-50 dark:bg-red-900/20 px-4 py-2 rounded-lg">
+                  {error}
+                </p>
+              )}
+
               <div>
-                <label className="block text-sm font-bold mb-1">
-                  Project Name
-                </label>
+                <label className="block text-sm font-bold mb-1">Project Name</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Talk2System Mobile App"
-                  className="w-full rounded-lg bg-background-light dark:bg-background-dark/80 px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                   required
+                  className="w-full rounded-lg bg-background-light dark:bg-background-dark/80 px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all"
                 />
               </div>
 
-              {/* DESCRIPTION */}
               <div>
-                <label className="block text-sm font-bold mb-1">
-                  Description
-                </label>
+                <label className="block text-sm font-bold mb-1">Description</label>
                 <textarea
                   rows={5}
                   value={description}
@@ -111,11 +83,8 @@ export default function AddProjectDetailsPage() {
                 />
               </div>
 
-              {/* DOMAIN */}
               <div>
-                <label className="block text-sm font-bold mb-1">
-                  Domain
-                </label>
+                <label className="block text-sm font-bold mb-1">Domain</label>
                 <input
                   type="text"
                   value={domain}
@@ -125,25 +94,25 @@ export default function AddProjectDetailsPage() {
                 />
               </div>
 
-              {/* ACTIONS */}
               <div className="flex gap-4 pt-4">
                 <button
                   type="submit"
                   disabled={loading}
-                  className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-white font-bold shadow-lg transition-all
-                    ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-primary hover:bg-primary/90 shadow-primary/25"}
-                  `}
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-white font-bold shadow-lg transition-all ${
+                    loading ? "bg-gray-400 cursor-not-allowed" : "bg-primary hover:bg-primary/90 shadow-primary/25"
+                  }`}
                 >
                   <span className="material-symbols-outlined">save</span>
                   {loading ? "Creating..." : "Create Project"}
                 </button>
 
-                <a
-                  href="/projects"
+                <button
+                  type="button"
+                  onClick={() => navigate("/projects")}
                   className="px-6 py-2.5 rounded-lg font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
                 >
                   Cancel
-                </a>
+                </button>
               </div>
 
             </form>

@@ -26,4 +26,5 @@ class Project(Base):
     )
 
     project_requirements = relationship("ProjectRequirement", back_populates="project",cascade="all, delete-orphan")
-
+    memberships = relationship("ProjectMembership", back_populates="project")
+    invitations = relationship("Invitation", back_populates="project")

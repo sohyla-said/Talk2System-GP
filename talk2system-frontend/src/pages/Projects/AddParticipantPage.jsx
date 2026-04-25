@@ -1,14 +1,46 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { addParticipantDirectly } from '../../api/projectApi'; 
+import { isAdmin } from '../../api/authApi'
 
 export default function AddParticipantPage() {
   const navigate = useNavigate();
   const { id: projectId } = useParams();
 
-  const handleSubmit = (e) => {
+  // Add state for form data
+  const [email, setEmail] = useState('');
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  // Real submit handler that calls the backend
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Handle form submission logic here
-    navigate(`/projects/${projectId}`); // Navigate back to project details
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      const result = await addParticipantDirectly(projectId, email, notes);
+      setSuccess(result.message || 'Participant added successfully!');
+      
+      setEmail('');
+      setNotes('');
+
+      // Go back after showing success message
+      setTimeout(() => {
+        if (isAdmin()) {
+          navigate("/projects/system-projects");
+        } else {
+          navigate(`/projects/${projectId}`);
+        }
+      }, 1500);
+    } catch (err) {
+      setError(err.message || 'Failed to add participant');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -40,6 +72,22 @@ export default function AddParticipantPage() {
           </p>
         </div>
 
+        {/* SUCCESS MESSAGE BOX */}
+        {success && (
+          <div className="mb-6 flex items-center gap-3 px-4 py-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+            <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400">check_circle</span>
+            <p className="text-emerald-700 dark:text-emerald-300 text-sm font-medium">{success}</p>
+          </div>
+        )}
+
+        {/* ERROR MESSAGE BOX (This will show the admin error!) */}
+        {error && (
+          <div className="mb-6 flex items-center gap-3 px-4 py-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+            <span className="material-symbols-outlined text-red-600 dark:text-red-400">error</span>
+            <p className="text-red-700 dark:text-red-300 text-sm font-medium">{error}</p>
+          </div>
+        )}
+
         {/* FORM CARD */}
         <div className="bg-white dark:bg-background-dark/50 border border-gray-200 dark:border-white/5 rounded-xl shadow">
           <div className="p-6 md:p-8">
@@ -48,27 +96,32 @@ export default function AddParticipantPage() {
 
               {/* EMAIL */}
               <div>
-                <label className="block text-sm font-bold mb-1">
-                  Email Address
+                <label className="block text-sm font-bold mb-1 text-[#100d1c] dark:text-white">
+                  Email Address <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="email"
                   placeholder="e.g. john.doe@example.com"
                   required
-                  className="w-full rounded-lg bg-background-light dark:bg-background-dark/80 px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  value={email}                        
+                  onChange={(e) => setEmail(e.target.value)} 
+                  disabled={loading}
+                  className="w-full rounded-lg bg-background-light dark:bg-background-dark/80 px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:opacity-50"
                 />
               </div>
 
-
               {/* NOTES */}
               <div>
-                <label className="block text-sm font-bold mb-1">
-                  Notes (Optional)
+                <label className="block text-sm font-bold mb-1 text-[#100d1c] dark:text-white">
+                  Notes <span className="text-gray-400 font-normal">(Optional)</span>
                 </label>
                 <textarea
                   rows={4}
                   placeholder="Any additional information about this participant..."
-                  className="w-full rounded-lg bg-background-light dark:bg-background-dark/80 px-4 py-3 text-sm resize-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  value={notes}                       
+                  onChange={(e) => setNotes(e.target.value)}
+                  disabled={loading}
+                  className="w-full rounded-lg bg-background-light dark:bg-background-dark/80 px-4 py-3 text-sm resize-none focus:ring-2 focus:ring-primary/20 transition-all disabled:opacity-50"
                 />
               </div>
 
@@ -76,16 +129,27 @@ export default function AddParticipantPage() {
               <div className="flex gap-4 pt-4">
                 <button
                   type="submit"
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-primary text-white font-bold shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all"
+                  disabled={loading}                  
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-primary text-white font-bold shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <span className="material-symbols-outlined">person_add</span>
-                  Add Participant
+                  {loading ? (
+                    <>
+                      <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+                      Adding...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined">person_add</span>
+                      Add Participant
+                    </>
+                  )}
                 </button>
 
                 <button
                   type="button"
                   onClick={() => navigate(-1)}
-                  className="px-6 py-2.5 rounded-lg font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+                  disabled={loading}
+                  className="px-6 py-2.5 rounded-lg font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>

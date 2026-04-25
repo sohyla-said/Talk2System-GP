@@ -1,8 +1,8 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import AppLayout from "../components/layout/AppLayout";
 import AuthLayout from "../components/layout/AuthLayout";
-import { isLoggedIn } from "../api/authApi";
+import { isLoggedIn, getCurrentUser } from "../api/authApi";
 
 // Pages
 import Home from "../pages/Home";
@@ -22,7 +22,12 @@ import ProjectDetails from "../pages/projects/ProjectDetailsPage";
 import AddProject from "../pages/projects/AddProjectDetailsPage";
 import AddParticipant from "../pages/projects/AddParticipantPage";
 import EmptyProjectsPage from "../pages/projects/EmptyProjectsPage";
- //sessions
+import PMNotificationsPage from "../pages/projects/PMNotificationsPage";
+import AdminAddProject from "../pages/projects/AdminAddProjectPage";
+import AdminSystemProjectsPage from "../pages/projects/AdminSystemProjectsPage"; 
+import AllUsersPage from "../pages/admin/AllUsersPage";
+
+//sessions
 // import SessionDetailsPage from "../pages/sessions/SessionDetailsPage";
 // Recording & Transcript
 import RecordingSession from "../pages/recordingsession/RecordingSessionPage";
@@ -86,13 +91,19 @@ export default function AppRoutes() {
       <Route element={
         <ProtectedRoute><AppLayout /></ProtectedRoute>
       }></Route>
+      <Route path="/notifications" element={<PMNotificationsPage />} />
 
       {/* App */}
       <Route element={<AppLayout />}>
         <Route path="/dashboard" element={<Dashboard />} />
+       
+        <Route path="/admin/all-users" element={<AllUsersPage />} />
 
         <Route path="/projects">
           <Route index element={<ProjectsPage />} />
+          <Route path="system-projects" element={<AdminSystemProjectsPage />} />
+          <Route path="new" element={<AddProject />} />
+          <Route path="new-admin" element={<AdminAddProject />} />
           <Route path="new" element={<AddProject />} />
           <Route path=":id" element={<ProjectDetails />} />
           <Route path=":id/add-participant" element={<AddParticipant />} />

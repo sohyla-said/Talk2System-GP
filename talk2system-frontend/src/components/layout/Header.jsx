@@ -1,9 +1,45 @@
-import { NavLink, useNavigate } from "react-router-dom";
-import { logout, getCurrentUser } from "../../api/authApi";
+import { useState, useEffect } from "react";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
+import { logout, getCurrentUser, isAdmin } from "../../api/authApi";
+import { fetchMyRole } from "../../api/projectApi";
 
 export default function Header() {
   const navigate = useNavigate();
+  const location = useLocation();
   const user = getCurrentUser();
+  const projectPath = isAdmin() ? "/projects/system-projects" : "/projects";
+
+  // State to hold the role inside the current project
+  const [projectRole, setProjectRole] = useState(null);
+
+  useEffect(() => {
+    const match = location.pathname.match(/^\/projects\/(\d+)(\/|$)/);
+
+    if (match) {
+      const projectId = match[1];
+      // Fetch the role for THIS specific project
+      fetchMyRole(projectId)
+        .then((data) => {
+          setProjectRole(data.role); // "project_manager" | "participant" | null
+        })
+        .catch(() => {
+          setProjectRole(null);
+        });
+    } // Only clear the role if we explicitly leave to a "non-project" page
+    else if (
+      location.pathname === "/dashboard" ||
+      location.pathname === "/projects" ||
+      location.pathname === "/projects/system-projects" ||
+      location.pathname === "/"
+    ) {
+      setProjectRole(null);
+    }
+    // If we go to /transcript/... or /projects/new, DO NOTHING! 
+    // (Keep showing the previous project role)
+  }, [location.pathname]);
+
+  // Show project role if inside a project, otherwise show global role
+  const displayRole = projectRole || user?.role;
 
   const navLinkClasses = ({ isActive }) =>
     `flex items-center gap-2 h-10 px-4 rounded-lg text-sm font-bold tracking-[0.015em]
@@ -53,19 +89,25 @@ export default function Header() {
           <span className="material-symbols-outlined text-xl">grid_view</span>
           Dashboard
         </NavLink>
-        <NavLink to="/projects" className={navLinkClasses}>
+        <NavLink to={projectPath} className={navLinkClasses}>
           <span className="material-symbols-outlined text-xl">folder</span>
           Projects
         </NavLink>
+        {isAdmin() && (
+          <NavLink to="/admin/all-users" className={navLinkClasses}>
+            <span className="material-symbols-outlined text-xl">manage_accounts</span>
+            Users
+          </NavLink>
+        )}
 
         {/* ── User info ── */}
         {user?.email && (
-          <div className="hidden md:flex flex-col items-end ml-2">
+          <div className="flex flex-col items-end ml-2">
             <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">
-              {user.email}
+              {user.full_name}
             </span>
             <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary capitalize">
-              {user.role?.replace("_", " ")}
+              {displayRole?.replace("_", " ") || user.role?.replace("_", " ")}
             </span>
           </div>
         )}
