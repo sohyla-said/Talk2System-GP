@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from sqlalchemy.orm import Session 
+from sqlalchemy.orm import Session
 
 from app.models.user import User
 
@@ -15,7 +15,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 
-VALID_ROLES = {"admin", "project_manager", "participant"}
+VALID_STATUSES = {"pending", "active", "suspended", "terminated", "archived"}
 
 
 def hash_password(password: str) -> str:
@@ -41,25 +41,21 @@ def decode_token(token: str) -> dict:
         raise ValueError(f"Invalid token: {e}") from e
 
 
-def register_user(db: Session, email: str, password: str,
-                  full_name: str = None, role: str = "participant") -> User:
-    role = role.lower().replace(" ", "_")
-    if role not in VALID_ROLES:
-        raise ValueError(f"Invalid role. Must be one of: {', '.join(VALID_ROLES)}")
-
+def register_user(db: Session, email: str, password: str, full_name: str = None) -> User:
+    """
+    Public signup — role is always 'user', status always starts as 'pending'.
+    Admins are never created through this endpoint; insert them directly in the DB.
+    """
     existing = db.query(User).filter(User.email == email.lower().strip()).first()
     if existing:
         raise ValueError("Email already registered")
-
-    # admin accounts are auto-approved, everyone else needs admin approval
-    initial_status = "approved" if role == "admin" else "pending"
 
     user = User(
         email=email.lower().strip(),
         hashed_password=hash_password(password),
         full_name=full_name,
-        role=role,
-        status=initial_status,
+        role="user",
+        status="pending",
     )
     try:
         db.add(user)
@@ -81,11 +77,15 @@ def login_user(db: Session, email: str, password: str) -> dict:
 
     if not user or not ok:
         raise ValueError("Invalid email or password")
+
     if user.status == "pending":
         raise ValueError("Your account is pending admin approval")
-    if user.status == "rejected":
-        raise ValueError("Your account has been rejected")
-
+    if user.status == "suspended":
+        raise ValueError("Your account has been suspended")
+    if user.status == "terminated":
+        raise ValueError("Your account has been terminated")
+    if user.status == "archived":
+        raise ValueError("This account has been archived")
     return {
         "access_token": create_access_token(user.id, user.email, user.role),
         "token_type": "bearer",
@@ -93,4 +93,5 @@ def login_user(db: Session, email: str, password: str) -> dict:
         "email": user.email,
         "role": user.role,
         "status": user.status,
+        "full_name": user.full_name,
     }

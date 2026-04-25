@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { logout } from "../../api/authApi";
 
 export default function PendingApprovalPage() {
   return (
@@ -14,24 +15,23 @@ export default function PendingApprovalPage() {
         </h1>
 
         <p className="text-[#57499c] dark:text-gray-400">
-          Your account has been created successfully and is currently under
-          admin review.
+          Your account has been created and is under admin review.
         </p>
 
         <div className="bg-primary/10 text-primary rounded-lg p-4 text-sm">
-          You will receive an email once your role is approved.
+          You will be able to log in once your account is approved.
         </div>
 
         <p className="text-sm text-gray-500 dark:text-gray-400">
           This usually takes less than 24 hours.
         </p>
 
-        <Link
-          to="/login"
+        <button
+          onClick={logout}
           className="inline-block mt-4 text-primary font-bold hover:underline"
         >
           Back to Login
-        </Link>
+        </button>
       </div>
     </div>
   );

@@ -1,12 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session 
+from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user, require_role
 from app.models.user import User
+from app.models.project import Project                          
+from app.models.project_membership import ProjectMembership    
+from app.models.invitation import Invitation  
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
 
+# USER MANAGEMENT 
 @router.get("/pending-users")
 def get_pending_users(
     db: Session = Depends(get_db),
@@ -29,13 +33,15 @@ def approve_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "User not found")
-    user.status = "approved"
+    if user.role == "admin":
+        raise HTTPException(400, "Admin accounts cannot be approved this way")
+    user.status = "active"
     db.commit()
     return {"message": f"{user.email} approved", "role": user.role}
 
 
-@router.patch("/users/{user_id}/reject")
-def reject_user(
+@router.patch("/users/{user_id}/terminate")
+def terminate_user(
     user_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("admin"))
@@ -43,10 +49,44 @@ def reject_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "User not found")
-    user.status = "rejected"
+    if user.role == "admin":
+        raise HTTPException(400, "Cannot terminate admin accounts") 
+    user.status = "terminated"
     db.commit()
-    return {"message": f"{user.email} rejected"}
+    return {"message": f"{user.email} terminated"}
 
+
+@router.patch("/users/{user_id}/suspend")
+def suspend_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    if user.role == "admin":
+        raise HTTPException(400, "Cannot suspend admin accounts") 
+    user.status = "suspended"
+    db.commit()
+    return {"message": f"{user.email} suspended"}
+
+
+
+@router.patch("/users/{user_id}/archive")
+def archive_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    if user.role == "admin":
+        raise HTTPException(400, "Cannot archive admin accounts") 
+    user.status = "archived"
+    db.commit()
+    return {"message": f"{user.email} archived"}
 
 @router.get("/all-users")
 def get_all_users(
@@ -59,3 +99,173 @@ def get_all_users(
          "role": u.role, "status": u.status}
         for u in users
     ]
+
+
+# SYSTEM PROJECT MANAGEMENT 
+
+@router.get("/system-projects")
+def get_all_system_projects(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    """Admin sees ALL projects in the system regardless of membership."""
+    projects = db.query(Project).all()
+    result = []
+    for p in projects:
+        # FIND THE PM OF THIS PROJECT AND GET THEIR STATUS
+        pm_membership = db.query(ProjectMembership).filter_by(project_id=p.id, role="project_manager").first()
+        pm_status = None
+        if pm_membership and pm_membership.user:
+            pm_status = pm_membership.user.status
+
+        result.append({
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "domain": p.domain,
+            "status": p.project_status,
+            "created_at": p.created_at,
+            "pm_status": pm_status,  
+        })
+    return result
+
+@router.delete("/system-projects/{project_id}", status_code=204)
+def delete_any_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    """Admin can delete ANY project in the system."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    # Delete related invitations first to prevent DB crash
+    db.query(Invitation).filter(Invitation.project_id == project_id).delete(synchronize_session=False)
+
+    # Delete related memberships first to prevent DB crash
+    db.query(ProjectMembership).filter(ProjectMembership.project_id == project_id).delete(synchronize_session=False)
+
+    # Now safely delete the project
+    db.delete(project)
+    db.commit()
+    return
+
+
+@router.get("/system-projects/{project_id}/members")
+def get_project_members_admin(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    """Admin views members of a specific project to manage them."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(404, "Project not found")
+        
+    memberships = db.query(ProjectMembership).filter_by(project_id=project_id).all()
+    return [
+        {
+            "id": m.id,                
+            "user_id": m.user_id,
+            "email": m.user.email,
+            "full_name": m.user.full_name,
+            "role": m.role,
+            "joined_at": m.joined_at,
+        }
+        for m in memberships
+    ]
+
+
+@router.delete("/system-projects/{project_id}/members/{membership_id}", status_code=204)
+def remove_participant(
+    project_id: int,
+    membership_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    """Admin removes a participant from a project."""
+    membership = db.query(ProjectMembership).filter_by(id=membership_id, project_id=project_id).first()
+    if not membership:
+        raise HTTPException(404, "Membership not found")
+    if membership.role == "project_manager":
+        raise HTTPException(400, "Cannot remove Project Manager this way. Use the 'Change PM' endpoint.")
+    db.delete(membership)
+    db.commit()
+    return
+
+
+@router.patch("/system-projects/{project_id}/change-pm")
+def change_project_manager(
+    project_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    """Admin demotes current PM and assigns a new user as PM."""
+    new_pm_email = body.get("email")
+    if not new_pm_email:
+        raise HTTPException(400, "New PM email is required")
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    new_pm_user = db.query(User).filter(User.email == new_pm_email.lower().strip()).first()
+    if not new_pm_user:
+        raise HTTPException(404, f"User '{new_pm_email}' not found")
+
+    # Demote current PM to participant
+    current_pm = db.query(ProjectMembership).filter_by(project_id=project_id, role="project_manager").first()
+    if current_pm:
+        current_pm.role = "participant"
+
+    # Promote new user
+    new_membership = db.query(ProjectMembership).filter_by(project_id=project_id, user_id=new_pm_user.id).first()
+    if new_membership:
+        new_membership.role = "project_manager"
+    else:
+        new_membership = ProjectMembership(project_id=project_id, user_id=new_pm_user.id, role="project_manager")
+        db.add(new_membership)
+
+    db.commit()
+    return {"message": f"{new_pm_user.email} is now the Project Manager of {project.name}"}
+@router.patch("/system-projects/{project_id}/change-pm")
+def change_project_manager(
+    project_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    """Admin demotes current PM and assigns a new user as PM."""
+    new_pm_email = body.get("email")
+    if not new_pm_email:
+        raise HTTPException(400, "New PM email is required")
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    new_pm_user = db.query(User).filter(User.email == new_pm_email.lower().strip()).first()
+    if not new_pm_user:
+        raise HTTPException(404, f"User '{new_pm_email}' not found")
+
+    # Prevent assigning a terminated/suspended user as PM
+    if new_pm_user.status != "active":
+        raise HTTPException(400, "Cannot assign an inactive user as Project Manager")
+
+    # Demote current PM to participant (even if they are terminated)
+    current_pm = db.query(ProjectMembership).filter_by(project_id=project_id, role="project_manager").first()
+    if current_pm:
+        current_pm.role = "participant"
+
+    # Promote new user
+    new_membership = db.query(ProjectMembership).filter_by(project_id=project_id, user_id=new_pm_user.id).first()
+    if new_membership:
+        new_membership.role = "project_manager"
+    else:
+        new_membership = ProjectMembership(project_id=project_id, user_id=new_pm_user.id, role="project_manager")
+        db.add(new_membership)
+
+    db.commit()
+    return {"message": f"{new_pm_user.email} is now the Project Manager of {project.name}"}

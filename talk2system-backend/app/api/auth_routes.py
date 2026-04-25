@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session 
+from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user
@@ -13,7 +13,6 @@ class SignupRequest(BaseModel):
     email: str = Field(min_length=5)
     password: str = Field(min_length=8)
     full_name: str = None
-    role: str = "participant"   # admin, project_manager, participant
 
 
 class LoginRequest(BaseModel):
@@ -28,6 +27,7 @@ class AuthResponse(BaseModel):
     email: str
     role: str
     status: str
+    full_name: str
 
 
 class MeResponse(BaseModel):
@@ -41,9 +41,7 @@ class MeResponse(BaseModel):
 @router.post("/signup", response_model=AuthResponse, status_code=201)
 def signup(data: SignupRequest, db: Session = Depends(get_db)):
     try:
-        user = auth_service.register_user(
-            db, data.email, data.password, data.full_name, data.role
-        )
+        user = auth_service.register_user(db, data.email, data.password, data.full_name)
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
@@ -54,6 +52,7 @@ def signup(data: SignupRequest, db: Session = Depends(get_db)):
         email=user.email,
         role=user.role,
         status=user.status,
+        full_name=user.full_name,
     )
 
 
@@ -62,7 +61,7 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
     try:
         return auth_service.login_user(db, data.email, data.password)
     except ValueError as e:
-        status_code = 403 if "pending" in str(e) or "rejected" in str(e) else 401
+        status_code = 403 if any(w in str(e) for w in ("pending", "suspended", "terminated", "archived")) else 401
         raise HTTPException(status_code=status_code, detail=str(e))
 
 

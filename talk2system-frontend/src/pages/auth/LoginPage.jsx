@@ -4,13 +4,12 @@ import { loginApi } from "../../api/authApi";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ email: "", password: "" });
-  const [error, setError] = useState("");
+  const [form, setForm]       = useState({ email: "", password: "" });
+  const [error, setError]     = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) => {
+  const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -25,12 +24,14 @@ export default function LoginPage() {
     try {
       const data = await loginApi(form);
 
+      // backend only returns a token for active / admin accounts
       if (data.role === "admin") {
         navigate("/role-approval");
       } else {
         navigate("/dashboard");
       }
     } catch (err) {
+      // surface the exact backend message (pending / suspended / bad creds …)
       setError(err.message || "Login failed");
     } finally {
       setLoading(false);
@@ -40,22 +41,17 @@ export default function LoginPage() {
   return (
     <div className="relative min-h-screen w-full bg-background-light dark:bg-background-dark font-display">
       <div className="flex flex-col min-h-screen">
-
-        {/* Main */}
         <main className="flex flex-grow">
           <div className="flex flex-col lg:flex-row w-full">
 
-            {/* Left Section */}
+            {/* Left */}
             <div className="lg:w-1/2 w-full flex flex-col items-center justify-center bg-primary/10 dark:bg-primary/20 p-8 relative overflow-hidden">
               <div className="absolute -top-20 -left-20 w-72 h-72 bg-primary/20 rounded-full opacity-50" />
               <div className="absolute -bottom-24 -right-16 w-80 h-80 bg-primary/20 rounded-full opacity-50" />
               <div className="w-full max-w-md flex flex-col items-center text-center">
                 <div
                   className="w-full aspect-square mb-8 bg-cover bg-center rounded-xl"
-                  style={{
-                    backgroundImage:
-                      'url("https://lh3.googleusercontent.com/aida-public/AB6AXuD0NIMW4MWdDil-LHDEL3XatVr5eSsIfuw1M8cIEbCy-VYKh-u77pUvuIYE8TNkqKvUlxLNhSNHc5_98AFyEank96nRHON9mFkvaQb7wom4ef9pZ-tvBYq0dZCtEZDl_RqJHAegC0DtdjF9rBhRpWq59nB0SKoC1bbk6PHpRGmsIYq6VE3dbP5XNLI0cYpaUVX5JxMuiNxUP-IuixHg9I4M_bciW-OJq1jVwjAPvwDNohie3mqm0rVecNtLgBqnftEVNjK-H6YVUwoT")',
-                  }}
+                  style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuD0NIMW4MWdDil-LHDEL3XatVr5eSsIfuw1M8cIEbCy-VYKh-u77pUvuIYE8TNkqKvUlxLNhSNHc5_98AFyEank96nRHON9mFkvaQb7wom4ef9pZ-tvBYq0dZCtEZDl_RqJHAegC0DtdjF9rBhRpWq59nB0SKoC1bbk6PHpRGmsIYq6VE3dbP5XNLI0cYpaUVX5JxMuiNxUP-IuixHg9I4M_bciW-OJq1jVwjAPvwDNohie3mqm0rVecNtLgBqnftEVNjK-H6YVUwoT")' }}
                 />
                 <h1 className="text-4xl font-bold text-[#100d1c] dark:text-white mb-3">
                   From Voice to Vision
@@ -66,10 +62,9 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Right Section */}
+            {/* Right */}
             <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
               <div className="w-full max-w-md bg-white dark:bg-background-dark/50 p-8 rounded-xl shadow-lg">
-
                 <h2 className="text-2xl font-bold text-[#100d1c] dark:text-white mb-6">
                   Welcome Back
                 </h2>
@@ -113,23 +108,19 @@ export default function LoginPage() {
 
                   <button
                     type="submit"
-                    className="w-full h-12 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
                     disabled={loading}
+                    className="w-full h-12 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
                   >
-                    {loading ? "Logging in..." : "Log In"}
+                    {loading ? "Logging in…" : "Log In"}
                   </button>
                 </form>
 
                 <p className="mt-6 text-center text-sm">
                   Don't have an account?{" "}
-                  <Link
-                    to="/signup"
-                    className="text-primary font-semibold hover:underline"
-                  >
+                  <Link to="/signup" className="text-primary font-semibold hover:underline">
                     Sign Up
                   </Link>
                 </p>
-
               </div>
             </div>
 

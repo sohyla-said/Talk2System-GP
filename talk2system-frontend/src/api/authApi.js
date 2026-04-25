@@ -1,37 +1,49 @@
 const BASE_URL = "http://127.0.0.1:8000";
 
-// SIGNUP 
+const KEYS = ["access_token", "user_email", "user_id", "user_role", "user_status", "user_full_name"];
+  
+function saveSession(data) {
+  localStorage.setItem("access_token", data.access_token);
+  localStorage.setItem("user_email",   data.email);
+  localStorage.setItem("user_id",      String(data.user_id));
+  localStorage.setItem("user_role",    data.role);
+  localStorage.setItem("user_status",  data.status);
+}
+
+function clearSession() {
+  KEYS.forEach((k) => localStorage.removeItem(k));
+}
+
 export async function signupApi(form) {
   const response = await fetch(`${BASE_URL}/api/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      email: form.email,
-      password: form.password,
+      email:     form.email,
+      password:  form.password,
       full_name: form.name,
-      role: form.role.toLowerCase().replace(" ", "_"), // "Project Manager" → "project_manager"
     }),
   });
 
   const data = await response.json();
   if (!response.ok) throw new Error(data.detail || "Signup failed");
 
-  localStorage.setItem("access_token", data.access_token);
-  localStorage.setItem("user_email", data.email);
-  localStorage.setItem("user_id", String(data.user_id));
-  localStorage.setItem("user_role", data.role);
-  localStorage.setItem("user_status", data.status);
-
+  // ── Save to LocalStorage ──
+    localStorage.setItem("access_token", data.access_token);
+    localStorage.setItem("user_id", data.user_id);     
+    localStorage.setItem("user_email", data.email);
+    localStorage.setItem("user_role", data.role);
+    localStorage.setItem("user_status", data.status);
+    localStorage.setItem("user_full_name", data.full_name); 
   return data;
 }
 
-//  LOGIN 
 export async function loginApi(form) {
   const response = await fetch(`${BASE_URL}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      email: form.email,
+      email:    form.email,
       password: form.password,
     }),
   });
@@ -39,54 +51,89 @@ export async function loginApi(form) {
   const data = await response.json();
   if (!response.ok) throw new Error(data.detail || "Login failed");
 
+
   localStorage.setItem("access_token", data.access_token);
+  localStorage.setItem("user_id", data.user_id);
   localStorage.setItem("user_email", data.email);
-  localStorage.setItem("user_id", String(data.user_id));
   localStorage.setItem("user_role", data.role);
   localStorage.setItem("user_status", data.status);
+  localStorage.setItem("user_full_name", data.full_name); 
 
   return data;
 }
-
-//  LOGOUT 
 export function logout() {
-  localStorage.removeItem("access_token");
-  localStorage.removeItem("user_email");
-  localStorage.removeItem("user_id");
-  localStorage.removeItem("user_role");
-  localStorage.removeItem("user_status");
-  window.location.href = "/auth/login";
+  clearSession();
+  window.location.replace("/login");   
 }
 
-//  CHECK IF LOGGED IN 
 export function isLoggedIn() {
   return !!localStorage.getItem("access_token");
 }
 
-//  GET TOKEN (for other API calls) 
 export function getToken() {
   return localStorage.getItem("access_token");
 }
 
-//  GET CURRENT USER INFO 
 export function getCurrentUser() {
   return {
-    id: localStorage.getItem("user_id"),
-    email: localStorage.getItem("user_email"),
-    role: localStorage.getItem("user_role"),
+    id:     localStorage.getItem("user_id"),
+    email:  localStorage.getItem("user_email"),
+    role:   localStorage.getItem("user_role"),
     status: localStorage.getItem("user_status"),
+    full_name: localStorage.getItem("user_full_name"),
   };
 }
 
-//  ROLE HELPERS 
 export function isAdmin() {
   return localStorage.getItem("user_role") === "admin";
 }
 
-export function isProjectManager() {
-  return localStorage.getItem("user_role") === "project_manager";
+
+export async function fetchAllUsers() {
+  const res = await fetch(`${BASE_URL}/api/admin/all-users`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error("Failed to fetch users");
+  return data;
 }
 
-export function isParticipant() {
-  return localStorage.getItem("user_role") === "participant";
+export async function adminSuspendUser(userId) {
+  const res = await fetch(`${BASE_URL}/api/admin/users/${userId}/suspend`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to suspend user");
+  return data;
+}
+
+export async function adminTerminateUser(userId) {
+  const res = await fetch(`${BASE_URL}/api/admin/users/${userId}/terminate`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to terminate user");
+  return data;
+}
+
+export async function adminArchiveUser(userId) {
+  const res = await fetch(`${BASE_URL}/api/admin/users/${userId}/archive`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to archive user");
+  return data;
+}
+
+export async function adminActivateUser(userId) {
+  const res = await fetch(`${BASE_URL}/api/admin/users/${userId}/approve`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to activate user");
+  return data;
 }
