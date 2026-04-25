@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import TranscriptApprovalModal from "../../components/modals/TranscriptApprovalModal";
 import TranscriptEditModal from "../../components/modals/TranscriptEditModal";
+import { getToken } from "../../api/authApi";
 
 export default function TranscriptPage() {
   const navigate = useNavigate();
@@ -123,7 +124,7 @@ export default function TranscriptPage() {
         `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/extract-requirements`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json" , Authorization: `Bearer ${getToken()}` },
           body: JSON.stringify({ transcript: transcriptText, engine:'both' }),
         }
       );
@@ -169,6 +170,7 @@ export default function TranscriptPage() {
     try {
       const res = await fetch(`http://localhost:8000/api/summarize/${sessionId}`, {
         method: "POST",
+        headers: {  Authorization: `Bearer ${getToken()}` },
       });
 
       if (!res.ok) {
@@ -233,7 +235,7 @@ export default function TranscriptPage() {
         `http://localhost:8000/api/sessions/${sessionId}/transcript/segment`,
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
           body: JSON.stringify({
             segment_index: segmentIndex,
             speaker: updatedSpeaker.name,
@@ -302,7 +304,7 @@ export default function TranscriptPage() {
         `http://localhost:8000/api/sessions/${sessionId}/transcript/segments`,
         {
           method: "DELETE",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
           body: JSON.stringify({ segment_indices: indices }),
         }
       );

@@ -3,7 +3,7 @@ import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import RequirementsApprovalModal from "../../components/modals/RequirementsApprovalModal";
 import RequirementsEditModal from "../../components/modals/RequirementsEditModal";
-
+import { getToken } from "../../api/authApi";
 export default function RequirementsProjectView() {
   const [approved, setApproved] = useState(false);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
@@ -49,7 +49,9 @@ export default function RequirementsProjectView() {
 
   const fetchProjectName = async () =>{
     try{
-        const projectRes = await fetch(`http://localhost:8000/api/projects/getproject/${projectId}`);
+        const projectRes = await fetch(`http://localhost:8000/api/projects/getproject/${projectId}`, {
+          headers: { Authorization: `Bearer ${getToken()}` } 
+        });
         const projectData = await projectRes.json();
         setProjectName(projectData.name)
     }
@@ -63,7 +65,11 @@ export default function RequirementsProjectView() {
 
     try{
           const response = await fetch (
-            `http://127.0.0.1:8000/api/projects/${projectId}/requirements`
+            `http://127.0.0.1:8000/api/projects/${projectId}/requirements`,
+            {
+              headers: { Authorization: `Bearer ${getToken()}` }
+            }
+
       );
       const data = await response.json();
       if (!response.ok) {
@@ -84,7 +90,11 @@ export default function RequirementsProjectView() {
 
     try {
       const response = await fetch (
-        `http://localhost:8000/api/projects/${projectId}/requirements/versions`
+        `http://localhost:8000/api/projects/${projectId}/requirements/versions`,
+        {
+          headers: { Authorization: `Bearer ${getToken()}` }
+        }
+
       );
       const data = await response.json();
       if (!response.ok) {
@@ -101,7 +111,11 @@ export default function RequirementsProjectView() {
   const fetchRequirementById = async (id) => {
     try{
       const response = await fetch (
-        `http://localhost:8000/api/projects/requirements/${id}`
+        `http://localhost:8000/api/projects/requirements/${id}`,
+        {
+          headers: { Authorization: `Bearer ${getToken()}` }
+        }
+
       );
       const data = await response.json();
       if (!response.ok) {
@@ -234,7 +248,7 @@ export default function RequirementsProjectView() {
     try{
       const response = await fetch(
         `http://localhost:8000/api/projects/requirements/${targetRequirementId}/approve`,
-        { method: 'PATCH' }
+        { method: 'PATCH' , headers: { Authorization: `Bearer ${getToken()}` }}
       );
 
       if (!response.ok) {
@@ -282,6 +296,7 @@ export default function RequirementsProjectView() {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${getToken()}`
           },
           body: JSON.stringify({
             grouped: updatedGrouped

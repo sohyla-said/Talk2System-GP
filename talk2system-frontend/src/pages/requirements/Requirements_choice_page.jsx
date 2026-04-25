@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { getToken } from "../../api/authApi";
 
 export default function RequirementsChoicePage() {
 	const navigate = useNavigate();
@@ -29,7 +30,9 @@ export default function RequirementsChoicePage() {
 
 	const fetchSessionMeta = async () => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/sessions/${sessionId}`);
+      const response = await fetch(`http://127.0.0.1:8000/api/sessions/${sessionId}`, {
+	  headers: { Authorization: `Bearer ${getToken()}` } 
+      });
       const data = await response.json();
         if (!response.ok) {
          throw new Error(data.detail || "Failed to load session data");
@@ -57,7 +60,8 @@ export default function RequirementsChoicePage() {
 				{
 					method: "POST",
 					headers: {
-						"Content-Type": "application/json"
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${getToken()}`
 					},
 					body: JSON.stringify({
 						requirements_json: selectedData,

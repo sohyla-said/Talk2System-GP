@@ -3,6 +3,7 @@ import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import RequirementsApprovalModal from "../../components/modals/RequirementsApprovalModal";
 import RequirementsEditModal from "../../components/modals/RequirementsEditModal";
+import { getToken } from "../../api/authApi";
 
 export default function RequirementsSessionView() {
   const [approved, setApproved] = useState(false);

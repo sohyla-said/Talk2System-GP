@@ -5,6 +5,9 @@ from app.services.requirement_service import RequirementService
 from app.db.session import get_db
 from app.services.project_service import ProjectService
 
+from app.dependencies.auth import get_current_user  
+from app.models.user import User                     
+from app.services.audit_service import log_action
 router = APIRouter()
 
 class ExtractRequirementsRequest(BaseModel):
@@ -25,7 +28,8 @@ def extract_requirements(
     project_id: int,
     session_id: int,
     request: ExtractRequirementsRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     try:
         result = RequirementService.extract_and_store_requirements(
@@ -35,6 +39,8 @@ def extract_requirements(
             transcript=request.transcript,
             engine= request.engine
         )
+        log_action(db, current_user.id, "extracted_requirements", "session", project_id=project_id, entity_id=session_id)
+
         return {
             "message": "Requirements extracted and stored successfully",
             "LLM_run_id": result['llm_run_id'],
@@ -52,8 +58,11 @@ def choose_requirements(
     project_id: int, 
     session_id: int,
     request: ChooseRequirementRequest, 
-    db: Session = Depends(get_db)):
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     try:
+        log_action(db, current_user.id, "chose_preferred_requirements", "session", project_id=project_id, entity_id=session_id)
         return RequirementService.save_preferred_requirements(db, project_id, session_id, request.requirements_json, request.src_run_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -85,16 +94,18 @@ def get_project_requirement_by_id(requirement_id: int, db: Session = Depends(get
     
 # edit requirement
 @ router.put("/projects/requirements/{requirement_id}")
-def update_project_requirement(requirement_id, request: UpdateRequirementsRequest, db: Session = Depends(get_db)):
+def update_project_requirement(requirement_id, request: UpdateRequirementsRequest, db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
     try:
+        log_action(db, current_user.id, "updated_requirement", "project", project_id=project_id, entity_id=requirement_id)
         return RequirementService.update_project_requirement(db, requirement_id, request.grouped)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     
 # approve requirement
 @router.patch("/projects/requirements/{requirement_id}/approve")
-def approve_project_requirement(requirement_id: int, db: Session = Depends(get_db)):
+def approve_project_requirement(requirement_id: int, db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
     try:
+        log_action(db, current_user.id, "approved_requirement", "project", project_id=project_id, entity_id=requirement_id)
         return RequirementService.approve_project_requirement(db, requirement_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -127,16 +138,18 @@ def get_session_requirement_by_id(requirement_id: int, db: Session = Depends(get
     
 # edit requirement
 @ router.put("/sessions/requirements/{requirement_id}")
-def update_session_requirement(requirement_id, request: UpdateRequirementsRequest, db: Session = Depends(get_db)):
+def update_session_requirement(requirement_id, request: UpdateRequirementsRequest, db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
     try:
+        log_action(db, current_user.id, "updated_requirement", "session", project_id=project_id, entity_id=requirement_id)
         return RequirementService.update_session_requirement(db, requirement_id, request.grouped)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     
 # approve requirement
 @router.patch("/sessions/requirements/{requirement_id}/approve")
-def approve_session_requirement(requirement_id: int, db: Session = Depends(get_db)):
+def approve_session_requirement(requirement_id: int, db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
     try:
+        log_action(db, current_user.id, "approved_requirement", "session", project_id=project_id, entity_id=requirement_id)
         return RequirementService.approve_session_requirement(db, requirement_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
