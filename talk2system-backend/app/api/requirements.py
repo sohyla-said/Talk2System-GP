@@ -7,6 +7,8 @@ from app.services.project_service import ProjectService
 
 from app.dependencies.auth import get_current_user  
 from app.models.user import User                     
+from app.models.session_requirement import SessionRequirement
+from app.models.project_requirments import ProjectRequirement
 from app.services.audit_service import log_action
 router = APIRouter()
 
@@ -43,10 +45,13 @@ def extract_requirements(
 
         return {
             "message": "Requirements extracted and stored successfully",
+            "common_data": result['common_requirements'],
             "LLM_run_id": result['llm_run_id'],
             "LLM_data": result["llm"],
+            "LLM_only_data": result['diff_llm'],
             "Hybrid_run_id": result['hybrid_run_id'],
-            "Hybrid_data": result['hybrid']
+            "Hybrid_data": result['hybrid'],
+            "Hybrid_only_data": result['diff_hybrid']
 
         }
     except ValueError as e:
@@ -94,9 +99,13 @@ def get_project_requirement_by_id(requirement_id: int, db: Session = Depends(get
     
 # edit requirement
 @ router.put("/projects/requirements/{requirement_id}")
-def update_project_requirement(requirement_id, request: UpdateRequirementsRequest, db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
+def update_project_requirement(requirement_id: int, request: UpdateRequirementsRequest, db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
     try:
-        log_action(db, current_user.id, "updated_requirement", "project", project_id=project_id, entity_id=requirement_id)
+        req = db.query(ProjectRequirement).filter(ProjectRequirement.id == requirement_id).first()
+        if not req:
+            raise HTTPException(status_code=404, detail="Requirement not found")
+
+        log_action(db, current_user.id, "updated_requirement", "project", project_id=req.project_id, entity_id=requirement_id)
         return RequirementService.update_project_requirement(db, requirement_id, request.grouped)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -105,7 +114,11 @@ def update_project_requirement(requirement_id, request: UpdateRequirementsReques
 @router.patch("/projects/requirements/{requirement_id}/approve")
 def approve_project_requirement(requirement_id: int, db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
     try:
-        log_action(db, current_user.id, "approved_requirement", "project", project_id=project_id, entity_id=requirement_id)
+        req = db.query(ProjectRequirement).filter(ProjectRequirement.id == requirement_id).first()
+        if not req:
+            raise HTTPException(status_code=404, detail="Requirement not found")
+
+        log_action(db, current_user.id, "approved_requirement", "project", project_id=req.project_id, entity_id=requirement_id)
         return RequirementService.approve_project_requirement(db, requirement_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -138,9 +151,13 @@ def get_session_requirement_by_id(requirement_id: int, db: Session = Depends(get
     
 # edit requirement
 @ router.put("/sessions/requirements/{requirement_id}")
-def update_session_requirement(requirement_id, request: UpdateRequirementsRequest, db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
+def update_session_requirement(requirement_id: int, request: UpdateRequirementsRequest, db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
     try:
-        log_action(db, current_user.id, "updated_requirement", "session", project_id=project_id, entity_id=requirement_id)
+        req = db.query(SessionRequirement).filter(SessionRequirement.id == requirement_id).first()
+        if not req:
+            raise HTTPException(status_code=404, detail="Requirement not found")
+
+        log_action(db, current_user.id, "updated_requirement", "session", project_id=req.project_id, entity_id=requirement_id)
         return RequirementService.update_session_requirement(db, requirement_id, request.grouped)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -149,7 +166,11 @@ def update_session_requirement(requirement_id, request: UpdateRequirementsReques
 @router.patch("/sessions/requirements/{requirement_id}/approve")
 def approve_session_requirement(requirement_id: int, db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
     try:
-        log_action(db, current_user.id, "approved_requirement", "session", project_id=project_id, entity_id=requirement_id)
+        req = db.query(SessionRequirement).filter(SessionRequirement.id == requirement_id).first()
+        if not req:
+            raise HTTPException(status_code=404, detail="Requirement not found")
+
+        log_action(db, current_user.id, "approved_requirement", "session", project_id=req.project_id, entity_id=requirement_id)
         return RequirementService.approve_session_requirement(db, requirement_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

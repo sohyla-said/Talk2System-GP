@@ -666,6 +666,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams,useLocation } from "react-router-dom";
+import { getToken } from "../../api/authApi";
 
 const TranscriptInputPage = () => {
   const [transcript, setTranscript] = useState('');
@@ -734,6 +735,13 @@ const TranscriptInputPage = () => {
   const handleSubmit = async () => {
     if (!transcript.trim()) return;
 
+    const token = getToken();
+    if (!token) {
+      alert("You are not logged in. Please log in again.");
+      navigate("/login");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -744,7 +752,10 @@ const TranscriptInputPage = () => {
         `http://127.0.0.1:8000/api/projects/${projectId}/UploadTranscript`,
         {
           method: 'POST',
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
           body: JSON.stringify({
             transcript: transcript,
             title: sessionTitle || uploadedFileName || "Uploaded Transcript",
@@ -767,7 +778,10 @@ const TranscriptInputPage = () => {
         `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/extract-requirements`,
         {
           method: 'POST',
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
           body: JSON.stringify({
             transcript: transcript,
             engine: "both",
@@ -786,10 +800,13 @@ const TranscriptInputPage = () => {
       navigate(`/transcript/${sessionId}/requirements/choice`, {
         state: {
           projectId,
+          commonData: requirementsData.common_data,
           hybridRunId: requirementsData.Hybrid_run_id,
           hybridData: requirementsData.Hybrid_data,
+          hybridOnlyData: requirementsData.Hybrid_only_data,
           llmRunId: requirementsData.LLM_run_id,
           llmData: requirementsData.LLM_data,
+          llmOnlyData: requirementsData.LLM_only_data
         },
       });
 

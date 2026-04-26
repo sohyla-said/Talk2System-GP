@@ -143,10 +143,13 @@ export default function TranscriptPage() {
       navigate(`/transcript/${sessionId}/requirements/choice`,{
             state: {
               projectId,
+              commonData: data.common_data,
               hybridRunId: data.Hybrid_run_id,
               hybridData: data.Hybrid_data,
+              hybridOnlyData: data.Hybird_only_data,
               llmRunId: data.LLM_run_id,
-              llmData: data.LLM_data
+              llmData: data.LLM_data,
+              llmOnlyData: data.LLM_only_data
             }
         });
     } catch (error) {

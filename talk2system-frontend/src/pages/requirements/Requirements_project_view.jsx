@@ -26,6 +26,20 @@ export default function RequirementsProjectView() {
     actors: [],
     features: []
   });
+    // multi select state for bulk deletion
+  const [selectionMode, setSelectionMode] = useState({
+    functional: false,
+    nonFunctional: false,
+    actors: false,
+    features: false
+  });
+  // track selected items for deletion per sesction
+  const [selectedItems, setSelectedItems] = useState({
+    functional: [],
+    nonFunctional: [],
+    actors: [],
+    features: []
+  });
 
   useEffect(() => {
     fetchProjectName();
@@ -146,6 +160,18 @@ export default function RequirementsProjectView() {
         actors: [],
         features: []
       });
+      setSelectionMode({
+        functional: false,
+        nonFunctional: false,
+        actors: false,
+        features: false
+      });
+      setSelectedItems({
+        functional: [],
+        nonFunctional: [],
+        actors: [],
+        features: []
+      });
       return;
     }
     const functionalList = Array.isArray(grouped.functional_requirements)
@@ -165,16 +191,18 @@ export default function RequirementsProjectView() {
       description: fr.text,
       tags: [
         ...(fr.actor ? [{ label: `Actor: ${fr.actor}`, color: "blue" }] : []),
-        ...(fr.feature ? [{ label: `Feature: ${fr.feature}`, color: "purple" }] : [])
+        ...(fr.feature ? [{ label: `Feature: ${fr.feature}`, color: "purple" }] : []),
+        ...(fr.src_session_title ? [{ label: `Source session: ${fr.src_session_title}`, color: "orange" }] : [])
       ]
     }));
 
     const nonFunctional = nonFunctionalList.map((nfr, index) => ({
       id: `NFR-${index + 1}`,
       description: nfr.text,
-      tags: nfr.category
-        ? [{ label: `Category: ${nfr.category}`, color: "green" }]
-        : []
+      tags: [
+        ...(nfr.category ? [{ label: `Category: ${nfr.category}`, color: "green" }] : []),
+        ...(nfr.src_session_title ? [{ label: `Source session: ${nfr.src_session_title}`, color: "orange" }] : [])
+      ]
     }));
 
     const actors = actorsList.map((actor, index) => ({
@@ -192,6 +220,18 @@ export default function RequirementsProjectView() {
       nonFunctional,
       actors,
       features
+    });
+    setSelectionMode({
+      functional: false,
+      nonFunctional: false,
+      actors: false,
+      features: false
+    });
+    setSelectedItems({
+      functional: [],
+      nonFunctional: [],
+      actors: [],
+      features: []
     });
   };
 
@@ -233,7 +273,53 @@ export default function RequirementsProjectView() {
   };
 
 
+const toggleSelectionMode = (sectionType) => {
+    // read current mode for this sesction and flip it
+    setSelectionMode((prev) => {
+      const nextIsOn = !prev[sectionType];
+      if (!nextIsOn) {
+        setSelectedItems((old) => ({ ...old, [sectionType]: [] }));
+      }
+      return { ...prev, [sectionType]: nextIsOn };
+    });
+  };
 
+  // add/remove 1 item id from the selected list for a section
+  const toggleItemSelection = (sectionType, itemId) => {
+    // Gets current selected IDs for the section.
+    // If itemId is already selected, removes it.
+    //If not selected, appends it.
+    setSelectedItems((prev) => {
+      const current = prev[sectionType] || [];
+      const exists = current.includes(itemId);
+      return {
+        ...prev,
+        [sectionType]: exists ? current.filter((id) => id !== itemId) : [...current, itemId]
+      };
+    });
+  };
+
+  // delete all currently selected items in one shot for that section.
+  const handleBulkDelete = async (sectionType) => {
+    // reads selected ids
+    const selected = selectedItems[sectionType] || [];
+    if (!selected.length) return;
+
+    // ask for user confirmation
+    const confirmDelete = window.confirm(`Delete ${selected.length} selected item(s)?`);
+    if (!confirmDelete) return;
+
+    // builds updatedSection by filtering out selected IDs from requirements[sectionType]
+    const updatedSection = (requirements[sectionType] || []).filter(
+      (item) => !selected.includes(item.id)
+    );
+
+    // persist the update in the backend
+    await handleSaveRequirements(sectionType, updatedSection);
+    // Resets section selection mode and clears selected IDs
+    setSelectionMode((prev) => ({ ...prev, [sectionType]: false }));
+    setSelectedItems((prev) => ({ ...prev, [sectionType]: [] }));
+  };
 
     
   // Handle approval
@@ -356,6 +442,7 @@ export default function RequirementsProjectView() {
       blue: "bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300",
       purple: "bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300",
       green: "bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300",
+      orange: "bg-orange-100 dark:bg-orange-900/50 text-orange-800 dark:text-orange-300",
     };
     return colors[color] || colors.blue;
   };
@@ -468,7 +555,7 @@ export default function RequirementsProjectView() {
               </button>
             </div>
 
-            {/* Search and Filter Bar */}
+            {/* Search and Filter Bar
             <div className="flex flex-col md:flex-row gap-4 p-4 pt-0">
               <label className="flex flex-col h-12 w-full md:flex-1">
                 <div className="flex w-full flex-1 items-stretch rounded-lg h-full">
@@ -489,7 +576,7 @@ export default function RequirementsProjectView() {
                   <span className="material-symbols-outlined text-slate-500 dark:text-slate-400">expand_more</span>
                 </button>
               </div>
-            </div>
+            </div> */}
 
             {/* Requirements Sections */}
             <div className="flex flex-col p-4 gap-4">
@@ -502,6 +589,29 @@ export default function RequirementsProjectView() {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Functional Requirements
                       </p>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelectionMode("functional");
+                        }}
+                        className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                      >
+                        {selectionMode.functional ? "Cancel" : "Select"}
+                      </button>
+                      {selectionMode.functional && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleBulkDelete("functional");
+                          }}
+                          disabled={(selectedItems.functional || []).length === 0}
+                          className="text-xs px-2 py-1 rounded-md bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 disabled:opacity-50"
+                        >
+                          Delete Selected ({(selectedItems.functional || []).length})
+                        </button>
+                      )}
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
@@ -524,6 +634,16 @@ export default function RequirementsProjectView() {
                 <div className="flex flex-col gap-3 pb-4">
                   {requirements.functional.map((req) => (
                     <div key={req.id} className="p-4 rounded-lg bg-background-light dark:bg-background-dark/50 border border-transparent dark:border-white/5">
+                      {selectionMode.functional && (
+                        <label className="inline-flex items-center gap-2 mb-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={(selectedItems.functional || []).includes(req.id)}
+                            onChange={() => toggleItemSelection("functional", req.id)}
+                          />
+                          <span className="text-xs text-slate-500 dark:text-slate-400">Select</span>
+                        </label>
+                      )}
                       <p className="text-slate-500 dark:text-slate-400 font-mono text-xs mb-1">
                         {req.id}
                       </p>
@@ -553,6 +673,29 @@ export default function RequirementsProjectView() {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Non-Functional Requirements
                       </p>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelectionMode("nonFunctional");
+                        }}
+                        className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                      >
+                        {selectionMode.nonFunctional ? "Cancel" : "Select"}
+                      </button>
+                      {selectionMode.nonFunctional && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleBulkDelete("nonFunctional");
+                          }}
+                          disabled={(selectedItems.nonFunctional || []).length === 0}
+                          className="text-xs px-2 py-1 rounded-md bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 disabled:opacity-50"
+                        >
+                          Delete Selected ({(selectedItems.nonFunctional || []).length})
+                        </button>
+                      )}
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
@@ -575,6 +718,16 @@ export default function RequirementsProjectView() {
                 <div className="flex flex-col gap-3 pb-4">
                   {requirements.nonFunctional.map((req) => (
                     <div key={req.id} className="p-4 rounded-lg bg-background-light dark:bg-background-dark/50 border border-transparent dark:border-white/5">
+                      {selectionMode.nonFunctional && (
+                        <label className="inline-flex items-center gap-2 mb-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={(selectedItems.nonFunctional || []).includes(req.id)}
+                            onChange={() => toggleItemSelection("nonFunctional", req.id)}
+                          />
+                          <span className="text-xs text-slate-500 dark:text-slate-400">Select</span>
+                        </label>
+                      )}
                       <p className="text-slate-500 dark:text-slate-400 font-mono text-xs mb-1">
                         {req.id}
                       </p>
@@ -604,6 +757,29 @@ export default function RequirementsProjectView() {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Actors
                       </p>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelectionMode("actors");
+                        }}
+                        className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                      >
+                        {selectionMode.actors ? "Cancel" : "Select"}
+                      </button>
+                      {selectionMode.actors && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleBulkDelete("actors");
+                          }}
+                          disabled={(selectedItems.actors || []).length === 0}
+                          className="text-xs px-2 py-1 rounded-md bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 disabled:opacity-50"
+                        >
+                          Delete Selected ({(selectedItems.actors || []).length})
+                        </button>
+                      )}
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
@@ -626,6 +802,16 @@ export default function RequirementsProjectView() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
                   {requirements.actors.map((actor) => (
                     <div key={actor.id} className="p-4 rounded-lg bg-background-light dark:bg-background-dark/50 border border-transparent dark:border-white/5">
+                      {selectionMode.actors && (
+                        <label className="inline-flex items-center gap-2 mb-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={(selectedItems.actors || []).includes(actor.id)}
+                            onChange={() => toggleItemSelection("actors", actor.id)}
+                          />
+                          <span className="text-xs text-slate-500 dark:text-slate-400">Select</span>
+                        </label>
+                      )}
                       <p className="text-slate-500 dark:text-slate-400 font-mono text-xs mb-1">
                         {actor.id}
                       </p>
@@ -645,6 +831,29 @@ export default function RequirementsProjectView() {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Features
                       </p>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelectionMode("features");
+                        }}
+                        className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                      >
+                        {selectionMode.features ? "Cancel" : "Select"}
+                      </button>
+                      {selectionMode.features && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleBulkDelete("features");
+                          }}
+                          disabled={(selectedItems.features || []).length === 0}
+                          className="text-xs px-2 py-1 rounded-md bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 disabled:opacity-50"
+                        >
+                          Delete Selected ({(selectedItems.features || []).length})
+                        </button>
+                      )}
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
@@ -667,6 +876,16 @@ export default function RequirementsProjectView() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
                   {requirements.features.map((feature) => (
                     <div key={feature.id} className="p-4 rounded-lg bg-background-light dark:bg-background-dark/50 border border-transparent dark:border-white/5">
+                      {selectionMode.features && (
+                        <label className="inline-flex items-center gap-2 mb-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={(selectedItems.features || []).includes(feature.id)}
+                            onChange={() => toggleItemSelection("features", feature.id)}
+                          />
+                          <span className="text-xs text-slate-500 dark:text-slate-400">Select</span>
+                        </label>
+                      )}
                       <p className="text-slate-500 dark:text-slate-400 font-mono text-xs mb-1">
                         {feature.id}
                       </p>

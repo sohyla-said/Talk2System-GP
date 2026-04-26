@@ -8,6 +8,7 @@ from app.models.project import Project
 from app.models.session import Session
 from app.nlp.hybrid_engine import hybrid_inference
 from app.services.llm_service import extract_requirements
+import copy
 
 
 logger = logging.getLogger(__name__)
@@ -98,12 +99,19 @@ class RequirementService:
             db.rollback()
             raise
 
+        common_reqs = get_common_requirments(grouped_hybrid, grouped_llm)
+        diff_hybrid = get_reqs_not_in_common(grouped_hybrid, common_reqs)
+        diff_llm = get_reqs_not_in_common(grouped_llm, common_reqs)
+
         return {
             "project_id": project_id,
+            "common_requirements": common_reqs,
             "hybrid_run_id": db_run_hybrid.id if db_run_hybrid else None,
             "hybrid": grouped_hybrid,
+            "diff_hybrid": diff_hybrid,
             "llm_run_id": db_run_llm.id if db_run_llm else None,
-            "llm": grouped_llm
+            "llm": grouped_llm,
+            "diff_llm": diff_llm
         }
     
     #################################################################################################
@@ -125,8 +133,9 @@ class RequirementService:
         src_run = db.query(RequirementRun).filter(RequirementRun.id == src_run_id, RequirementRun.project_id == project_id).first()
         if not src_run:
             raise ValueError("Source run not found")
+    
         
-        # 4) create the requirement and save it
+        # 5) create the requirement and save it
         db_session_requirment = SessionRequirement(
             project_id = project_id,
             session_id = session_id,
@@ -280,12 +289,15 @@ class RequirementService:
 
         if not req:
             raise ValueError("No requirements found")
+
+        src_run = db.query(RequirementRun).filter(RequirementRun.id == req.src_run_id).first()
         
         return{
             "id": req.id,
             "version": req.version,
             "approval_status": req.approval_status,
-            "data": req.requirements_json
+            "data": req.requirements_json,
+            "preferred_type": src_run.run_type if src_run else None
         }
     
     #################################################################################################
@@ -322,12 +334,15 @@ class RequirementService:
         if not req:
             raise ValueError("Requirement not found")
 
+        src_run = db.query(RequirementRun).filter(RequirementRun.id == req.src_run_id).first()
+
         
         return{
             "id": req.id,
             "version": req.version,
             "approval_status": req.approval_status,
-            "data": req.requirements_json
+            "data": req.requirements_json,
+            "preferred_type": src_run.run_type if src_run else None
         }
 
     #################################################################################################
@@ -363,11 +378,14 @@ class RequirementService:
         db.commit()
         db.refresh(new_req)
 
+        src_run = db.query(RequirementRun).filter(RequirementRun.id == new_req.src_run_id).first()
+
         return{
             "id": new_req.id,
             "version": new_req.version,
             "approval_status": new_req.approval_status,
-            "data": grouped_data
+            "data": grouped_data,
+            "preferred_type": src_run.run_type if src_run else None
         }
 
     #################################################################################################
@@ -381,6 +399,10 @@ class RequirementService:
             raise ValueError("Requirement not found")
         req.approval_status = "approved"
 
+        session = db.query(Session).filter(Session.id == req.session_id).first()
+        if not session:
+            raise ValueError("Session not found")
+
 
         # 5) get latest project_requirements
         project_req = db.query(ProjectRequirement).filter(ProjectRequirement.project_id == req.project_id)\
@@ -389,15 +411,17 @@ class RequirementService:
         merged_json = None
         new_version = 1
 
+        # 4) Add source session info without mutating the original req_json
+        req_json_with_source = add_source_session_info(req.requirements_json, req.session_id, session.title)
 
         # if there exist previous requirements for this project merge them and increase the version by 1
         if project_req:
-            merged_json = merge_requirements(project_req.aggregated_req_json, req.requirements_json)
+            merged_json = merge_requirements(project_req.aggregated_req_json, req_json_with_source)
             new_version = project_req.version + 1
 
         # else the req_json will be the first requirement in the project
         else:
-            merged_json = req.requirements_json
+            merged_json = req_json_with_source
             new_version = 1
 
         # add new project requirement with increased version
@@ -425,6 +449,29 @@ class RequirementService:
 
     ################################################# Helper functions ################################################
 
+# add source session info to requirements
+def add_source_session_info(req_json, session_id, session_title):
+    # Create a copy of requirements JSON and add source session info. Does NOT mutate the original req_json.
+    
+    req_json_copy = copy.deepcopy(req_json or {})
+    
+    for fr in req_json_copy.get('functional_requirements', []):
+        fr['src_session_id'] = session_id
+        fr['src_session_title'] = session_title
+
+    # Support both historical and current NFR key names.
+    nfr_list = req_json_copy.get('nonfunctional_requirements')
+    if nfr_list is None:
+        nfr_list = req_json_copy.get('non_functional_requirements', [])
+        req_json_copy['nonfunctional_requirements'] = nfr_list
+
+    for nfr in nfr_list:
+        nfr['src_session_id'] = session_id
+        nfr['src_session_title'] = session_title
+    
+    return req_json_copy
+
+
 # group extracted requirements into actors, FRs and NFRs for better UI display
 def group_requirements(results):
     grouped = {
@@ -436,8 +483,9 @@ def group_requirements(results):
 
     for r in results:
         structure = r.get("structure", {})
-        actor = structure.get("actor")
-        feature = structure.get("action")  # NEW
+        requirement_type = r.get("requirement_type")
+        actor = normalize_actor(structure.get("actor"), requirement_type=requirement_type)
+        feature = structure.get("action") 
         nfr_category = r.get("nfr_category")
 
         if actor:
@@ -462,11 +510,59 @@ def group_requirements(results):
     grouped['features'] = list(grouped['features'])
     return grouped
 
+def get_common_requirments(hybrid_req, llm_req):
+    if not hybrid_req or not llm_req:
+        return {
+            "functional_requirements": [],
+            "nonfunctional_requirements": []
+        }
 
+    common_reqs = {
+        "functional_requirements": [],
+        "nonfunctional_requirements": []
+    }
+    hybrid_frs = [fr['text'].strip().lower() for fr in hybrid_req.get('functional_requirements', [])]
+    for fr in llm_req.get('functional_requirements', []):
+        if fr['text'].strip().lower() in hybrid_frs:
+            common_reqs['functional_requirements'].append(fr)
+
+    hybrid_nfrs = [nfr['text'].strip().lower() for nfr in hybrid_req.get('nonfunctional_requirements', [])]
+    for nfr in llm_req.get('nonfunctional_requirements', []):
+        if nfr['text'].strip().lower() in hybrid_nfrs:
+            common_reqs['nonfunctional_requirements'].append(nfr)
+
+    return common_reqs
+
+def get_reqs_not_in_common(all_reqs, common_reqs):
+    if not all_reqs:
+        return {
+            "functional_requirements": [],
+            "nonfunctional_requirements": []
+        }
+
+    diff_reqs = {
+        "functional_requirements": [],
+        "nonfunctional_requirements": []
+    }
+    common_fr = [fr['text'].strip().lower() for fr in common_reqs.get('functional_requirements', [])]
+    for fr in all_reqs.get('functional_requirements', []):
+        if fr['text'].strip().lower() not in common_fr:
+            diff_reqs['functional_requirements'].append(fr)
+
+    common_nfr = [nfr['text'].strip().lower() for nfr in common_reqs.get('nonfunctional_requirements', [])]
+    for nfr in all_reqs.get('nonfunctional_requirements', []):
+        if nfr['text'].strip().lower() not in common_nfr:
+            diff_reqs['nonfunctional_requirements'].append(nfr)
+
+    return diff_reqs
+
+# change llm output to be similar to hybrid engine output to ensure consistency
 def adapt_llm_output(llm_results):
     adapted = []
 
     for item in llm_results:
+        requirement_type = item.get("type")
+        actor = normalize_actor(item.get("actor"), requirement_type=requirement_type)
         adapted.append({
             "sentence_id": None,
             "speaker": None,
@@ -474,7 +570,7 @@ def adapt_llm_output(llm_results):
             "requirement_type": item["type"],
             "nfr_category": item["category"],
             "structure": {
-                "actor": item["actor"],
+                "actor": actor,
                 "action": item['feature'],
                 "object": None,
                 "is_negative": None
@@ -484,7 +580,19 @@ def adapt_llm_output(llm_results):
 
     return adapted
 
+# return None when actor is missing/empty.
+# if the actor is "system" state that it is internal requirement
+def normalize_actor(actor, requirement_type=None):
+    if not actor:
+        return None
+    if isinstance(actor, str) and actor.strip().lower() == "system":
+        if requirement_type == "FR":
+            return "Internal System"
+        return None
+    return actor
 
+# Merge requirements from multiple sessions while preserving source session lineage.
+# When duplicate requirements are found, tracks all source sessions.
 def merge_requirements(old, new):
     merged = {
         "actors": list(set(old.get("actors", []) + new.get("actors", []))),
@@ -492,26 +600,63 @@ def merge_requirements(old, new):
         "nonfunctional_requirements": [],
         "features": list(set(old.get("features", []) + new.get("features", [])))
     }
-    # --- Helper to avoid duplicates ---
-    def unique_by_text(items):
-        seen = set()
+    
+    # Merge items while preserving source session info and detecting duplicates
+    def merge_items_with_source(old_items, new_items):
+        seen = {}
         result = []
-        for item in items:
-            text = item["text"].strip().lower()
-            if text not in seen:
-                seen.add(text)
-                result.append(item)
+        
+        for item in old_items + new_items:
+            text_key = item["text"].strip().lower()
+            
+            if text_key not in seen:
+                # First occurrence: create entry with single source
+                item_copy = item.copy()
+                seen[text_key] = item_copy
+                result.append(item_copy)
+            else:
+                # Duplicate found: merge source session tracking
+                current_src = item.get("src_session_id")
+                current_title = item.get("src_session_title")
+                existing_item = seen[text_key]
+                
+                if current_src is not None:
+                    # Initialize src_session_ids list if not present
+                    if "src_session_ids" not in existing_item:
+                        existing_src = existing_item.get("src_session_id")
+                        if existing_src is not None:
+                            existing_item["src_session_ids"] = [existing_src]
+                        else:
+                            existing_item["src_session_ids"] = []
+                    
+                    # Add new source if not already tracked
+                    if current_src not in existing_item["src_session_ids"]:
+                        existing_item["src_session_ids"].append(current_src)
+
+                if current_title:
+                    # Initialize src_session_titles list if not present
+                    if "src_session_titles" not in existing_item:
+                        existing_title = existing_item.get("src_session_title")
+                        if existing_title:
+                            existing_item["src_session_titles"] = [existing_title]
+                        else:
+                            existing_item["src_session_titles"] = []
+
+                    # Add new title if not already tracked
+                    if current_title not in existing_item["src_session_titles"]:
+                        existing_item["src_session_titles"].append(current_title)
+        
         return result
 
-    # Merge FRs
-    merged["functional_requirements"] = unique_by_text(
-        old.get("functional_requirements", []) +
+    # Merge FRs with source tracking
+    merged["functional_requirements"] = merge_items_with_source(
+        old.get("functional_requirements", []),
         new.get("functional_requirements", [])
     )
 
-    # Merge NFRs
-    merged["nonfunctional_requirements"] = unique_by_text(
-        old.get("nonfunctional_requirements", []) +
+    # Merge NFRs with source tracking
+    merged["nonfunctional_requirements"] = merge_items_with_source(
+        old.get("nonfunctional_requirements", []),
         new.get("nonfunctional_requirements", [])
     )
 

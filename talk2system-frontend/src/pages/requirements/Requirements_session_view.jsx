@@ -9,7 +9,7 @@ export default function RequirementsSessionView() {
   const [approved, setApproved] = useState(false);
   const [showApprovalModal, setShowApprovalModal] = useState(false);  // controls visibility of the approval modal
   const [pendingNavigation, setPendingNavigation] = useState(null);   // Stores target route temporarily when user tries to move to another tab before approval.
-  const [showEditModal, setShowEditModal] = useState(false);  // contraols whether the edit modal is opened
+  const [showEditModal, setShowEditModal] = useState(false);  // controls whether the edit modal is opened
   const [editingSection, setEditingSection] = useState(null); // Stores which section is being edited, such as functional, nonFunctional, actors, features.
   const [versions, setVersions] = useState([]); // Holds all available versions for the current session requirement set (for dropdown).
   const [selectedVersionId, setSelectedVersionId] = useState(null); // Tracks currently selected version in the dropdown.
@@ -20,6 +20,7 @@ export default function RequirementsSessionView() {
   const [currentRequirementId, setCurrentRequirementId] = useState(location.state?.requirementId ?? null);  // Primary requirement id currently displayed/edited/approved.
 
   const initialData = location.state?.groupedData;
+  const [chosenRunType, setChosenRunType] = useState(location.state?.preferredType ?? null);
   const [requirementId, setRequirementId] = useState(location.state?.requirementId ?? null);  // Fallback requirement id, mostly used together with currentRequirementId when approving.
   const [requirements, setRequirements] = useState({
     functional: [],
@@ -29,6 +30,28 @@ export default function RequirementsSessionView() {
   }); // Normalized UI data object used for rendering sections: functional, nonFunctional, actors and features
   const [projectName, setProjectName] = useState(null);
   const [sessionName, setSessionName] = useState(null);
+  // multi select state for bulk deletion
+  const [selectionMode, setSelectionMode] = useState({
+    functional: false,
+    nonFunctional: false,
+    actors: false,
+    features: false
+  });
+  // track selected items for deletion per sesction
+  const [selectedItems, setSelectedItems] = useState({
+    functional: [],
+    nonFunctional: [],
+    actors: [],
+    features: []
+  });
+
+  const getAuthHeaders = (includeJson = false) => {
+    const token = getToken();
+    return {
+      ...(includeJson ? { "Content-Type": "application/json" } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    };
+  };
 
 
   useEffect(() => {
@@ -62,7 +85,9 @@ export default function RequirementsSessionView() {
 // if project id is missed but session id exists, call an endpoint to fetch project id
   const fetchSessionMeta = async () => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/sessions/${sessionId}`);
+      const response = await fetch(`http://127.0.0.1:8000/api/sessions/${sessionId}`, {
+        headers: getAuthHeaders()
+      });
       const data = await response.json();
         if (!response.ok) {
          throw new Error(data.detail || "Failed to load session data");
@@ -76,7 +101,9 @@ export default function RequirementsSessionView() {
 
   const fetchProjectName = async () =>{
     try{
-        const projectRes = await fetch(`http://localhost:8000/api/projects/getproject/${projectId}`);
+        const projectRes = await fetch(`http://localhost:8000/api/projects/getproject/${projectId}`, {
+          headers: getAuthHeaders()
+        });
         const projectData = await projectRes.json();
         setProjectName(projectData.name)
     }
@@ -91,7 +118,9 @@ export default function RequirementsSessionView() {
 
     try{
       const response = await fetch (
-        `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/requirements`
+        `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/requirements`, {
+          headers: getAuthHeaders(true),
+        }
       );
       const data = await response.json();
       if (!response.ok) {
@@ -101,6 +130,7 @@ export default function RequirementsSessionView() {
       setRequirementId(data.id ?? null);
       setCurrentRequirementId(data.id ?? null);
       setApproved(data.approval_status === "approved");
+      setChosenRunType(data.preferred_type ?? location.state?.preferredType ?? null);
       mapBackendData(data.data || data);
     }
     catch (err) {
@@ -114,7 +144,10 @@ export default function RequirementsSessionView() {
 
     try {
       const response = await fetch (
-        `http://localhost:8000/api/projects/${projectId}/session/${sessionId}/requirements/versions`
+        `http://localhost:8000/api/projects/${projectId}/session/${sessionId}/requirements/versions`,
+        {
+          headers: getAuthHeaders()
+        }
       );
       const data = await response.json();
       if (!response.ok) {
@@ -133,7 +166,10 @@ export default function RequirementsSessionView() {
   const fetchRequirementById = async (id) => {
     try{
       const response = await fetch (
-        `http://localhost:8000/api/sessions/requirements/${id}`
+        `http://localhost:8000/api/sessions/requirements/${id}`,
+        {
+          headers: getAuthHeaders()
+        }
       );
       const data = await response.json();
       if (!response.ok) {
@@ -143,6 +179,7 @@ export default function RequirementsSessionView() {
       setCurrentRequirementId(data.id);
       setRequirementId(data.id);
       setApproved(data.approval_status === "approved");
+      setChosenRunType(data.preferred_type ?? chosenRunType ?? null);
       mapBackendData(data.data);
     }
     catch (err) {
@@ -161,6 +198,18 @@ export default function RequirementsSessionView() {
   const mapBackendData = (grouped) => {
     if (!grouped || typeof grouped !== "object") {
       setRequirements({
+        functional: [],
+        nonFunctional: [],
+        actors: [],
+        features: []
+      });
+      setSelectionMode({
+        functional: false,
+        nonFunctional: false,
+        actors: false,
+        features: false
+      });
+      setSelectedItems({
         functional: [],
         nonFunctional: [],
         actors: [],
@@ -215,6 +264,18 @@ export default function RequirementsSessionView() {
       actors,
       features
     });
+    setSelectionMode({
+      functional: false,
+      nonFunctional: false,
+      actors: false,
+      features: false
+    });
+    setSelectedItems({
+      functional: [],
+      nonFunctional: [],
+      actors: [],
+      features: []
+    });
   };
 
   // converts current UI-edited state back to backend payload structure before save
@@ -257,6 +318,56 @@ export default function RequirementsSessionView() {
     return tag ? tag.label.replace("Category: ", "") : null;
   };
 
+  // turn selection mode on/off for 1 section (fr, nfr, actors, features)
+  // prevents stale selected checkboxes when user exits selection mode
+  const toggleSelectionMode = (sectionType) => {
+    // read current mode for this sesction and flip it
+    setSelectionMode((prev) => {
+      const nextIsOn = !prev[sectionType];
+      if (!nextIsOn) {
+        setSelectedItems((old) => ({ ...old, [sectionType]: [] }));
+      }
+      return { ...prev, [sectionType]: nextIsOn };
+    });
+  };
+
+  // add/remove 1 item id from the selected list for a section
+  const toggleItemSelection = (sectionType, itemId) => {
+    // Gets current selected IDs for the section.
+    // If itemId is already selected, removes it.
+    //If not selected, appends it.
+    setSelectedItems((prev) => {
+      const current = prev[sectionType] || [];
+      const exists = current.includes(itemId);
+      return {
+        ...prev,
+        [sectionType]: exists ? current.filter((id) => id !== itemId) : [...current, itemId]
+      };
+    });
+  };
+
+  // delete all currently selected items in one shot for that section.
+  const handleBulkDelete = async (sectionType) => {
+    // reads selected ids
+    const selected = selectedItems[sectionType] || [];
+    if (!selected.length) return;
+
+    // ask for user confirmation
+    const confirmDelete = window.confirm(`Delete ${selected.length} selected item(s)?`);
+    if (!confirmDelete) return;
+
+    // builds updatedSection by filtering out selected IDs from requirements[sectionType]
+    const updatedSection = (requirements[sectionType] || []).filter(
+      (item) => !selected.includes(item.id)
+    );
+
+    // persist the update in the backend
+    await handleSaveRequirements(sectionType, updatedSection);
+    // Resets section selection mode and clears selected IDs
+    setSelectionMode((prev) => ({ ...prev, [sectionType]: false }));
+    setSelectedItems((prev) => ({ ...prev, [sectionType]: [] }));
+  };
+
 
 const handleApprove = async () => {
   const targetRequirementId = currentRequirementId ?? requirementId;
@@ -269,7 +380,10 @@ const handleApprove = async () => {
   try {
     const response = await fetch(
       `http://localhost:8000/api/sessions/requirements/${targetRequirementId}/approve`,
-      { method: 'PATCH' }
+      {
+        method: 'PATCH',
+        headers: getAuthHeaders()
+      }
     );
 
     if (!response.ok) {
@@ -316,9 +430,7 @@ const handleApprove = async () => {
         `http://localhost:8000/api/sessions/requirements/${currentRequirementId}`,
         {
           method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: getAuthHeaders(true),
           body: JSON.stringify({
             grouped: updatedGrouped
           }),
@@ -335,6 +447,7 @@ const handleApprove = async () => {
       setRequirementId(data.id);
       setSelectedVersionId(data.id);
       setApproved(data.approval_status === "approved");
+      setChosenRunType(data.preferred_type ?? chosenRunType ?? null);
       mapBackendData(data.data);
 
       // Refresh versions list
@@ -412,6 +525,9 @@ const handleApprove = async () => {
             </h1>
             <p className="text-slate-500 dark:text-slate-400 text-base font-normal leading-normal">
               Review, filter, and manage requirements generated from your brainstorming session.
+            </p>
+            <p className="text-slate-500 dark:text-slate-400 text-base font-normal leading-normal">
+              These requirements are choosen from the <strong>{chosenRunType || "selected extractor"}</strong>.
             </p>
           </div>
           <div className="flex items-start gap-3">
@@ -504,7 +620,7 @@ const handleApprove = async () => {
               </button>
             </div>
 
-            {/* Search and Filter Bar */}
+            {/* Search and Filter Bar
             <div className="flex flex-col md:flex-row gap-4 p-4 pt-0">
               <label className="flex flex-col h-12 w-full md:flex-1">
                 <div className="flex w-full flex-1 items-stretch rounded-lg h-full">
@@ -525,7 +641,7 @@ const handleApprove = async () => {
                   <span className="material-symbols-outlined text-slate-500 dark:text-slate-400">expand_more</span>
                 </button>
               </div>
-            </div>
+            </div> */}
 
             {/* Requirements Sections */}
             <div className="flex flex-col p-4 gap-4">
@@ -538,6 +654,29 @@ const handleApprove = async () => {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Functional Requirements
                       </p>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelectionMode("functional");
+                        }}
+                        className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                      >
+                        {selectionMode.functional ? "Cancel" : "Select"}
+                      </button>
+                      {selectionMode.functional && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleBulkDelete("functional");
+                          }}
+                          disabled={(selectedItems.functional || []).length === 0}
+                          className="text-xs px-2 py-1 rounded-md bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 disabled:opacity-50"
+                        >
+                          Delete Selected ({(selectedItems.functional || []).length})
+                        </button>
+                      )}
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
@@ -560,6 +699,16 @@ const handleApprove = async () => {
                 <div className="flex flex-col gap-3 pb-4">
                   {requirements.functional.map((req) => (
                     <div key={req.id} className="p-4 rounded-lg bg-background-light dark:bg-background-dark/50 border border-transparent dark:border-white/5">
+                      {selectionMode.functional && (
+                        <label className="inline-flex items-center gap-2 mb-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={(selectedItems.functional || []).includes(req.id)}
+                            onChange={() => toggleItemSelection("functional", req.id)}
+                          />
+                          <span className="text-xs text-slate-500 dark:text-slate-400">Select</span>
+                        </label>
+                      )}
                       <p className="text-slate-500 dark:text-slate-400 font-mono text-xs mb-1">
                         {req.id}
                       </p>
@@ -589,6 +738,29 @@ const handleApprove = async () => {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Non-Functional Requirements
                       </p>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelectionMode("nonFunctional");
+                        }}
+                        className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                      >
+                        {selectionMode.nonFunctional ? "Cancel" : "Select"}
+                      </button>
+                      {selectionMode.nonFunctional && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleBulkDelete("nonFunctional");
+                          }}
+                          disabled={(selectedItems.nonFunctional || []).length === 0}
+                          className="text-xs px-2 py-1 rounded-md bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 disabled:opacity-50"
+                        >
+                          Delete Selected ({(selectedItems.nonFunctional || []).length})
+                        </button>
+                      )}
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
@@ -611,6 +783,16 @@ const handleApprove = async () => {
                 <div className="flex flex-col gap-3 pb-4">
                   {requirements.nonFunctional.map((req) => (
                     <div key={req.id} className="p-4 rounded-lg bg-background-light dark:bg-background-dark/50 border border-transparent dark:border-white/5">
+                      {selectionMode.nonFunctional && (
+                        <label className="inline-flex items-center gap-2 mb-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={(selectedItems.nonFunctional || []).includes(req.id)}
+                            onChange={() => toggleItemSelection("nonFunctional", req.id)}
+                          />
+                          <span className="text-xs text-slate-500 dark:text-slate-400">Select</span>
+                        </label>
+                      )}
                       <p className="text-slate-500 dark:text-slate-400 font-mono text-xs mb-1">
                         {req.id}
                       </p>
@@ -640,6 +822,29 @@ const handleApprove = async () => {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Actors
                       </p>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelectionMode("actors");
+                        }}
+                        className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                      >
+                        {selectionMode.actors ? "Cancel" : "Select"}
+                      </button>
+                      {selectionMode.actors && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleBulkDelete("actors");
+                          }}
+                          disabled={(selectedItems.actors || []).length === 0}
+                          className="text-xs px-2 py-1 rounded-md bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 disabled:opacity-50"
+                        >
+                          Delete Selected ({(selectedItems.actors || []).length})
+                        </button>
+                      )}
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
@@ -662,6 +867,16 @@ const handleApprove = async () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
                   {requirements.actors.map((actor) => (
                     <div key={actor.id} className="p-4 rounded-lg bg-background-light dark:bg-background-dark/50 border border-transparent dark:border-white/5">
+                      {selectionMode.actors && (
+                        <label className="inline-flex items-center gap-2 mb-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={(selectedItems.actors || []).includes(actor.id)}
+                            onChange={() => toggleItemSelection("actors", actor.id)}
+                          />
+                          <span className="text-xs text-slate-500 dark:text-slate-400">Select</span>
+                        </label>
+                      )}
                       <p className="text-slate-500 dark:text-slate-400 font-mono text-xs mb-1">
                         {actor.id}
                       </p>
@@ -681,6 +896,29 @@ const handleApprove = async () => {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Features
                       </p>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelectionMode("features");
+                        }}
+                        className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                      >
+                        {selectionMode.features ? "Cancel" : "Select"}
+                      </button>
+                      {selectionMode.features && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleBulkDelete("features");
+                          }}
+                          disabled={(selectedItems.features || []).length === 0}
+                          className="text-xs px-2 py-1 rounded-md bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 disabled:opacity-50"
+                        >
+                          Delete Selected ({(selectedItems.features || []).length})
+                        </button>
+                      )}
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
@@ -703,6 +941,16 @@ const handleApprove = async () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
                   {requirements.features.map((feature) => (
                     <div key={feature.id} className="p-4 rounded-lg bg-background-light dark:bg-background-dark/50 border border-transparent dark:border-white/5">
+                      {selectionMode.features && (
+                        <label className="inline-flex items-center gap-2 mb-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={(selectedItems.features || []).includes(feature.id)}
+                            onChange={() => toggleItemSelection("features", feature.id)}
+                          />
+                          <span className="text-xs text-slate-500 dark:text-slate-400">Select</span>
+                        </label>
+                      )}
                       <p className="text-slate-500 dark:text-slate-400 font-mono text-xs mb-1">
                         {feature.id}
                       </p>

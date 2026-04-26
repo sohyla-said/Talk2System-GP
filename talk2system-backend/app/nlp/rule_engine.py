@@ -510,8 +510,8 @@ class RuleBasedRequirementEngine:
 
         # 3. Extract components
         actor = self.extract_actor(doc)
-        if actor == "system":
-            actor = None   # or "user" depending on your preference
+        # if actor == "system":
+        #     actor = None   # or "user" depending on your preference
         action = self.extract_action(doc)
         direct_object = self.extract_direct_object(doc)
         prepositional_objects = self.extract_prepositional_objects(doc)

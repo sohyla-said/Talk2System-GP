@@ -12,10 +12,18 @@ export default function RequirementsChoicePage() {
 
 	const {
 		projectId,
+		commonData,
+		common_data,
+		hybridRunId,
+		hybridData,
+		hybridOnlyData,
+		Hybrid_only_data,
+		Hybird_only_data,
 		llmRunId,
 		llmData,
-		hybridRunId,
-		hybridData
+		llmOnlyData,
+		LLM_only_data,
+		
 	} = location.state || {};
 
 	const hasLLMResults = !!llmData;
@@ -23,6 +31,27 @@ export default function RequirementsChoicePage() {
 
 	const normalizedLlm = useMemo(() => normalizeGrouped(llmData), [llmData]);
 	const normalizedHybrid = useMemo(() => normalizeGrouped(hybridData), [hybridData]);
+	const normalizedCommon = useMemo(() => normalizeGrouped(commonData || common_data), [commonData, common_data]);
+	const normalizedLlmDiff = useMemo(() => normalizeGrouped(llmOnlyData || LLM_only_data), [llmOnlyData, LLM_only_data]);
+	const normalizedHybridDiff = useMemo(
+		() => normalizeGrouped(hybridOnlyData || Hybrid_only_data || Hybird_only_data),
+		[hybridOnlyData, Hybrid_only_data, Hybird_only_data]
+	);
+
+	const summary = useMemo(() => {
+		const commonCount = normalizedCommon.functional_requirements.length + normalizedCommon.nonfunctional_requirements.length;
+		const hybridOnlyCount = normalizedHybridDiff.functional_requirements.length + normalizedHybridDiff.nonfunctional_requirements.length;
+		const llmOnlyCount = normalizedLlmDiff.functional_requirements.length + normalizedLlmDiff.nonfunctional_requirements.length;
+		const unionCount = commonCount + hybridOnlyCount + llmOnlyCount;
+		const overlapPercent = unionCount > 0 ? Math.round((commonCount / unionCount) * 100) : 0;
+
+		return {
+			commonCount,
+			hybridOnlyCount,
+			llmOnlyCount,
+			overlapPercent
+		};
+	}, [normalizedCommon, normalizedHybridDiff, normalizedLlmDiff]);
 
 	useEffect(() => {
 		fetchSessionMeta();
@@ -80,8 +109,7 @@ export default function RequirementsChoicePage() {
                     projectId,
 					requirementId: data.session_req_id,
 					groupedData: selectedData,
-					preferredType: data.preferred_type,
-					projectId
+					preferredType: data.preferred_type
 				}
 			});
 		} catch (error) {
@@ -119,18 +147,29 @@ export default function RequirementsChoicePage() {
 		<div className="w-full max-w-7xl mx-auto p-4 space-y-4">
 			<div className="rounded-xl border border-[#d3cee8]/50 bg-white dark:bg-background-dark p-5">
 				<h1 className="text-slate-900 dark:text-white text-3xl font-black leading-tight tracking-[-0.02em]">
-					{sessionName} session - Choose Preferred Extraction
+					{sessionName} - Choose Preferred Extraction
 				</h1>
 				<p className="text-slate-500 dark:text-slate-400 text-sm mt-2">
 					Compare LLM and Hybrid outputs, then choose the result you want to continue with.
 				</p>
 			</div>
 
+			<div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+				<SummaryCard label="Common FR/NFR" value={summary.commonCount} tone="blue" />
+				<SummaryCard label="Hybrid-only FR/NFR" value={summary.hybridOnlyCount} tone="green" />
+				<SummaryCard label="LLM-only FR/NFR" value={summary.llmOnlyCount} tone="purple" />
+				<SummaryCard label="Overlap" value={`${summary.overlapPercent}%`} tone="amber" />
+			</div>
+
+			<CommonPane grouped={normalizedCommon} />
+
 			<div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
 				{hasLLMResults ? (
 					<ResultPane
-						title="LLM Extraction"
+						title="LLM Differences"
+						subtitle="Requirements found by LLM but not in Hybrid."
 						grouped={normalizedLlm}
+						diffGrouped={normalizedLlmDiff}
 						accent="purple"
 						buttonLabel="I prefer this"
 						isLoading={submittingType === "llm"}
@@ -153,8 +192,10 @@ export default function RequirementsChoicePage() {
 
 				{hasHybridResults ? (
 					<ResultPane
-						title="Hybrid Extraction"
+						title="Hybrid Differences"
+						subtitle="Requirements found by Hybrid but not in LLM."
 						grouped={normalizedHybrid}
+						diffGrouped={normalizedHybridDiff}
 						accent="purple"
 						buttonLabel="I prefer this"
 						isLoading={submittingType === "hybrid"}
@@ -178,13 +219,19 @@ export default function RequirementsChoicePage() {
 	);
 }
 
-function ResultPane({ title, grouped, accent, buttonLabel, isLoading, onPrefer }) {
+function ResultPane({ title, subtitle, grouped, diffGrouped, accent, buttonLabel, isLoading, onPrefer }) {
 	const buttonClass = "bg-primary text-white hover:bg-primary/90";
+	const hasDiffs =
+		diffGrouped.functional_requirements.length > 0 ||
+		diffGrouped.nonfunctional_requirements.length > 0;
 
 	return (
 		<div className="rounded-xl border border-[#d3cee8]/50 dark:border-white/10 bg-white dark:bg-background-dark p-4 space-y-4">
 			<div className="flex items-center justify-between gap-3">
-				<h2 className="text-slate-900 dark:text-white text-xl font-bold">{title}</h2>
+				<div>
+					<h2 className="text-slate-900 dark:text-white text-xl font-bold">{title}</h2>
+					<p className="text-slate-500 dark:text-slate-400 text-xs mt-1">{subtitle}</p>
+				</div>
 				<button
 					onClick={onPrefer}
 					disabled={isLoading}
@@ -194,10 +241,62 @@ function ResultPane({ title, grouped, accent, buttonLabel, isLoading, onPrefer }
 				</button>
 			</div>
 
-			<SectionCard title="Functional Requirements" items={grouped.functional_requirements} type="fr" />
-			<SectionCard title="Non-Functional Requirements" items={grouped.nonfunctional_requirements} type="nfr" />
+			{hasDiffs ? (
+				<>
+					<SectionCard title="Functional Requirements" items={diffGrouped.functional_requirements} type="fr" />
+					<SectionCard title="Non-Functional Requirements" items={diffGrouped.nonfunctional_requirements} type="nfr" />
+				</>
+			) : (
+				<div className="rounded-xl border border-dashed border-[#d3cee8]/70 dark:border-white/20 p-4 text-sm text-slate-500 dark:text-slate-400">
+					No differences found in FR/NFR for this extractor.
+				</div>
+			)}
+
 			<SimpleList title="Actors" values={grouped.actors} idPrefix="A" />
 			<SimpleList title="Features" values={grouped.features} idPrefix="F" />
+		</div>
+	);
+}
+
+function CommonPane({ grouped }) {
+	const hasCommon =
+		grouped.functional_requirements.length > 0 || grouped.nonfunctional_requirements.length > 0;
+
+	return (
+		<div className="rounded-xl border border-[#d3cee8]/50 dark:border-white/10 bg-white dark:bg-background-dark p-4 space-y-4">
+			<div>
+				<h2 className="text-slate-900 dark:text-white text-xl font-bold">Common Requirements</h2>
+				<p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
+					Requirements that both Hybrid and LLM extracted.
+				</p>
+			</div>
+
+			{hasCommon ? (
+				<>
+					<SectionCard title="Common Functional Requirements" items={grouped.functional_requirements} type="fr" />
+					<SectionCard title="Common Non-Functional Requirements" items={grouped.nonfunctional_requirements} type="nfr" />
+				</>
+			) : (
+				<div className="rounded-xl border border-dashed border-[#d3cee8]/70 dark:border-white/20 p-4 text-sm text-slate-500 dark:text-slate-400">
+					No common FR/NFR were found between Hybrid and LLM.
+				</div>
+			)}
+		</div>
+	);
+}
+
+function SummaryCard({ label, value, tone }) {
+	const toneClasses = {
+		blue: "bg-blue-50 dark:bg-blue-900/30 border-blue-100 dark:border-blue-800/40 text-blue-800 dark:text-blue-300",
+		green: "bg-green-50 dark:bg-green-900/30 border-green-100 dark:border-green-800/40 text-green-800 dark:text-green-300",
+		purple: "bg-purple-50 dark:bg-purple-900/30 border-purple-100 dark:border-purple-800/40 text-purple-800 dark:text-purple-300",
+		amber: "bg-amber-50 dark:bg-amber-900/30 border-amber-100 dark:border-amber-800/40 text-amber-800 dark:text-amber-300"
+	};
+
+	return (
+		<div className={`rounded-xl border p-4 ${toneClasses[tone] || toneClasses.blue}`}>
+			<p className="text-xs font-semibold uppercase tracking-wide opacity-80">{label}</p>
+			<p className="text-2xl font-black mt-1">{value}</p>
 		</div>
 	);
 }
