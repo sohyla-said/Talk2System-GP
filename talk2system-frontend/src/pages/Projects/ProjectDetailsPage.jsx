@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { getToken } from "../../api/authApi";
 import { fetchProject, fetchMyRole, fetchPendingRequests, acceptInvitation, rejectInvitation, fetchMembers, fetchProjectAuditLogs } from "../../api/projectApi";
 
@@ -8,7 +8,7 @@ const BASE_URL = "http://127.0.0.1:8000";
 export default function ProjectDetailsPage() {
   const navigate    = useNavigate();
   const { id: projectId } = useParams();
-
+  const [searchParams, setSearchParams] = useSearchParams();
   const [project, setProject]     = useState(null);
   const [sessions, setSessions]   = useState([]);
   const [myRole, setMyRole]       = useState(null);
@@ -146,25 +146,53 @@ export default function ProjectDetailsPage() {
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
-            {pendingRequests.length === 0 ? (
-              <p className="text-gray-400 text-sm text-center py-6">No pending requests.</p>
-            ) : (
-              <div className="space-y-3">
-                {pendingRequests.map((req) => (
-                  <div key={req.id} className="flex items-center justify-between bg-gray-50 dark:bg-[#231e3d] rounded-lg p-4">
-                    <div>
-                      <p className="font-semibold text-sm">User #{req.invitee_user_id}</p>
-                      {req.project_domain && <p className="text-xs text-gray-400">Domain: {req.project_domain}</p>}
-                      <p className="text-xs text-gray-400">{new Date(req.created_at).toLocaleDateString()}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => handleAccept(req.id, `User #${req.invitee_user_id}`)} className="px-3 py-1 rounded-lg bg-primary text-white text-xs font-bold hover:bg-primary/90">Accept</button>
-                      <button onClick={() => handleReject(req.id, `User #${req.invitee_user_id}`)} className="px-3 py-1 rounded-lg border border-red-300 text-red-500 text-xs font-bold hover:bg-red-50">Reject</button>
-                    </div>
+                {pendingRequests.length === 0 ? (
+                  <p className="text-gray-400 text-sm text-center py-6">No pending requests.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {pendingRequests.map((req) => (
+                      <div key={req.id} className="flex items-center justify-between bg-gray-50 dark:bg-[#231e3d] rounded-lg p-4">
+                        <div className="flex items-center gap-3">
+                          {/* Avatar */}
+                          <div
+                            className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-9 flex-shrink-0"
+                            style={{
+                              backgroundImage: `url(https://ui-avatars.com/api/?name=${encodeURIComponent(
+                                req.invitee_full_name || "User"
+                              )}&background=random&color=fff)`,
+                            }}
+                          />
+                          <div>
+                            <p className="font-semibold text-sm">
+                              {req.invitee_full_name || "Unknown User"}
+                            </p>
+                            <p className="text-xs text-gray-400">{req.invitee_email}</p>
+                            {req.project_domain && (
+                              <p className="text-xs text-gray-400">Domain: {req.project_domain}</p>
+                            )}
+                            <p className="text-xs text-gray-400">
+                              {new Date(req.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleAccept(req.id, req.invitee_full_name || `User #${req.invitee_user_id}`)}
+                            className="px-3 py-1 rounded-lg bg-primary text-white text-xs font-bold hover:bg-primary/90"
+                          >
+                            Accept
+                          </button>
+                          <button
+                            onClick={() => handleReject(req.id, req.invitee_full_name || `User #${req.invitee_user_id}`)}
+                            className="px-3 py-1 rounded-lg border border-red-300 text-red-500 text-xs font-bold hover:bg-red-50"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                )}
           </div>
         </div>
       )}

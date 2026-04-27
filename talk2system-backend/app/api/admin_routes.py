@@ -6,11 +6,12 @@ from app.models.user import User
 from app.models.project import Project                          
 from app.models.project_membership import ProjectMembership    
 from app.models.invitation import Invitation  
+from app.services import notification_service
+from app.models.audit_log import AuditLog 
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
 
-# USER MANAGEMENT 
 @router.get("/pending-users")
 def get_pending_users(
     db: Session = Depends(get_db),
@@ -72,7 +73,6 @@ def suspend_user(
     return {"message": f"{user.email} suspended"}
 
 
-
 @router.patch("/users/{user_id}/archive")
 def archive_user(
     user_id: int,
@@ -88,6 +88,7 @@ def archive_user(
     db.commit()
     return {"message": f"{user.email} archived"}
 
+
 @router.get("/all-users")
 def get_all_users(
     db: Session = Depends(get_db),
@@ -100,8 +101,6 @@ def get_all_users(
         for u in users
     ]
 
-
-# SYSTEM PROJECT MANAGEMENT 
 
 @router.get("/system-projects")
 def get_all_system_projects(
@@ -129,6 +128,7 @@ def get_all_system_projects(
         })
     return result
 
+
 @router.delete("/system-projects/{project_id}", status_code=204)
 def delete_any_project(
     project_id: int,
@@ -140,14 +140,32 @@ def delete_any_project(
     if not project:
         raise HTTPException(404, "Project not found")
 
-    # Delete related invitations first to prevent DB crash
+    project_name = project.name
+    
+    active_members = db.query(ProjectMembership).filter(
+        ProjectMembership.project_id == project_id, 
+        ProjectMembership.left_at.is_(None)
+    ).all()
+    
+    member_user_ids = [m.user_id for m in active_members]
+    db.query(AuditLog).filter(AuditLog.project_id == project_id).delete(synchronize_session=False)
     db.query(Invitation).filter(Invitation.project_id == project_id).delete(synchronize_session=False)
-
-    # Delete related memberships first to prevent DB crash
     db.query(ProjectMembership).filter(ProjectMembership.project_id == project_id).delete(synchronize_session=False)
-
-    # Now safely delete the project
     db.delete(project)
+    
+    for user_id in member_user_ids:
+        notification_service.create_notification(
+            db, 
+            user_id=user_id, 
+            notification_type="admin_deleted_project",
+            title="Project Deleted", 
+            message=f"The project '{project_name}' has been deleted by an admin.",
+            actor_name="System Admin", 
+            actor_email=current_user.email, 
+            project_id=project_id, 
+            project_name=project_name
+        )
+    
     db.commit()
     return
 
@@ -215,57 +233,47 @@ def change_project_manager(
     if not new_pm_user:
         raise HTTPException(404, f"User '{new_pm_email}' not found")
 
-    # Demote current PM to participant
-    current_pm = db.query(ProjectMembership).filter_by(project_id=project_id, role="project_manager").first()
-    if current_pm:
-        current_pm.role = "participant"
-
-    # Promote new user
-    new_membership = db.query(ProjectMembership).filter_by(project_id=project_id, user_id=new_pm_user.id).first()
-    if new_membership:
-        new_membership.role = "project_manager"
-    else:
-        new_membership = ProjectMembership(project_id=project_id, user_id=new_pm_user.id, role="project_manager")
-        db.add(new_membership)
-
-    db.commit()
-    return {"message": f"{new_pm_user.email} is now the Project Manager of {project.name}"}
-@router.patch("/system-projects/{project_id}/change-pm")
-def change_project_manager(
-    project_id: int,
-    body: dict,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin"))
-):
-    """Admin demotes current PM and assigns a new user as PM."""
-    new_pm_email = body.get("email")
-    if not new_pm_email:
-        raise HTTPException(400, "New PM email is required")
-
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(404, "Project not found")
-
-    new_pm_user = db.query(User).filter(User.email == new_pm_email.lower().strip()).first()
-    if not new_pm_user:
-        raise HTTPException(404, f"User '{new_pm_email}' not found")
-
     # Prevent assigning a terminated/suspended user as PM
     if new_pm_user.status != "active":
         raise HTTPException(400, "Cannot assign an inactive user as Project Manager")
 
-    # Demote current PM to participant (even if they are terminated)
     current_pm = db.query(ProjectMembership).filter_by(project_id=project_id, role="project_manager").first()
+    old_pm_user_id = None
     if current_pm:
+        old_pm_user_id = current_pm.user_id
         current_pm.role = "participant"
 
-    # Promote new user
     new_membership = db.query(ProjectMembership).filter_by(project_id=project_id, user_id=new_pm_user.id).first()
     if new_membership:
         new_membership.role = "project_manager"
     else:
         new_membership = ProjectMembership(project_id=project_id, user_id=new_pm_user.id, role="project_manager")
         db.add(new_membership)
+
+    if old_pm_user_id and old_pm_user_id != new_pm_user.id:
+        notification_service.create_notification(
+            db, 
+            user_id=old_pm_user_id, 
+            notification_type="admin_replaced_pm",
+            title="Replaced as Project Manager", 
+            message=f"You have been replaced as PM of '{project.name}' by an admin. You are now a participant.",
+            actor_name="System Admin", 
+            actor_email=current_user.email, 
+            project_id=project_id, 
+            project_name=project.name
+        )
+
+    notification_service.create_notification(
+        db, 
+        user_id=new_pm_user.id, 
+        notification_type="admin_assigned_pm",
+        title="Assigned as Project Manager", 
+        message=f"An admin has assigned you as PM of '{project.name}'.",
+        actor_name="System Admin", 
+        actor_email=current_user.email, 
+        project_id=project_id, 
+        project_name=project.name
+    )
 
     db.commit()
     return {"message": f"{new_pm_user.email} is now the Project Manager of {project.name}"}

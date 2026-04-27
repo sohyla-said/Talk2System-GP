@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { logout, getCurrentUser, isAdmin } from "../../api/authApi";
 import { fetchMyRole } from "../../api/projectApi";
+import NotificationBell from "./NotificationBell";
 
 export default function Header() {
   const navigate = useNavigate();
@@ -99,7 +100,8 @@ export default function Header() {
             Users
           </NavLink>
         )}
-
+      {/* ── Notification Bell ── */}
+        {!isAdmin() && <NotificationBell />}
         {/* ── User info ── */}
         {user?.email && (
           <div className="flex flex-col items-end ml-2">

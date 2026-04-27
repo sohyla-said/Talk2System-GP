@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import AppLayout from "../components/layout/AppLayout";
 import AuthLayout from "../components/layout/AuthLayout";
 import { isLoggedIn, getCurrentUser } from "../api/authApi";
+import NotificationsPage from "../notifications/NotificationsPage";
 
 // Pages
 import Home from "../pages/Home";
@@ -22,7 +23,6 @@ import ProjectDetails from "../pages/projects/ProjectDetailsPage";
 import AddProject from "../pages/projects/AddProjectDetailsPage";
 import AddParticipant from "../pages/projects/AddParticipantPage";
 import EmptyProjectsPage from "../pages/projects/EmptyProjectsPage";
-import PMNotificationsPage from "../pages/projects/PMNotificationsPage";
 import AdminAddProject from "../pages/projects/AdminAddProjectPage";
 import AdminSystemProjectsPage from "../pages/projects/AdminSystemProjectsPage"; 
 import AllUsersPage from "../pages/admin/AllUsersPage";
@@ -91,12 +91,11 @@ export default function AppRoutes() {
       <Route element={
         <ProtectedRoute><AppLayout /></ProtectedRoute>
       }></Route>
-      <Route path="/notifications" element={<PMNotificationsPage />} />
 
       {/* App */}
       <Route element={<AppLayout />}>
         <Route path="/dashboard" element={<Dashboard />} />
-       
+        <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/admin/all-users" element={<AllUsersPage />} />
 
         <Route path="/projects">

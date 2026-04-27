@@ -12,6 +12,7 @@ from app.models.invitation import Invitation
 from app.services.project_service import ProjectService
 from app.models.audit_log import AuditLog  
 from app.services.audit_service import log_action
+from app.services import notification_service
 router = APIRouter(prefix="/api/projects", tags=["Projects"])
 
 
@@ -44,13 +45,14 @@ class InvitationResponse(BaseModel):
     id:                 int
     project_id:         int
     invitee_user_id:    int
-    project_domain:     Optional[str]
+    invitee_email:      Optional[str] = None     
+    invitee_full_name:  Optional[str] = None     
+    project_domain:     Optional[str] = None
     status:             str
     created_at:         datetime
 
     class Config:
         from_attributes = True
-
 
 class MemberResponse(BaseModel):
     id:          int
@@ -64,12 +66,6 @@ class MemberResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-class InviteByEmailRequest(BaseModel):
-    email: str
-    notes: Optional[str] = None
-
 
 class AddParticipantRequest(BaseModel):
     email: str
@@ -140,9 +136,32 @@ def request_join(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return ProjectService.request_join(
+    inv = ProjectService.request_join(
         db, data.project_id, current_user, data.project_domain
     )
+
+    project = db.query(Project).filter(Project.id == data.project_id).first()
+    pm_membership = db.query(ProjectMembership).filter(
+        ProjectMembership.project_id == data.project_id,
+        ProjectMembership.role == "project_manager",
+        ProjectMembership.left_at.is_(None)
+    ).first()
+
+    if pm_membership and project:
+        notification_service.create_notification(
+            db,
+            user_id=pm_membership.user_id,
+            notification_type="join_requested",
+            title="New Join Request",
+            message=f"'{current_user.full_name or current_user.email}' wants to join '{project.name}'.",
+            actor_name=current_user.full_name,
+            actor_email=current_user.email,
+            project_id=data.project_id,
+            project_name=project.name,
+        )
+        db.commit()
+
+    return inv
 
 
 @router.get("/my-requests", response_model=list[InvitationResponse])
@@ -158,7 +177,23 @@ def pending_requests(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return ProjectService.get_pending_invitations_for_pm(db, current_user)
+    invitations = ProjectService.get_pending_invitations_for_pm(db, current_user)
+    result = []
+    for inv in invitations:
+        invitee = db.query(User).filter(User.id == inv.invitee_user_id).first()
+        result.append(
+            InvitationResponse(
+                id=inv.id,
+                project_id=inv.project_id,
+                invitee_user_id=inv.invitee_user_id,
+                invitee_email=invitee.email if invitee else None,
+                invitee_full_name=invitee.full_name if invitee else None,
+                project_domain=inv.project_domain,
+                status=inv.status,
+                created_at=inv.created_at,
+            )
+        )
+    return result
 
 
 @router.patch("/invitations/{invitation_id}/accept", response_model=InvitationResponse)
@@ -167,7 +202,53 @@ def accept_invitation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return ProjectService.accept_invitation(db, invitation_id, current_user)
+    inv = db.query(Invitation).filter(Invitation.id == invitation_id).first()
+    if not inv:
+        raise HTTPException(404, "Invitation not found")
+
+    pm_membership = ProjectService.get_membership(db, inv.project_id, current_user.id)
+    if not pm_membership or pm_membership.role != "project_manager":
+        raise HTTPException(403, "Only the project manager can action this request")
+
+    if inv.status != "pending":
+        raise HTTPException(409, f"Invitation already {inv.status}")
+
+    invitee = db.query(User).filter(User.id == inv.invitee_user_id).first()
+    if not invitee or invitee.status != "active":
+        inv.status = "rejected"
+        inv.actioned_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(inv)
+        raise HTTPException(400, "Cannot accept - invitee is no longer active")
+
+    inv.status = "accepted"
+    inv.actioned_at = datetime.now(timezone.utc)
+
+    membership = ProjectMembership(
+        project_id=inv.project_id,
+        user_id=inv.invitee_user_id,
+        role="participant",
+    )
+    db.add(membership)
+
+    project = db.query(Project).filter(Project.id == inv.project_id).first()
+
+    # CREATE NOTIFICATION
+    notification_service.create_notification(
+        db,
+        user_id=inv.invitee_user_id,
+        notification_type="join_accepted",
+        title="Join Request Accepted",
+        message=f"Your request to join '{project.name if project else 'Project #' + str(inv.project_id)}' has been accepted.",
+        actor_name=current_user.full_name,
+        actor_email=current_user.email,
+        project_id=inv.project_id,
+        project_name=project.name if project else None,
+    )
+
+    db.commit()
+    db.refresh(inv)
+    return inv
 
 
 @router.patch("/invitations/{invitation_id}/reject", response_model=InvitationResponse)
@@ -176,8 +257,38 @@ def reject_invitation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return ProjectService.reject_invitation(db, invitation_id, current_user)
+    inv = db.query(Invitation).filter(Invitation.id == invitation_id).first()
+    if not inv:
+        raise HTTPException(404, "Invitation not found")
 
+    pm_membership = ProjectService.get_membership(db, inv.project_id, current_user.id)
+    if not pm_membership or pm_membership.role != "project_manager":
+        raise HTTPException(403, "Only the project manager can action this request")
+
+    if inv.status != "pending":
+        raise HTTPException(409, f"Invitation already {inv.status}")
+
+    inv.status = "rejected"
+    inv.actioned_at = datetime.now(timezone.utc)
+
+    project = db.query(Project).filter(Project.id == inv.project_id).first()
+
+    # CREATE NOTIFICATION
+    notification_service.create_notification(
+        db,
+        user_id=inv.invitee_user_id,
+        notification_type="join_rejected",
+        title="Join Request Rejected",
+        message=f"Your request to join '{project.name if project else 'Project #' + str(inv.project_id)}' has been rejected.",
+        actor_name=current_user.full_name,
+        actor_email=current_user.email,
+        project_id=inv.project_id,
+        project_name=project.name if project else None,
+    )
+
+    db.commit()
+    db.refresh(inv)
+    return inv
 
 @router.get("/{project_id}/my-role")
 def my_role_in_project(
@@ -215,50 +326,6 @@ def get_members(
         for m in memberships
     ]
 
-
-@router.post("/{project_id}/invite", status_code=200)
-def invite_by_email(
-    project_id: int,
-    data: InviteByEmailRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    membership = ProjectService.get_membership(db, project_id, current_user.id)
-    if not membership or membership.role != "project_manager":
-        raise HTTPException(403, "Only the project manager can invite participants")
-
-    project = ProjectService.get_project(db, project_id)
-    if not project:
-        raise HTTPException(404, "Project not found")
-
-    invited_user = db.query(User).filter(
-        User.email == data.email.lower().strip()
-    ).first()
-
-    if invited_user:
-        existing = ProjectService.get_membership(db, project_id, invited_user.id)
-        if existing:
-            raise HTTPException(409, "This user is already a member of the project")
-        inv = Invitation(
-            project_id=project_id,
-            invitee_user_id=invited_user.id,
-            invited_by_user_id=current_user.id,
-            project_domain=project.domain,
-            status="pending",
-        )
-        db.add(inv)
-        db.commit()
-
-    send_invitation_email(
-        to_email=data.email,
-        inviter_name=current_user.full_name or current_user.email,
-        project_name=project.name,
-        project_domain=project.domain,
-        notes=data.notes,
-    )
-    return {"message": f"Invitation sent to {data.email}"}
-
-
 # DIRECT ADD PARTICIPANT (no invitation needed)
 @router.post("/{project_id}/participants", status_code=201)
 def add_participant_directly(
@@ -270,7 +337,7 @@ def add_participant_directly(
     is_admin = current_user.role == "admin"
     membership = ProjectService.get_membership(db, project_id, current_user.id)
     is_pm = membership and membership.role == "project_manager"
-    
+
     if not is_admin and not is_pm:
         raise HTTPException(403, "Only a project manager or admin can add participants")
 
@@ -280,29 +347,64 @@ def add_participant_directly(
 
     target_email = data.email.lower().strip()
     target_user = db.query(User).filter(User.email == target_email).first()
-    
+
     if not target_user:
         raise HTTPException(404, f"No user found with email '{data.email}'")
 
-    user_role = getattr(target_user, "role", None)
-    if user_role == "admin":
+    if target_user.role == "admin":
         raise HTTPException(403, "System administrators cannot be added to projects.")
+
+    if target_user.status != "active":
+        raise HTTPException(400, f"Cannot add '{target_email}' - user status is '{target_user.status}'")
 
     existing_membership = ProjectService.get_membership(db, project_id, target_user.id)
     if existing_membership:
         raise HTTPException(409, f"'{target_user.email}' is already a member of this project")
 
-    new_membership = ProjectMembership(
-        project_id=project_id,
-        user_id=target_user.id,
-        role="participant",
-        joined_at=datetime.now(timezone.utc),
+    removed_membership = (
+        db.query(ProjectMembership)
+        .filter(
+            ProjectMembership.project_id == project_id,
+            ProjectMembership.user_id == target_user.id,
+            ProjectMembership.left_at.isnot(None)
+        )
+        .first()
     )
-    db.add(new_membership)
-    
-    # LOG ACTION
+
+    if removed_membership:
+        removed_membership.left_at = None
+        removed_membership.role = "participant"
+        new_membership = removed_membership
+    else:
+        new_membership = ProjectMembership(
+            project_id=project_id,
+            user_id=target_user.id,
+            role="participant",
+            joined_at=datetime.now(timezone.utc),
+        )
+        db.add(new_membership)
+
     log_action(db, current_user.id, "added_participant", "user", project_id=project_id, entity_id=target_user.id)
-    
+
+    if is_admin:
+        actor_name = "System Admin"
+        actor_email = current_user.email
+    else:
+        actor_name = current_user.full_name
+        actor_email = current_user.email
+
+    notification_service.create_notification(
+        db,
+        user_id=target_user.id,
+        notification_type="added_to_project",
+        title="Added to Project",
+        message=f"You have been added to '{project.name}' as a participant.",
+        actor_name=actor_name,
+        actor_email=actor_email,
+        project_id=project_id,
+        project_name=project.name,
+    )
+
     db.commit()
     db.refresh(new_membership)
 
@@ -319,7 +421,6 @@ def add_participant_directly(
 
 
 # REMOVE PARTICIPANT
-
 @router.delete("/{project_id}/participants/{user_id}", status_code=200)
 def remove_participant(
     project_id: int,

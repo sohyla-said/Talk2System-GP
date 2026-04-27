@@ -6,6 +6,7 @@ from app.models.project import Project
 from app.models.project_membership import ProjectMembership
 from app.models.invitation import Invitation
 from app.models.user import User
+from app.services import notification_service 
 
 
 class ProjectService:
@@ -29,12 +30,31 @@ class ProjectService:
             if not manager_user:
                 raise HTTPException(404, f"User with email '{manager_email}' not found")
             
+            # PREVENT ASSIGNING TO ANOTHER ADMIN
+            if manager_user.role == "admin":
+                raise HTTPException(400, "Cannot assign an admin as Project Manager. Please select a regular user.")
+            
+            if manager_user.status != "active":
+                raise HTTPException(400, f"Cannot assign '{manager_email}' as PM - user status is '{manager_user.status}'")
+            
             membership = ProjectMembership(
                 project_id=project.id,
                 user_id=manager_user.id,
                 role="project_manager",
             )
             db.add(membership)
+                        
+            notification_service.create_notification(
+                db,
+                user_id=manager_user.id,
+                notification_type="admin_assigned_pm",
+                title="Assigned as Project Manager",
+                message=f"An admin has created project '{project.name}' and assigned you as Project Manager.",
+                actor_name="System Admin",
+                actor_email=creator.email,
+                project_id=project.id,
+                project_name=project.name,
+            )
             
         # IF USER: Add themselves as Project Manager (Normal behavior)
         else:
