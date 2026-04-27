@@ -27,6 +27,10 @@ export default function TranscriptPage() {
   // Extract Requirements loading state
   const [isSubmittingReq, setIsSubmittingReq] = useState(false);
 
+  // Existing session requirement — if set, skip generation and redirect instead
+  const [existingRequirementId, setExistingRequirementId] = useState(null);
+  const [isCheckingReq, setIsCheckingReq] = useState(false);
+
   // Summarize loading state
   const [isSummarizing, setIsSummarizing] = useState(false);
 
@@ -93,7 +97,37 @@ export default function TranscriptPage() {
   }, [sessionId]);
 
   // -----------------------------
-  // Reformat transcript segments into the conversational string
+  // Check if a requirement already exists for this session
+  // Runs after projectId is resolved from the transcript fetch
+  // -----------------------------
+  useEffect(() => {
+    if (!projectId || !sessionId) return;
+
+    const checkExistingRequirement = async () => {
+      setIsCheckingReq(true);
+      try {
+        const res = await fetch(
+          `http://localhost:8000/api/projects/${projectId}/session/${sessionId}/requirements`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          // Backend returns the latest requirement object; grab its id
+          if (data?.id) {
+            setExistingRequirementId(data.id);
+          }
+        }
+        // 404 means no requirement yet — stay null, that's fine
+      } catch (err) {
+        console.error("Error checking existing requirement:", err);
+      } finally {
+        setIsCheckingReq(false);
+      }
+    };
+
+    checkExistingRequirement();
+  }, [projectId, sessionId]);
+
+  // -----------------------------
   // the backend expects:  Speaker: "text"\nSpeaker: "text"\n...
   // -----------------------------
   const formatTranscriptForBackend = (segments) => {
@@ -568,42 +602,64 @@ export default function TranscriptPage() {
                     )}
                   </button>
 
-                  <button
-                    onClick={() => handleGenerate("req")}
-                    disabled={isSubmittingReq}
-                    className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-primary-accent/90 disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {isSubmittingReq ? (
-                      <>
-                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                        </svg>
-                        Processing…
-                      </>
-                    ) : (
-                      <>
-                        <span className="material-symbols-outlined text-xl">checklist</span>
-                        Extract Requirements
-                      </>
-                    )}
-                  </button>
+                  {existingRequirementId ? (
+                    // Requirement already exists — offer navigation instead of re-generation
+                    <div className="flex flex-col gap-2">
+                      <button
+                        onClick={() =>
+                          navigate(`/transcript/${sessionId}/requirements`)
+                        }
+                        className="flex w-full items-center justify-center gap-3 rounded-lg bg-green-600 hover:bg-green-700 px-4 py-3 text-base font-bold text-white shadow-soft transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-xl">task_alt</span>
+                        View Requirements
+                      </button>
+                      <button
+                        onClick={() => handleGenerate("req")}
+                        disabled={isSubmittingReq || isCheckingReq}
+                        className="flex w-full items-center justify-center gap-3 rounded-lg border border-primary-accent/50 bg-transparent px-4 py-2.5 text-sm font-semibold text-primary-accent hover:bg-primary-accent/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isSubmittingReq ? (
+                          <>
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                            </svg>
+                            Processing…
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-base">refresh</span>
+                            Re-extract Requirements
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ) : (
+                    // No requirement yet — show the primary generate button
+                    <button
+                      onClick={() => handleGenerate("req")}
+                      disabled={isSubmittingReq || isCheckingReq}
+                      className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-primary-accent/90 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {isSubmittingReq || isCheckingReq ? (
+                        <>
+                          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                          </svg>
+                          {isCheckingReq ? "Checking…" : "Processing…"}
+                        </>
+                      ) : (
+                        <>
+                          <span className="material-symbols-outlined text-xl">checklist</span>
+                          Extract Requirements
+                        </>
+                      )}
+                    </button>
+                  )}
 
-                  {/* <button
-                    onClick={() => handleGenerate("uml")}
-                    className="flex w-full items-center justify-center gap-3 rounded-lg bg-secondary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-secondary-accent/90"
-                  >
-                    <span className="material-symbols-outlined text-xl">schema</span>
-                    Generate UML Diagrams
-                  </button>
 
-                  <button
-                    onClick={() => handleGenerate("srs")}
-                    className="flex w-full items-center justify-center gap-3 rounded-lg bg-secondary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-secondary-accent/90"
-                  >
-                    <span className="material-symbols-outlined text-xl">description</span>
-                    Generate SRS
-                  </button> */}
                 </div>
 
                 <hr className="border-border-light dark:border-white/10" />
@@ -617,6 +673,12 @@ export default function TranscriptPage() {
                   <p className="text-xs text-green-600 dark:text-green-400 text-center flex items-center justify-center gap-1">
                     <span className="material-symbols-outlined text-sm">check_circle</span>
                     Transcript approved — ready to generate
+                  </p>
+                )}
+                {existingRequirementId && (
+                  <p className="text-xs text-blue-600 dark:text-blue-400 text-center flex items-center justify-center gap-1">
+                    <span className="material-symbols-outlined text-sm">info</span>
+                    Requirements already generated for this session
                   </p>
                 )}
               </div>
