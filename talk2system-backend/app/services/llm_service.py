@@ -2,9 +2,7 @@ import time
 import json
 import re
 import logging
-from typing import List, Optional, Literal, Generator
 
-from pydantic import BaseModel, ValidationError
 from langchain_ollama import OllamaLLM
 
 
@@ -16,28 +14,6 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s"
 )
-
-# =========================
-# PYDANTIC SCHEMA
-# =========================
-class Requirement(BaseModel):
-    text: str
-    type: Literal["FR", "NFR"]
-    category: Optional[Literal[
-        "performance",
-        "security",
-        "usability",
-        "reliability",
-        "scalability",
-        "maintainability"
-    ]] = None
-    actor: Optional[str] = None
-    feature: Optional[str] = None
-
-
-class RequirementResponse(BaseModel):
-    requirements: List[Requirement]
-
 
 # =========================
 # CHUNKING
@@ -53,19 +29,49 @@ def chunk_text(text: str, max_words: int = 800):
 # =========================
 def build_prompt(transcript: str) -> str:
     return f"""
-You are a senior software requirements analyst.
+You are a software requirements analysis assistant.
 
-TASK:
-Extract atomic software requirements from the transcript.
+    Your task is to extract structured requirements from a transcript.
 
-RULES:
-- Split into atomic requirements (ONE action only)
-- Do NOT merge multiple actions
-- Do NOT hallucinate
-- Do not include noise and irrelevent talk
-- Extract: type (FR/NFR), actor, feature, category (if NFR)
+    Instructions:
 
-OUTPUT FORMAT (STRICT JSON ONLY):
+    1. Sentence Segmentation & Decomposition:
+    - Split the transcript into requirement sentences.
+    - If a sentence contains multiple actions or functionalities, split it into MULTIPLE atomic requirements.
+    - Each requirement must describe ONE single action or functionality only.
+
+    Example:
+    Input:
+    "Customers should be able to browse products, add them to a cart, and complete purchases."
+
+    Output:
+    - "Customers should be able to browse products"
+    - "Customers should be able to add products to cart"
+    - "Customers should be able to complete purchases"
+
+    Input:
+    "The system must allow users to sign in and register"
+    
+    Output:
+    - "The system must allow users to sign in"
+    - "The system must allow users to register"
+
+    2. For each atomic requirement:
+    - Classify it as:
+    - "FR" (Functional Requirement)
+    - "NFR" (Non-Functional Requirement)
+    - If it is NFR, assign a category from:
+    ["performance", "security", "usability", "reliability", "scalability", "maintainability"]
+    - If it is FR, category must be null.
+
+    3. Extract the main actor in the requirement (e.g., user, admin, customer, system).
+
+    4. Extract the feature (the main functionality, e.g., login, browse products, upload file).
+
+    ---
+
+    Output format:
+    Return ONLY valid JSON in this exact structure:
 {{
   "requirements": [
     {{
@@ -103,10 +109,24 @@ def safe_parse(llm_output: str, llm, prompt: str, retries: int = 2):
     for attempt in range(retries):
         try:
             data = extract_json(llm_output)
-            validated = RequirementResponse(**data)
-            return validated.requirements
+            requirements = data.get("requirements", [])
 
-        except (ValidationError, json.JSONDecodeError, ValueError) as e:
+            if not isinstance(requirements, list):
+                raise ValueError("requirements must be a list")
+
+            normalized_requirements = []
+            for requirement in requirements:
+                if not isinstance(requirement, dict):
+                    raise ValueError("Each requirement must be an object")
+
+                if isinstance(requirement.get("category"), str):
+                    requirement["category"] = requirement["category"].lower()
+
+                normalized_requirements.append(requirement)
+
+            return normalized_requirements
+
+        except (json.JSONDecodeError, ValueError, TypeError) as e:
             last_error = str(e)
             logger.warning(f"Parse attempt {attempt+1} failed: {last_error}")
 
@@ -142,7 +162,7 @@ def extract_requirements(transcript: str):
 
     logger.info("Starting requirement extraction pipeline")
 
-    all_requirements: List[Requirement] = []
+    all_requirements = []
 
     for idx, chunk in enumerate(chunk_text(transcript)):
         logger.info(f"Processing chunk {idx + 1}")
@@ -153,7 +173,7 @@ def extract_requirements(transcript: str):
             response = llm.invoke(prompt)
 
             requirements = safe_parse(
-                response= llm.invoke(prompt),
+                llm_output=response,
                 llm=llm,
                 prompt=prompt,
                 retries=2
@@ -167,4 +187,4 @@ def extract_requirements(transcript: str):
     execution_time = time.time() - start_time
     logger.info(f"Completed in {execution_time:.2f}s")
 
-    return [r.model_dump() for r in all_requirements]
+    return all_requirements
