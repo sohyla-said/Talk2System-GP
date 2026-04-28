@@ -7,11 +7,14 @@ export default function RequirementsChoicePage() {
 	const location = useLocation();
 	const { sessionId } = useParams();
 
+	const [extractionState, setExtractionState] = useState(() => location.state || {});
 	const [submittingType, setSubmittingType] = useState(null);
+	const [regeneratingType, setRegeneratingType] = useState(null);
 	const [sessionName, setSessionName] = useState(null);
 
 	const {
 		projectId,
+		transcriptText,
 		commonData,
 		common_data,
 		hybridRunId,
@@ -23,8 +26,7 @@ export default function RequirementsChoicePage() {
 		llmData,
 		llmOnlyData,
 		LLM_only_data,
-		
-	} = location.state || {};
+	} = extractionState;
 
 	const hasLLMResults = !!llmData;
 	const hasHybridResults = !!hybridData;
@@ -54,6 +56,10 @@ export default function RequirementsChoicePage() {
 	}, [normalizedCommon, normalizedHybridDiff, normalizedLlmDiff]);
 
 	useEffect(() => {
+		setExtractionState(location.state || {});
+	}, [location.state]);
+
+	useEffect(() => {
 		fetchSessionMeta();
 	  }, [sessionId]);
 
@@ -67,10 +73,69 @@ export default function RequirementsChoicePage() {
          throw new Error(data.detail || "Failed to load session data");
        }
       setSessionName(data.title ?? null);
+		setExtractionState((prev) => ({
+			...prev,
+			transcriptText: prev.transcriptText || data.transcript_text || ""
+		}));
     } catch (err) {
       console.error(err);
     }
   };
+
+	const formatTranscriptForBackend = (segments) => {
+		return segments
+			.filter((item) => item.name && item.text)
+			.map((item) => `${item.name.trim()}: "${item.text.trim()}"`)
+			.join("\n");
+	};
+
+	const fetchTranscriptText = async () => {
+		if (transcriptText && transcriptText.trim()) {
+			return transcriptText;
+		}
+
+		const response = await fetch(`http://127.0.0.1:8000/api/sessions/${sessionId}/transcript`, {
+			headers: { Authorization: `Bearer ${getToken()}` }
+		});
+
+		const data = await response.json();
+		if (!response.ok) {
+			throw new Error(data.detail || "Failed to load transcript");
+		}
+
+		const segments = Array.isArray(data.transcript) ? data.transcript : [];
+		return formatTranscriptForBackend(segments);
+	};
+
+	const mergeExtractionResponse = (engine, responseData) => {
+		setExtractionState((prev) => {
+			const next = { ...prev };
+
+			if (engine === "llm") {
+				next.llmRunId = responseData.LLM_run_id ?? prev.llmRunId;
+				next.llmData = responseData.LLM_data ?? prev.llmData;
+				next.llmOnlyData = responseData.LLM_only_data ?? prev.llmOnlyData;
+			} else {
+				next.hybridRunId = responseData.Hybrid_run_id ?? prev.hybridRunId;
+				next.hybridData = responseData.Hybrid_data ?? prev.hybridData;
+				next.hybridOnlyData = responseData.Hybrid_only_data ?? prev.hybridOnlyData;
+			}
+
+			const currentLlm = normalizeGrouped(next.llmData || next.LLM_data);
+			const currentHybrid = normalizeGrouped(next.hybridData || next.Hybrid_data);
+			const comparison = compareGroupedRequirements(currentHybrid, currentLlm);
+
+			next.commonData = comparison.commonData;
+			next.common_data = comparison.commonData;
+			next.llmOnlyData = comparison.llmOnlyData;
+			next.LLM_only_data = comparison.llmOnlyData;
+			next.hybridOnlyData = comparison.hybridOnlyData;
+			next.Hybird_only_data = comparison.hybridOnlyData;
+			next.Hybrid_only_data = comparison.hybridOnlyData;
+
+			return next;
+		});
+	};
 
 	const handlePrefer = async (type) => {
 		const selectedData = type === "llm" ? normalizedLlm : normalizedHybrid;
@@ -117,6 +182,46 @@ export default function RequirementsChoicePage() {
 			alert(error.message);
 		} finally {
 			setSubmittingType(null);
+		}
+	};
+
+	const handleRegenerate = async (engine) => {
+		if (!projectId || !sessionId) {
+			alert("Missing project/session information. Please try again.");
+			return;
+		}
+
+		setRegeneratingType(engine);
+		try {
+			const transcriptText = await fetchTranscriptText();
+			const response = await fetch(
+				`http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/extract-requirements`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${getToken()}`
+					},
+					body: JSON.stringify({
+						transcript: transcriptText,
+						engine
+					})
+				}
+			);
+
+			const data = await response.json();
+			if (!response.ok) {
+				throw new Error(
+					typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail)
+				);
+			}
+
+			mergeExtractionResponse(engine, data);
+		} catch (error) {
+			console.error(error);
+			alert(error.message);
+		} finally {
+			setRegeneratingType(null);
 		}
 	};
 
@@ -182,9 +287,17 @@ export default function RequirementsChoicePage() {
 							<span className="material-symbols-outlined">info</span>
 						</div>
 						<h3 className="text-slate-900 dark:text-white text-xl font-bold mb-2">No requirements extracted yet</h3>
-						<p className="text-slate-500 dark:text-slate-400 mb-6">
+						<p className="text-slate-500 dark:text-slate-400 mb-4">
 							LLM requirement extraction failed.
 						</p>
+						<button
+							onClick={() => handleRegenerate("llm")}
+							disabled={regeneratingType === "llm"}
+							className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-bold text-white transition-colors hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
+						>
+							<span className="material-symbols-outlined text-lg">refresh</span>
+							{regeneratingType === "llm" ? "Regenerating..." : "Regenerate with LLM"}
+						</button>
 						</div>
 					</div>
 				)}
@@ -208,9 +321,17 @@ export default function RequirementsChoicePage() {
 								<span className="material-symbols-outlined">info</span>
 							</div>
 							<h3 className="text-slate-900 dark:text-white text-xl font-bold mb-2">No requirements extracted yet</h3>
-							<p className="text-slate-500 dark:text-slate-400 mb-6">
+							<p className="text-slate-500 dark:text-slate-400 mb-4">
 								Hybrid requirement extraction failed.
 							</p>
+							<button
+								onClick={() => handleRegenerate("hybrid")}
+								disabled={regeneratingType === "hybrid"}
+								className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-bold text-white transition-colors hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
+							>
+								<span className="material-symbols-outlined text-lg">refresh</span>
+								{regeneratingType === "hybrid" ? "Regenerating..." : "Regenerate with Hybrid"}
+							</button>
 						</div>
 					</div>
 				)}
@@ -399,5 +520,67 @@ function normalizeGrouped(grouped) {
 		nonfunctional_requirements: nonFunctional,
 		actors,
 		features
+	};
+}
+
+function compareGroupedRequirements(hybridGrouped, llmGrouped) {
+	const hybridFunctional = Array.isArray(hybridGrouped.functional_requirements)
+		? hybridGrouped.functional_requirements
+		: [];
+	const hybridNonFunctional = Array.isArray(hybridGrouped.nonfunctional_requirements)
+		? hybridGrouped.nonfunctional_requirements
+		: [];
+	const llmFunctional = Array.isArray(llmGrouped.functional_requirements)
+		? llmGrouped.functional_requirements
+		: [];
+	const llmNonFunctional = Array.isArray(llmGrouped.nonfunctional_requirements)
+		? llmGrouped.nonfunctional_requirements
+		: [];
+
+	const hybridFunctionalMap = new Map(hybridFunctional.map((item) => [item.text.trim().toLowerCase(), item]));
+	const hybridNonFunctionalMap = new Map(hybridNonFunctional.map((item) => [item.text.trim().toLowerCase(), item]));
+
+	const commonFunctional = [];
+	const llmOnlyFunctional = [];
+	for (const item of llmFunctional) {
+		const key = item.text.trim().toLowerCase();
+		if (hybridFunctionalMap.has(key)) {
+			commonFunctional.push(item);
+		} else {
+			llmOnlyFunctional.push(item);
+		}
+	}
+
+	const commonNonFunctional = [];
+	const llmOnlyNonFunctional = [];
+	for (const item of llmNonFunctional) {
+		const key = item.text.trim().toLowerCase();
+		if (hybridNonFunctionalMap.has(key)) {
+			commonNonFunctional.push(item);
+		} else {
+			llmOnlyNonFunctional.push(item);
+		}
+	}
+
+	const hybridOnlyFunctional = hybridFunctional.filter(
+		(item) => !commonFunctional.some((commonItem) => commonItem.text.trim().toLowerCase() === item.text.trim().toLowerCase())
+	);
+	const hybridOnlyNonFunctional = hybridNonFunctional.filter(
+		(item) => !commonNonFunctional.some((commonItem) => commonItem.text.trim().toLowerCase() === item.text.trim().toLowerCase())
+	);
+
+	return {
+		commonData: {
+			functional_requirements: commonFunctional,
+			nonfunctional_requirements: commonNonFunctional
+		},
+		llmOnlyData: {
+			functional_requirements: llmOnlyFunctional,
+			nonfunctional_requirements: llmOnlyNonFunctional
+		},
+		hybridOnlyData: {
+			functional_requirements: hybridOnlyFunctional,
+			nonfunctional_requirements: hybridOnlyNonFunctional
+		}
 	};
 }

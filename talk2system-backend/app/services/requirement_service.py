@@ -54,6 +54,10 @@ class RequirementService:
         grouped_hybrid = group_requirements(hybrid_results) if hybrid_results else None
         grouped_llm = group_requirements(llm_results) if llm_results else None
 
+        # Keep grouped data deterministic and easier to review in UI/DB.
+        grouped_hybrid = sort_grouped_requirements(grouped_hybrid) if grouped_hybrid else None
+        grouped_llm = sort_grouped_requirements(grouped_llm) if grouped_llm else None
+
         if not grouped_hybrid and not grouped_llm:
             raise ValueError("No requirements could be extracted from the selected engine")
 
@@ -510,6 +514,33 @@ def group_requirements(results):
     grouped['features'] = list(grouped['features'])
     return grouped
 
+
+def sort_grouped_requirements(grouped):
+    if not grouped:
+        return grouped
+
+    grouped_copy = copy.deepcopy(grouped)
+
+    grouped_copy["actors"] = sorted(
+        grouped_copy.get("actors", []),
+        key=lambda value: str(value).strip().lower()
+    )
+    grouped_copy["features"] = sorted(
+        grouped_copy.get("features", []),
+        key=lambda value: str(value).strip().lower()
+    )
+
+    grouped_copy["functional_requirements"] = sorted(
+        grouped_copy.get("functional_requirements", []),
+        key=lambda item: str(item.get("text", "")).strip().lower()
+    )
+    grouped_copy["nonfunctional_requirements"] = sorted(
+        grouped_copy.get("nonfunctional_requirements", []),
+        key=lambda item: str(item.get("text", "")).strip().lower()
+    )
+
+    return grouped_copy
+
 def get_common_requirments(hybrid_req, llm_req):
     if not hybrid_req or not llm_req:
         return {
@@ -566,12 +597,12 @@ def adapt_llm_output(llm_results):
         adapted.append({
             "sentence_id": None,
             "speaker": None,
-            "cleaned_sentence": item["text"],
-            "requirement_type": item["type"],
-            "nfr_category": item["category"],
+            "cleaned_sentence": item.get("text"),
+            "requirement_type": item.get("type"),
+            "nfr_category": item.get("category"),
             "structure": {
                 "actor": actor,
-                "action": item['feature'],
+                "action": item.get('feature'),
                 "object": None,
                 "is_negative": None
             },

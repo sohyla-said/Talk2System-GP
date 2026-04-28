@@ -163,3 +163,134 @@ Speaker A: Admins should oversee refund disputes in case of conflicts.
 Speaker E: We also need role-based access control. The system must restrict actions based on user roles.
 Speaker B: Finally, all users should be able to update their profiles and reset passwords.
 Speaker A: Great, I think this covers a complex interaction scenario between all actors.
+
+
+                              Simple Clinic Appointment System
+
+Mona: Okay, are we recording? I think yes. Good morning everyone, today we’ll gather requirements for the clinic appointment system.
+Sara: One second, the AC remote is missing again.
+Dr. Kareem: Forget the remote, start please. Patients already complained about delays this week.
+Mona: Alright. So what problem are we solving first?
+Dr. Kareem: Chaos. Mainly chaos. Patients call, WhatsApp, walk in, sometimes all three.
+Omar: So booking management?
+Dr. Kareem: Booking, yes, but not only booking. Also no-shows. Also double bookings. Also I need reports.
+Nadia: Reports for finance too, not only appointments.
+Sara: And reminders. If patients forget, they blame me.
+Mona: Let’s start with users. Who uses the system?
+Sara: Reception.
+Dr. Kareem: Doctors.
+Nadia: Finance.
+Omar: Patients directly?
+Dr. Kareem: Maybe later. Not sure. If patients book themselves, they choose random times.
+Sara: Yes, they’ll choose lunch break.
+laughter
+Mona: So maybe patient portal in phase two?
+Dr. Kareem: Or phase one if easy.
+Omar: “Easy” depends on definition.
+Youssef: Tea or coffee anyone?
+Nadia: Coffee please, no sugar.
+Mona: Core feature: creating appointments. How should that work?
+Sara: Search patient name, choose doctor, choose time, save.
+Mona: Existing patients only?
+Sara: No, sometimes new patient while calling.
+Dr. Kareem: Need quick registration. Name and phone enough initially.
+Nadia: But later for invoices we need national ID maybe.
+Omar: Mandatory at booking or optional?
+Everyone: …depends.
+Mona: Depends on what?
+Nadia: Insurance patients need more data.
+Dr. Kareem: Cash patients less data.
+Sara: Some patients refuse giving ID on phone.
+Mona: Noted. Conditional fields maybe.
+Omar: Can two doctors share same room?
+Dr. Kareem: Sometimes yes.
+Sara: Sometimes no.
+Omar: That helps a lot.
+Mona: Explain.
+Dr. Kareem: We have three rooms. Usually I use Room 1. Dentist comes Wednesdays and uses Room 2. Sometimes if AC broken, we move.
+Youssef: Room 2 AC still leaking by the way.
+Dr. Kareem: Please call maintenance after meeting.
+Mona: So appointments may need room assignment?
+Sara: Maybe hidden from patients but visible internally.
+Mona: Cancellation process?
+Sara: Need one-click cancel.
+Nadia: But store reason.
+Omar: Required reason?
+Sara: If I’m busy, no.
+Nadia: Then at least optional.
+Mona: Rescheduling?
+Dr. Kareem: Very common. Must be easy.
+Sara: Drag and drop calendar maybe?
+Omar: Possible, but web or desktop?
+Dr. Kareem: Whatever works on my iPad.
+Mona: So browser responsive maybe.
+Nadia: Also deposits.
+Mona: Deposits?
+Nadia: Some procedures require advance payment.
+Dr. Kareem: Only some procedures.
+Omar: Which procedures?
+Dr. Kareem: We’ll send list later.
+Mona: Reminder notifications?
+Sara: SMS preferred.
+Nadia: SMS costs money.
+Youssef: WhatsApp cheaper maybe.
+Omar: WhatsApp API has rules.
+Dr. Kareem: Use whatever sends reliably.
+Mona: Timing of reminders?
+Sara: Day before.
+Dr. Kareem: Also same day morning.
+Nadia: Too many messages annoy people.
+Mona: So configurable reminders.
+phone rings loudly
+Sara: Sorry, patient asking if laser session hurts.
+Mona: We can pause.
+Dr. Kareem: No continue.
+Omar: Need doctor schedules fixed weekly or custom?
+Dr. Kareem: Mostly fixed, but sometimes conferences, surgeries, emergencies.
+Sara: Last-minute changes happen a lot.
+Omar: Need leave / blocked slots then.
+Mona: Walk-ins?
+Sara: Daily.
+Dr. Kareem: Walk-ins should be inserted between appointments if possible.
+Omar: Auto-suggest gaps?
+Sara: Nice if system smart enough.
+Nadia: Need invoices printed.
+Omar: Separate module?
+Nadia: Maybe simple first. Just amount paid, remaining balance.
+Mona: Per appointment linked billing noted.
+Youssef: Printer jams when using Arabic text sometimes.
+Omar: Useful note actually.
+Mona: Language support?
+Sara: Arabic first.
+Dr. Kareem: English labels okay too.
+Nadia: Numbers should be clear, last system mixed formats.
+Mona: Security/access levels?
+Dr. Kareem: Reception should not see everything.
+Sara: Like what everything?
+Dr. Kareem: Financial reports maybe.
+Nadia: Definitely not finance data.
+Omar: Can reception edit appointments though?
+Everyone: Yes.
+Mona: Can doctors edit appointments?
+Dr. Kareem: Maybe only their own schedule.
+Omar: Audit logs needed? Who changed what?
+Nadia: Yes.
+Sara: Unless it slows me down.
+Mona: Performance expectations?
+Sara: If page loads more than two seconds I’ll complain.
+Omar: Honest requirement.
+Mona: Backups/data loss concerns?
+Dr. Kareem: Yes. Old laptop died once. Never again.
+Nadia: Can reports show busiest doctor monthly?
+Dr. Kareem: And no-show percentage.
+Sara: And who books most from Instagram campaign maybe.
+Omar: Marketing source tracking too?
+Dr. Kareem: Nice to have.
+Mona: Final question: deadline?
+Dr. Kareem: Before summer.
+Omar: Which year?
+laughter
+Mona: Okay, we’ll summarize and follow up with unclear points: deposits list, patient self-booking, room logic, notifications channel, billing depth, reports, permissions.
+Sara: Also dark mode please.
+Omar: That’s the clearest requirement so far.
+Meeting ends.

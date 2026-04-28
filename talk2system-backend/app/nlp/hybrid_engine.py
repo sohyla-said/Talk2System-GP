@@ -130,14 +130,14 @@ def hybrid_inference(transcript: str) -> List[dict]:
 
         # Step 3B: If final decision is NFR → compare category confidence
         if final_type == "NFR":
-            rule_cat_conf = rule_result.get("quality_category_confidence", 0) or 0
+            rule_cat_conf = rule_result.get("quality_category_confidence", 0) or 0 if rule_result else 0
             ml_cat_conf = round(float(ml_nfr_conf), 2) if ml_nfr_conf is not None else 0
 
             if ml_cat_conf > rule_cat_conf:
                 final_nfr_cat = ml_nfr_category
                 final_conf = ml_cat_conf
             else:
-                final_nfr_cat = rule_result.get("quality_category")
+                final_nfr_cat = rule_result.get("quality_category") if rule_result else None
                 final_conf = rule_cat_conf
 
         result = {
@@ -160,7 +160,7 @@ def hybrid_inference(transcript: str) -> List[dict]:
                 "ml_nfr_confidence": ml_cat_conf if final_type == "NFR" else None,
                 "rule_prediction_type": rule_result["req_type"] if rule_result else None,
                 "rule_confidence": round(rule_result["req_type_confidence"], 3) if rule_result else None,
-                "rule_nfr_prediction": rule_result.get("quality_category") if final_type == "NFR" else None,
+                "rule_nfr_prediction": rule_result.get("quality_category") if final_type == "NFR" and rule_result else None,
                 "rule_nfr_confidence": rule_cat_conf if final_type == "NFR" else None
             }
         }
