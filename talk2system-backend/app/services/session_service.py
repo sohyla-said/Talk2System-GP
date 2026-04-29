@@ -121,6 +121,13 @@ class SessionService:
             .order_by(SessionModel.created_at.desc())
             .all()
         )
+    @staticmethod
+    def get_session_membership(db: Session, session_id: int, user_id: int):
+        return (
+            db.query(SessionMembership)
+            .filter_by(session_id=session_id, user_id=user_id)
+            .first()
+        )
 
     @staticmethod
     def delete_session(db: Session, session_id: int):
