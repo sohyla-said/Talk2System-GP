@@ -182,10 +182,21 @@ _SPEAKER_TAG_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Matches real-name speaker labels at the start of a line, e.g.:
+#   "Dr. Kareem:", "Nadia:", "Omar:", "Everyone:"
+# Requires at least one capital letter to avoid matching mid-sentence phrases.
+_REALNAME_TAG_RE = re.compile(
+    r'(?:^|\n)\s*((?:(?:Dr|Mr|Ms|Mrs|Prof)\.?\s+)?[A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*){0,2})\s*:'
+)
+
 
 def _has_speaker_tags(text: str) -> bool:
-    """Return True if the text contains at least one 'Speaker X:' label."""
-    return bool(_SPEAKER_TAG_RE.search(text))
+    """Return True if the text contains at least one speaker label.
+
+    Accepts both the legacy 'Speaker X:' format and real-name formats
+    such as 'Dr. Kareem:', 'Nadia:', 'Omar:', 'Everyone:', etc.
+    """
+    return bool(_SPEAKER_TAG_RE.search(text) or _REALNAME_TAG_RE.search(text))
 
 
 def parse_transcript_text(raw_text: str) -> list[dict]:
@@ -207,27 +218,35 @@ def parse_transcript_text(raw_text: str) -> list[dict]:
             }
         ]
 
-    # ── Mode A: split on every "Speaker X:" occurrence ───────────────────
+    # ── Mode A: split on every speaker label occurrence ──────────────────
     # Replace newlines with spaces first so inline and newline formats both work.
     normalised = raw_text.replace("\n", " ").replace("\r", " ")
 
-    # Split pattern: "Speaker <label>:"
-    split_re = re.compile(r'Speaker\s+([A-Za-z0-9_]+)\s*:', re.IGNORECASE)
-    parts = split_re.split(normalised)
-    # split() with one capture group → ['pre', label1, text1, label2, text2, …]
+    # Unified split pattern: matches both "Speaker X:" and real names like
+    # "Dr. Kareem:", "Nadia:", "Everyone:", etc.
+    split_re = re.compile(
+        r'(?:Speaker\s+([A-Za-z0-9_]+)'
+        r'|((?:(?:Dr|Mr|Ms|Mrs|Prof)\.?\s+)?'
+        r'[A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*){0,2}))'
+        r'\s*:',
+        re.IGNORECASE,
+    )
+
+    matches = list(split_re.finditer(normalised))
+    if not matches:
+        return [{"speaker": None, "text": normalised.strip(), "start": None, "end": None, "chunk": 0}]
 
     segments = []
-    it = iter(parts)
-    next(it, None)  # discard any text before the first speaker tag
-
-    for label, text_chunk in zip(it, it):
-        label = label.strip()
-        text_chunk = text_chunk.strip()
+    for i, match in enumerate(matches):
+        label = (match.group(1) or match.group(2) or "").strip()
+        text_start = match.end()
+        text_end = matches[i + 1].start() if i + 1 < len(matches) else len(normalised)
+        text_chunk = normalised[text_start:text_end].strip()
         if not text_chunk:
             continue
         segments.append(
             {
-                "speaker": label,   # e.g. "A", "B", "1"
+                "speaker": label,
                 "text": text_chunk,
                 "start": None,
                 "end": None,

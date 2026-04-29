@@ -183,7 +183,6 @@ Nadia: Finance.
 Omar: Patients directly?
 Dr. Kareem: Maybe later. Not sure. If patients book themselves, they choose random times.
 Sara: Yes, they’ll choose lunch break.
-laughter
 Mona: So maybe patient portal in phase two?
 Dr. Kareem: Or phase one if easy.
 Omar: “Easy” depends on definition.
@@ -241,7 +240,6 @@ Sara: Day before.
 Dr. Kareem: Also same day morning.
 Nadia: Too many messages annoy people.
 Mona: So configurable reminders.
-phone rings loudly
 Sara: Sorry, patient asking if laser session hurts.
 Mona: We can pause.
 Dr. Kareem: No continue.
@@ -289,8 +287,6 @@ Dr. Kareem: Nice to have.
 Mona: Final question: deadline?
 Dr. Kareem: Before summer.
 Omar: Which year?
-laughter
 Mona: Okay, we’ll summarize and follow up with unclear points: deposits list, patient self-booking, room logic, notifications channel, billing depth, reports, permissions.
 Sara: Also dark mode please.
 Omar: That’s the clearest requirement so far.
-Meeting ends.
