@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import TranscriptApprovalModal from "../../components/modals/TranscriptApprovalModal";
@@ -72,6 +71,10 @@ export default function TranscriptPage() {
         }
         if (data.title) {
           setSessionTitle(data.title);
+        }
+        // Restore approval state from backend so it survives page navigation
+        if (data.approval_status === "approved") {
+          setApproved(true);
         }
 
         if (!data.transcript || !data.transcript.length) {
@@ -320,14 +323,32 @@ export default function TranscriptPage() {
 
   // approved is still false when this runs, so pass pending directly
   // to executeNavigation instead of re-calling handleGenerate
-  const handleApprove = () => {
-    setApproved(true);
-    setShowModal(false);
+  const handleApprove = async () => {
+    try {
+      const res = await fetch(
+        `http://localhost:8000/api/sessions/${sessionId}/transcript/approve`,
+        {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${getToken()}` },
+        }
+      );
 
-    if (pendingNavigation) {
-      const pending = pendingNavigation;
-      setPendingNavigation(null);
-      executeNavigation(pending);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail ?? "Failed to approve transcript");
+      }
+
+      setApproved(true);
+      setShowModal(false);
+
+      if (pendingNavigation) {
+        const pending = pendingNavigation;
+        setPendingNavigation(null);
+        executeNavigation(pending);
+      }
+    } catch (error) {
+      console.error("Approval error:", error);
+      alert(error.message);
     }
   };
 
@@ -533,7 +554,7 @@ export default function TranscriptPage() {
                 </button>
 
                 <button
-                  onClick={() => setApproved(true)}
+                  onClick={handleApprove}
                   disabled={approved}
                   className={`flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold text-white shadow-soft transition-colors
                     ${approved ? "bg-green-600 cursor-default" : "bg-primary hover:bg-primary/90"}`}

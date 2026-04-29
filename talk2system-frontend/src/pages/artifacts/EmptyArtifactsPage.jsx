@@ -23,8 +23,7 @@ export default function EmptyArtifacts({ projectId, sessionId, isSession }) {
       </h2>
 
       <p className="text-gray-500 max-w-md mb-6">
-        You haven’t generated any results yet. Start by generating UML diagrams,
-        SRS documents, or summaries from your requirements.
+        You haven’t generated any Artifacts yet. Start by Generating from your Requirements
       </p>
 
       <button

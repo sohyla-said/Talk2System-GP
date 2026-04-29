@@ -13,6 +13,7 @@ class Session(Base):
     status = Column(String, default="processing")
     audio_file_path = Column(String, nullable=True)
     transcript_text = Column(Text, nullable=True)
+    transcript_approval_status = Column(String, default="pending", nullable=False, server_default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
    
  #relationships

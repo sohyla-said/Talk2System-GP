@@ -1,5 +1,3 @@
-
-
 from pydantic import BaseModel
 
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
@@ -20,6 +18,9 @@ from app.services.transcription_service import (
 )
 from app.models.project import Project
 from app.models.session_membership import SessionMembership
+from app.models.user import User
+from app.dependencies.auth import get_current_user  
+from app.services.audit_service import log_action
 from typing import Optional, List
 
 router = APIRouter()
@@ -232,14 +233,16 @@ def get_transcript(session_id: int, db: Session = Depends(get_db)):
             "session_id": session_id,
             "project_id": session.project_id,
             "title": session.title,
-            "transcript": []
+            "transcript": [],
+            "approval_status": session.transcript_approval_status or "pending",
         }
 
     return {
         "session_id": session_id,
         "project_id": session.project_id,
         "title": session.title,
-        "transcript": transcript
+        "transcript": transcript,
+        "approval_status": session.transcript_approval_status or "pending",
     }
 
 
@@ -300,3 +303,44 @@ def update_segment(
         raise HTTPException(status_code=404, detail="Segment not found")
  
     return {"ok": True, "segment_index": payload.segment_index}
+
+
+# ---------------------------------------------------------------------------
+# APPROVE TRANSCRIPT
+# ---------------------------------------------------------------------------
+
+@router.patch("/sessions/{session_id}/transcript/approve")
+def approve_transcript(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session.transcript_approval_status == "approved":
+        raise HTTPException(status_code=400, detail="Transcript is already approved")
+
+    try:
+        session.transcript_approval_status = "approved"
+        db.commit()
+        db.refresh(session)
+
+        log_action(
+            db,
+            current_user.id,
+            "approved_transcript",
+            "session",
+            project_id=session.project_id,
+            entity_id=session_id,
+        )
+
+        return {
+            "session_id": session_id,
+            "project_id": session.project_id,
+            "approval_status": session.transcript_approval_status,
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
