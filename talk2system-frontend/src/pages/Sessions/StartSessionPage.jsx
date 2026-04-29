@@ -689,6 +689,208 @@
 //     </div>
 //   );
 // }
+
+
+
+///////////final shrouk code/////
+// import { useNavigate, useParams } from "react-router-dom";
+// import { useEffect, useState } from "react";
+// import { fetchMembers } from "../../api/projectApi";
+
+// export default function StartSessionPage() {
+//   const navigate = useNavigate();
+//   const { id: projectId } = useParams();
+
+//   const [title, setTitle] = useState("");
+//   const [members, setMembers] = useState([]);
+//   const [selectedIds, setSelectedIds] = useState([]);
+//   const [pmId, setPmId] = useState(null);
+//   const [loading, setLoading] = useState(false);
+
+//   useEffect(() => {
+//     const loadMembers = async () => {
+//       try {
+//         setLoading(true);
+//         const data = await fetchMembers(projectId);
+//         setMembers(data);
+
+//         const manager = data.find((m) => m.role === "project_manager");
+//         if (manager) {
+//           const managerId = manager.user_id ?? manager.id;
+//           setPmId(managerId);
+//           // PM is tracked but NOT added to selectedIds (backend handles it)
+//           setSelectedIds([]);
+//         }
+//       } catch (err) {
+//         console.error(err);
+//       } finally {
+//         setLoading(false);
+//       }
+//     };
+
+//     loadMembers();
+//   }, [projectId]);
+
+//   const getMemberId = (m) => m.user_id ?? m.id;
+
+//   const toggleMember = (m) => {
+//     const id = getMemberId(m);
+//     setSelectedIds((prev) =>
+//       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+//     );
+//   };
+
+//   const handleSubmit = (e) => {
+//     e.preventDefault();
+//     if (!title.trim()) return;
+
+//     navigate(`/projects/${projectId}/recording`, {
+//       state: {
+//         sessionTitle: title,
+//         participants: selectedIds, // backend always adds PM separately
+//       },
+//     });
+//   };
+
+//   const nonPmMembers = members.filter((m) => getMemberId(m) !== pmId);
+
+//   return (
+//     <div className="min-h-screen bg-background-light dark:bg-background-dark font-display">
+//       <div className="max-w-[960px] mx-auto px-4 sm:px-8 py-6">
+
+//         {/* Back */}
+//         <div className="mb-6">
+//           <button
+//             onClick={() => navigate(`/projects/${projectId}`)}
+//             className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-primary"
+//           >
+//             <span className="material-symbols-outlined">arrow_back</span>
+//             Back to Project
+//           </button>
+//         </div>
+
+//         {/* Header */}
+//         <div className="mb-6">
+//           <h1 className="text-3xl font-black text-[#100d1c] dark:text-white">
+//             Start Meeting Session
+//           </h1>
+//           <p className="text-gray-500 dark:text-gray-400 mt-1">
+//             Add session title and select additional participants
+//           </p>
+//         </div>
+
+//         <div className="bg-white dark:bg-background-dark/50 border border-gray-200 dark:border-white/5 rounded-xl shadow">
+//           <div className="p-6 md:p-8">
+
+//             {loading ? (
+//               <p className="text-gray-500">Loading members...</p>
+//             ) : (
+//               <form onSubmit={handleSubmit} className="space-y-6">
+
+//                 {/* Session Title */}
+//                 <div>
+//                   <label className="block text-sm font-bold mb-1">
+//                     Session Title
+//                   </label>
+//                   <input
+//                     type="text"
+//                     value={title}
+//                     onChange={(e) => setTitle(e.target.value)}
+//                     required
+//                     placeholder="e.g. Sprint Planning – Week 3"
+//                     className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-background-light dark:bg-background-dark/80 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+//                   />
+//                 </div>
+
+//                 {/* Participants */}
+//                 <div>
+//                   <label className="block text-sm font-bold mb-1">
+//                     Participants
+//                   </label>
+//                   <p className="text-xs text-gray-400 mb-3">
+//                     The Project Manager is always included automatically. Select any additional participants below.
+//                   </p>
+
+//                   <div className="space-y-2 rounded-lg border border-gray-200 dark:border-white/10 divide-y divide-gray-100 dark:divide-white/5 overflow-hidden">
+//                     {nonPmMembers.map((m) => {
+//                       const id = getMemberId(m);
+//                       const isChecked = selectedIds.includes(id);
+
+//                       return (
+//                         <label
+//                           key={id}
+//                           className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+//                         >
+//                           <input
+//                             type="checkbox"
+//                             checked={isChecked}
+//                             onChange={() => toggleMember(m)}
+//                             className="accent-primary w-4 h-4 rounded flex-shrink-0"
+//                           />
+
+//                           {/* Avatar */}
+//                           <div
+//                             className="w-8 h-8 rounded-full bg-center bg-cover flex-shrink-0"
+//                             style={{
+//                               backgroundImage: `url(https://ui-avatars.com/api/?name=${encodeURIComponent(
+//                                 m.full_name || m.email || "U"
+//                               )}&background=random&color=fff&size=32)`,
+//                             }}
+//                           />
+
+//                           <div className="flex-1 min-w-0">
+//                             <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+//                               {m.full_name || "Unknown"}
+//                             </p>
+//                             <p className="text-xs text-gray-400 truncate">
+//                               {m.email}
+//                             </p>
+//                           </div>
+//                         </label>
+//                       );
+//                     })}
+
+//                     {nonPmMembers.length === 0 && (
+//                       <p className="px-4 py-6 text-sm text-gray-400 text-center">
+//                         No other members in this project.
+//                       </p>
+//                     )}
+//                   </div>
+
+//                   <p className="text-xs text-gray-400 mt-2">
+//                     {selectedIds.length} additional participant{selectedIds.length !== 1 ? "s" : ""} selected
+//                     — Project Manager always included
+//                   </p>
+//                 </div>
+
+//                 {/* Action Buttons */}
+//                 <div className="flex gap-4 pt-2">
+//                   <button
+//                     type="submit"
+//                     disabled={!title.trim()}
+//                     className="px-6 py-2.5 rounded-lg text-white font-bold bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition"
+//                   >
+//                     Start & Record
+//                   </button>
+
+//                   <button
+//                     type="button"
+//                     onClick={() => navigate(`/projects/${projectId}`)}
+//                     className="px-6 py-2.5 rounded-lg font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition"
+//                   >
+//                     Cancel
+//                   </button>
+//                 </div>
+
+//               </form>
+//             )}
+//           </div>
+//         </div>
+//       </div>
+//     </div>
+//   );
+// }
+
 import { useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { fetchMembers } from "../../api/projectApi";
@@ -743,7 +945,8 @@ export default function StartSessionPage() {
     navigate(`/projects/${projectId}/recording`, {
       state: {
         sessionTitle: title,
-        participants: selectedIds, // backend always adds PM separately
+        participants: selectedIds, // non-PM participants; backend adds PM from project membership
+        pmId,                      // forwarded so RecordingSessionPage can pass it onward if needed
       },
     });
   };
