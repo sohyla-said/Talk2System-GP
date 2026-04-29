@@ -1,9 +1,42 @@
-import React from "react";
+// import React from "react";
+// import { useNavigate, useParams } from "react-router-dom";
+
+// export default function ProjectResults() {
+//   const navigate = useNavigate();
+//   const { id: projectId } = useParams(); // 🔥 dynamic project
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import EmptyArtifacts from "../../pages/artifacts/EmptyArtifactsPage";
+import { getProjectArtifacts } from "../../api/artifactsAPI";
 
 export default function ProjectResults() {
   const navigate = useNavigate();
-  const { id: projectId } = useParams(); // 🔥 dynamic project
+  const { id: projectId } = useParams();
+
+  const [loading, setLoading] = useState(true);
+  const [hasArtifacts, setHasArtifacts] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await getProjectArtifacts(projectId);
+        setHasArtifacts(data.length > 0);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [projectId]);
+
+  if (loading) return <p className="p-8 text-gray-400">Loading...</p>;
+
+  // 🔥 KEY CHANGE
+  if (!hasArtifacts) {
+    return <EmptyArtifacts projectId={projectId} isSession={false} />;
+  }
 
   return (
     <div className="font-display bg-background-light dark:bg-background-dark min-h-screen flex flex-col items-center py-8 px-4 lg:px-10">

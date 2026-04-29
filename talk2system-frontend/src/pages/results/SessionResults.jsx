@@ -1,9 +1,40 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+import EmptyArtifacts from "../../pages/artifacts/EmptyArtifactsPage";
+import { getSessionArtifacts } from "../../api/artifactsAPI";
 import { useNavigate, useParams } from "react-router-dom";
 
 export default function SessionResults() {
   const navigate = useNavigate();
   const { sessionId, projectId } = useParams();
+  const [loading, setLoading] = useState(true);
+  const [hasArtifacts, setHasArtifacts] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await getSessionArtifacts(projectId, sessionId);
+        setHasArtifacts(data.length > 0);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [projectId, sessionId]);
+
+  if (loading) return <p className="p-8 text-gray-400">Loading...</p>;
+
+  if (!hasArtifacts) {
+    return (
+      <EmptyArtifacts
+        projectId={projectId}
+        sessionId={sessionId}
+        isSession={true}
+      />
+    );
+  }
 
   return (
     <div className="font-display bg-background-light dark:bg-background-dark min-h-screen flex flex-col items-center py-8 px-4 lg:px-10">
