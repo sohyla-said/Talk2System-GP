@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { useEffect } from "react";
 import RequirementsApprovalModal from "../../components/modals/RequirementsApprovalModal";
 import RequirementsEditModal from "../../components/modals/RequirementsEditModal";
 import { getToken } from "../../api/authApi";
@@ -53,11 +52,12 @@ export default function RequirementsSessionView() {
     };
   };
 
+  const latestVersionIdRef = useRef(null);
 
   useEffect(() => {
-    if (projectId || !sessionId) return;
+    if (!sessionId) return;
     fetchSessionMeta();
-  }, [projectId, sessionId]);
+  }, [sessionId]);
 
   useEffect(() => {
     if (!projectId || !sessionId) return;
@@ -73,13 +73,50 @@ export default function RequirementsSessionView() {
     }
   }, [initialData, projectId, sessionId]);
 
+  // useEffect(() => {
+  //   if (versions.length > 0) {
+  //     const latest = versions[0]; // already sorted DESC
+  //     setSelectedVersionId(latest.id);
+  //     fetchRequirementById(latest.id);
+  //   }
+  // }, [versions]);
+
+  // poll for versions changes to support multi-user live sync
   useEffect(() => {
-    if (versions.length > 0) {
-      const latest = versions[0]; // already sorted DESC
-      setSelectedVersionId(latest.id);
-      fetchRequirementById(latest.id);
-    }
-  }, [versions]);
+    if (!projectId || !sessionId) return;
+
+    const pollLatestVersion = async () => {
+      try{
+        const response = await fetch(
+          `http://localhost:8000/api/projects/${projectId}/session/${sessionId}/requirements/versions`,
+          {
+            headers: getAuthHeaders()
+          }
+        );
+        const data = await response.json();
+        if (!response.ok){
+          throw new Error(data.detail || "Failed to load versions");
+        }
+        setVersions(data);
+
+        if (Array.isArray(data) && data.length > 0){
+          const latest = data[0]
+
+          if (latestVersionIdRef.current !== latest.id){
+            latestVersionIdRef.current = latest.id;
+            setSelectedVersionId(latest.id);
+            fetchRequirementById(latest.id);
+          }
+        }
+      }catch (err) {
+        console.error("Polling failed:", err);
+      }
+    };
+    pollLatestVersion();
+    const intervalId = setInterval(pollLatestVersion, 7000);
+
+    return () => clearInterval(intervalId);
+  }, [projectId, sessionId]);
 
 
 // if project id is missed but session id exists, call an endpoint to fetch project id
@@ -92,7 +129,8 @@ export default function RequirementsSessionView() {
         if (!response.ok) {
          throw new Error(data.detail || "Failed to load session data");
        }
-      setProjectId(data.project_id ?? null);
+       // set projectId only if it's missing
+      setProjectId((prev) => prev ?? data.project_id ?? null);
       setSessionName(data.title ?? null);
     } catch (err) {
       console.error(err);
@@ -660,8 +698,9 @@ const handleApprove = async () => {
                           e.stopPropagation();
                           toggleSelectionMode("functional");
                         }}
-                        className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
                       >
+                        <span className="material-symbols-outlined text-sm leading-none">delete</span>
                         {selectionMode.functional ? "Cancel" : "Select"}
                       </button>
                       {selectionMode.functional && (
@@ -744,8 +783,9 @@ const handleApprove = async () => {
                           e.stopPropagation();
                           toggleSelectionMode("nonFunctional");
                         }}
-                        className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
                       >
+                        <span className="material-symbols-outlined text-sm leading-none">delete</span>
                         {selectionMode.nonFunctional ? "Cancel" : "Select"}
                       </button>
                       {selectionMode.nonFunctional && (
@@ -828,8 +868,9 @@ const handleApprove = async () => {
                           e.stopPropagation();
                           toggleSelectionMode("actors");
                         }}
-                        className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
                       >
+                        <span className="material-symbols-outlined text-sm leading-none">delete</span>
                         {selectionMode.actors ? "Cancel" : "Select"}
                       </button>
                       {selectionMode.actors && (
@@ -902,8 +943,9 @@ const handleApprove = async () => {
                           e.stopPropagation();
                           toggleSelectionMode("features");
                         }}
-                        className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
                       >
+                        <span className="material-symbols-outlined text-sm leading-none">delete</span>
                         {selectionMode.features ? "Cancel" : "Select"}
                       </button>
                       {selectionMode.features && (

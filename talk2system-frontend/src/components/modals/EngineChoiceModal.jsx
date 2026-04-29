@@ -35,7 +35,7 @@ export default function EngineChoiceModal({ open, onClose, onConfirm, isLoading 
       id: "hybrid",
       icon: "hub",
       label: "Hybrid Engine",
-      sublabel: "Rule-based + LLM fusion",
+      sublabel: "Rule-based + ML fusion",
       desc: "Combines structured rule extraction with AI reasoning for precise, traceable requirements.",
       accent: "from-[#0ea5e9] to-[#38bdf8]",
       ring: "ring-[#0ea5e9]",

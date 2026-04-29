@@ -103,9 +103,13 @@ class RequirementService:
             db.rollback()
             raise
 
-        common_reqs = get_common_requirments(grouped_hybrid, grouped_llm)
-        diff_hybrid = get_reqs_not_in_common(grouped_hybrid, common_reqs)
-        diff_llm = get_reqs_not_in_common(grouped_llm, common_reqs)
+        common_reqs = None
+        diff_hybrid = None
+        diff_llm = None
+        if grouped_hybrid and grouped_llm:
+            common_reqs = get_common_requirments(grouped_hybrid, grouped_llm)
+            diff_hybrid = get_reqs_not_in_common(grouped_hybrid, common_reqs)
+            diff_llm = get_reqs_not_in_common(grouped_llm, common_reqs)
 
         return {
             "project_id": project_id,
@@ -137,6 +141,15 @@ class RequirementService:
         src_run = db.query(RequirementRun).filter(RequirementRun.id == src_run_id, RequirementRun.project_id == project_id).first()
         if not src_run:
             raise ValueError("Source run not found")
+        
+        # 4) check if an existing requirement for this session is generated 
+        # to incerement the version of the newely extracted requirement.
+        session_req = db.query(SessionRequirement).filter(SessionRequirement.session_id == session_id)\
+            .order_by(SessionRequirement.created_at.desc()).first()
+        
+        req_version = 1
+        if session_req:
+            req_version = session_req.version + 1
     
         
         # 5) create the requirement and save it
@@ -144,6 +157,7 @@ class RequirementService:
             project_id = project_id,
             session_id = session_id,
             requirements_json = req_json,
+            version = req_version,
             src_run_id = src_run_id
         )
 

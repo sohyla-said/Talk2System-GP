@@ -126,7 +126,7 @@ const TranscriptInputPage = () => {
           },
           body: JSON.stringify({
             transcript: transcript,
-            engine,
+            engine: engine,
           }),
         }
       );
@@ -154,21 +154,68 @@ const TranscriptInputPage = () => {
           },
         });
       } else if (engine === "hybrid") {
-        // TODO: navigate to hybrid-only results page
-        navigate(`/transcript/${sessionId}/requirements/hybrid`, {
+        try{
+          const response = await fetch(
+          `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/choose-requirements`,
+          {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${getToken()}`
+              },
+              body: JSON.stringify({
+                requirements_json: requirementsData.Hybrid_data,
+                src_run_id: requirementsData.Hybrid_run_id
+              })
+            }
+          );
+          if (!response.ok) {
+            throw new Error(data.detail || "Failed to save preferred requirements");
+          }
+
+        }catch (error) {
+          console.error(error);
+          alert(error.message);
+        }
+        navigate(`/transcript/${sessionId}/requirements`, {
           state: {
             projectId,
-            hybridRunId: requirementsData.Hybrid_run_id,
-            hybridData: requirementsData.Hybrid_data,
+            requirementId: requirementsData.Hybrid_run_id,
+            groupedData: requirementsData.Hybrid_data,
+            preferredType: 'hybrid'
           },
         });
       } else if (engine === "llm") {
-        // TODO: navigate to llm-only results page
-        navigate(`/transcript/${sessionId}/requirements/llm`, {
+        try{
+          const response = await fetch(
+          `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/choose-requirements`,
+          {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${getToken()}`
+              },
+              body: JSON.stringify({
+                requirements_json: requirementsData.LLM_data,
+                src_run_id: requirementsData.LLM_run_id
+              })
+            }
+          );
+          if (!response.ok) {
+            throw new Error(data.detail || "Failed to save preferred requirements");
+          }
+
+        }catch (error) {
+          console.error(error);
+          alert(error.message);
+        }
+
+        navigate(`/transcript/${sessionId}/requirements`, {
           state: {
             projectId,
-            llmRunId: requirementsData.LLM_run_id,
-            llmData: requirementsData.LLM_data,
+            requirementId: requirementsData.LLM_run_id,
+            groupedData: requirementsData.LLM_data,
+            preferredType: 'llm'
           },
         });
       }

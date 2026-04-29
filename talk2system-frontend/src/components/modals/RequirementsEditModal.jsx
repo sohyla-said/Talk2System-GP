@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 export default function RequirementsEditModal({ open, onClose, onSave, sectionData, sectionType }) {
   const [editedRequirements, setEditedRequirements] = useState([]);
   const [sectionTitle, setSectionTitle] = useState('');
+  const addRequirementAnchorRef = useRef(null);
 
   useEffect(() => {
     if (sectionData && open) {
@@ -50,6 +51,10 @@ export default function RequirementsEditModal({ open, onClose, onSave, sectionDa
     onClose();
   };
 
+  const handleScrollToAdd = () => {
+    addRequirementAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
   if (!open) return null;
 
   return (
@@ -66,7 +71,7 @@ export default function RequirementsEditModal({ open, onClose, onSave, sectionDa
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-white/10">
           <div className="flex items-center gap-3">
             <span className="material-symbols-outlined text-primary text-2xl">edit_note</span>
-            <h2 className="text-xl font-bold text-text-dark dark:text-text-light">Edit {sectionTitle}</h2>
+            <h2 className="text-xl font-bold text-text-dark dark:text-text-light">Edit / Add {sectionTitle}</h2>
           </div>
           <button
             onClick={handleCancel}
@@ -78,6 +83,15 @@ export default function RequirementsEditModal({ open, onClose, onSave, sectionDa
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <button
+            type="button"
+            onClick={handleScrollToAdd}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-dashed border-primary/40 bg-primary/5 px-4 py-3 text-sm font-semibold text-primary hover:bg-primary/10 transition-colors"
+          >
+            <span className="material-symbols-outlined text-lg">south</span>
+            Scroll down to add {sectionTitle}
+          </button>
+          
           {editedRequirements.map((req, index) => (
             <div 
               key={index} 
@@ -152,11 +166,12 @@ export default function RequirementsEditModal({ open, onClose, onSave, sectionDa
 
           {/* Add New Button */}
           <button
+            ref={addRequirementAnchorRef}
             onClick={handleAddRequirement}
             className="w-full p-4 rounded-lg border-2 border-dashed border-gray-300 dark:border-white/20 text-gray-500 dark:text-gray-400 hover:border-primary hover:text-primary dark:hover:border-primary dark:hover:text-primary transition-colors flex items-center justify-center gap-2"
           >
             <span className="material-symbols-outlined">add_circle</span>
-            <span className="font-medium">Add New Requirement</span>
+            <span className="font-medium">Add New {sectionTitle}</span>
           </button>
         </div>
 
