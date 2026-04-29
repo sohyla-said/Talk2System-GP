@@ -15,8 +15,7 @@ export default function ProjectDetailsPage() {
   const [loading, setLoading]     = useState(true);
   const [pmName, setPmName]       = useState(null);
   
-  const [showSessionModal, setShowSessionModal] = useState(false);
-  const [sessionTitle, setSessionTitle]         = useState("");
+
 
   const [pendingRequests, setPendingRequests]   = useState([]);
   const [showRequestsPanel, setShowRequestsPanel] = useState(false);
@@ -218,13 +217,6 @@ export default function ProjectDetailsPage() {
     return `${entity} #${entityId}`;
   };
 
-  const handleConfirmSession = () => {
-    if (!sessionTitle.trim()) return;
-    navigate(`/projects/${projectId}/recording`, {
-      state: { sessionTitle: sessionTitle.trim() },
-    });
-  };
-
   const handleAccept = async (invId, userName) => {
     try {
       await acceptInvitation(invId);
@@ -255,18 +247,7 @@ export default function ProjectDetailsPage() {
   return (
     <div className="w-full font-display">
 
-      {showSessionModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-900 rounded-xl p-6 w-full max-w-md shadow-lg">
-            <h2 className="text-lg font-bold mb-4 text-gray-900 dark:text-white">Start Meeting Session</h2>
-            <input type="text" placeholder="e.g. Sprint 4 Planning" value={sessionTitle} onChange={(e) => setSessionTitle(e.target.value)} className="w-full border rounded-lg px-4 py-2 mb-4 dark:bg-gray-800 dark:border-gray-600" />
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowSessionModal(false)} className="px-4 py-2 rounded-lg border dark:border-gray-600 text-sm">Cancel</button>
-              <button onClick={handleConfirmSession} disabled={!sessionTitle.trim()} className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-bold disabled:opacity-50">Start</button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {showRequestsPanel && myRole === "project_manager" && (
         <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50">
@@ -373,7 +354,6 @@ export default function ProjectDetailsPage() {
           <div className="flex flex-wrap justify-between items-start gap-4 p-4">
             <div className="flex min-w-72 flex-col gap-2">
               <p className="text-gray-900 dark:text-white text-4xl font-black leading-tight">{project?.name}</p>
-              <p className="text-gray-500 dark:text-gray-400 text-base">{project?.description}</p>
               {pmName && myRole !== "project_manager" && (<p className="text-sm text-gray-500 dark:text-gray-400">Project Manager: <span className="font-semibold text-gray-700 dark:text-gray-300">{pmName}</span></p>)}
               {myRole && (<span className="w-fit text-xs font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">Your role: {myRole.replace("_", " ")}</span>)}
             </div>
@@ -384,7 +364,7 @@ export default function ProjectDetailsPage() {
                 {myRole === "project_manager" && (<button onClick={() => setShowRequestsPanel(true)} className="relative flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition"><span className="material-symbols-outlined text-sm">group_add</span>Requests{pendingRequests.length > 0 && (<span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-primary text-white text-[9px] flex items-center justify-center font-bold">{pendingRequests.length}</span>)}</button>)}
                 {myRole === "project_manager" && (<button onClick={openLogsModal} className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition"><span className="material-symbols-outlined text-sm">history</span>Activity</button>)}
               </div>
-              {myRole === "project_manager" && (<button onClick={() => setShowSessionModal(true)} className="flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-white text-sm font-bold shadow hover:opacity-90 transition"><span className="material-symbols-outlined text-lg">mic</span>Start Meeting Session</button>)}
+              {myRole === "project_manager" && (<button onClick={() => navigate(`/projects/${projectId}/start-session`)} className="flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-white text-sm font-bold shadow hover:opacity-90 transition"><span className="material-symbols-outlined text-lg">mic</span>Start Meeting Session</button>)}
             </div>
           </div>
           <div className="flex gap-3 px-4 pt-1 pb-4 overflow-x-auto">
@@ -402,7 +382,7 @@ export default function ProjectDetailsPage() {
           <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {sessions.length === 0 ? (<p className="text-gray-400 col-span-3">No sessions yet.</p>) : (
               sessions.map((session) => (
-                <div key={session.id} onClick={() => navigate(`/transcript/${session.id}/requirements`)} className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border shadow-sm hover:shadow-md cursor-pointer transition">
+                <div key={session.id} onClick={() => navigate(`/projects/${projectId}/sessions/${session.id}`)} className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border shadow-sm hover:shadow-md cursor-pointer transition">
                   <h3 className="font-bold text-lg">{session.title || `Session #${session.id}`}</h3>
                   <span className="text-sm text-gray-500">{new Date(session.created_at).toLocaleDateString()}</span>
                 </div>

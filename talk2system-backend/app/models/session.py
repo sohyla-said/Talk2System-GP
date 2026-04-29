@@ -30,3 +30,8 @@ class Session(Base):
     back_populates="session",
     cascade="all, delete-orphan"
    )
+    session_memberships = relationship(
+        "SessionMembership",
+        back_populates="session",
+        cascade="all, delete-orphan"
+    )

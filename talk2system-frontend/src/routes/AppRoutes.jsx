@@ -28,7 +28,8 @@ import AdminSystemProjectsPage from "../pages/projects/AdminSystemProjectsPage";
 import AllUsersPage from "../pages/admin/AllUsersPage";
 
 //sessions
-// import SessionDetailsPage from "../pages/sessions/SessionDetailsPage";
+import SessionDetailsPage from "../pages/sessions/SessionDetailsPage";
+import StartSessionPage from "../pages/Sessions/StartSessionPage";
 // Recording & Transcript
 import RecordingSession from "../pages/recordingsession/RecordingSessionPage";
 import TranscriptInput from "../pages/recordingsession/TranscriptInputPage"
@@ -114,6 +115,7 @@ export default function AppRoutes() {
           <Route path=":id/artifacts/uml" element={<UMLDiagrams />} />
           <Route path=":id/results" element={<ProjectResults />} />
           <Route path=":id/artifacts/uml-view" element={<UmlProjectViewPage />} />
+          <Route path=":id/start-session" element={<StartSessionPage />} />
         </Route>
 
 
@@ -123,7 +125,7 @@ export default function AppRoutes() {
           <Route path=":sessionId/requirements/choice" element={<RequirementsChoicePage />} />
         </Route>
 
-        <Route path="/projects/:projectId/sessions/:sessionId">
+        <Route path="/projects/:projectId/sessions/:sessionId" element={<SessionDetailsPage />}>
           <Route path="artifacts" element={<SessionResults />} />
           <Route path="artifacts/uml" element={<UmlSessionViewPage />} />
         </Route>
@@ -132,8 +134,6 @@ export default function AppRoutes() {
         
         {/* Summary */}
         <Route path="/summary/:sessionId" element={<TranscriptSummary />} />
-        
-        {/* <Route path=":projectId/sessions/:sessionId" element={<SessionDetailsPage />} /> */}     
       </Route>
       {/* Catch-all */}
       <Route path="*" element={

@@ -42,6 +42,11 @@ class User(Base):
         foreign_keys="Invitation.invited_by_user_id",
         back_populates="invited_by",
     )
+    session_memberships = relationship(
+        "SessionMembership",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self):
         return f"<User id={self.id} email={self.email!r} role={self.role!r} status={self.status!r}>"
