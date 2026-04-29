@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import TranscriptApprovalModal from "../../components/modals/TranscriptApprovalModal";
 import TranscriptEditModal from "../../components/modals/TranscriptEditModal";
+import EngineChoiceModal from "../../components/modals/EngineChoiceModal";
 import { getToken } from "../../api/authApi";
 
 export default function TranscriptPage() {
@@ -26,6 +27,10 @@ export default function TranscriptPage() {
 
   // Extract Requirements loading state
   const [isSubmittingReq, setIsSubmittingReq] = useState(false);
+
+  // Engine choice modal
+  const [showEngineModal, setShowEngineModal] = useState(false);
+  const [pendingEngineAction, setPendingEngineAction] = useState(null); // "req"
 
   // Existing session requirement — if set, skip generation and redirect instead
   const [existingRequirementId, setExistingRequirementId] = useState(null);
@@ -140,52 +145,68 @@ export default function TranscriptPage() {
   // -----------------------------
   // Extract Requirements — calls backend then navigates
   // -----------------------------
-  const handleExtractRequirements = async () => {
+  const handleExtractRequirements = async (engine = "both") => {
     if (!projectId) {
       alert("Project ID could not be resolved. Please try again.");
       return;
     }
 
+    setShowEngineModal(false);
     setIsSubmittingReq(true);
     try {
       const transcriptText = formatTranscriptForBackend(transcriptData);
-
-      console.log("Sending to extract-requirements:");
-      console.log("projectId:", projectId);
-      console.log("transcript:\n", transcriptText);
 
       const response = await fetch(
         `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/extract-requirements`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" , Authorization: `Bearer ${getToken()}` },
-          body: JSON.stringify({ transcript: transcriptText, engine:'both' }),
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+          body: JSON.stringify({ transcript: transcriptText, engine }),
         }
       );
 
       const data = await response.json();
-      console.log("Response:", data);
 
       if (!response.ok) {
         throw new Error(
           typeof data.detail === "string"
             ? data.detail
-            : JSON.stringify(data.detail) // 422 detail is often an array
+            : JSON.stringify(data.detail)
         );
       }
 
-      navigate(`/transcript/${sessionId}/requirements/choice`,{
-            state: {
-              projectId,
-              commonData: data.common_data,
-              hybridRunId: data.Hybrid_run_id,
-              hybridData: data.Hybrid_data,
-              hybridOnlyData: data.Hybird_only_data,
-              llmRunId: data.LLM_run_id,
-              llmData: data.LLM_data,
-              llmOnlyData: data.LLM_only_data
-            }
+      if (engine === "both") {
+        navigate(`/transcript/${sessionId}/requirements/choice`, {
+          state: {
+            projectId,
+            commonData: data.common_data,
+            hybridRunId: data.Hybrid_run_id,
+            hybridData: data.Hybrid_data,
+            hybridOnlyData: data.Hybird_only_data,
+            llmRunId: data.LLM_run_id,
+            llmData: data.LLM_data,
+            llmOnlyData: data.LLM_only_data,
+          },
         });
+      } else if (engine === "hybrid") {
+        // TODO: navigate to hybrid-only results page
+        navigate(`/transcript/${sessionId}/requirements/hybrid`, {
+          state: {
+            projectId,
+            hybridRunId: data.Hybrid_run_id,
+            hybridData: data.Hybrid_data,
+          },
+        });
+      } else if (engine === "llm") {
+        // TODO: navigate to llm-only results page
+        navigate(`/transcript/${sessionId}/requirements/llm`, {
+          state: {
+            projectId,
+            llmRunId: data.LLM_run_id,
+            llmData: data.LLM_data,
+          },
+        });
+      }
     } catch (error) {
       console.error(error);
       alert(error.message);
@@ -226,10 +247,18 @@ export default function TranscriptPage() {
   };
 
   const executeNavigation = (type) => {
-    // if (type === "uml") navigate(`/projects/${projectId}/artifacts/uml`);
-    // if (type === "srs") navigate(`/projects/${projectId}/artifacts/srs`);
-    if (type === "req") handleExtractRequirements();
+    if (type === "req") {
+      setShowEngineModal(true);
+      setPendingEngineAction("req");
+    }
     if (type === "sum") handleSummarize();
+  };
+
+  const handleEngineConfirm = (engine) => {
+    if (pendingEngineAction === "req") {
+      handleExtractRequirements(engine);
+    }
+    setPendingEngineAction(null);
   };
 
   const handleGenerate = (type) => {
@@ -704,6 +733,15 @@ export default function TranscriptPage() {
         }}
         onSave={handleSaveEdit}
         speakerData={editingSpeaker}
+      />
+      <EngineChoiceModal
+        open={showEngineModal}
+        onClose={() => {
+          setShowEngineModal(false);
+          setPendingEngineAction(null);
+        }}
+        onConfirm={handleEngineConfirm}
+        isLoading={isSubmittingReq}
       />
     </>
   );
