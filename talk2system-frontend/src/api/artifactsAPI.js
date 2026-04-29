@@ -42,3 +42,15 @@ export async function getSessionArtifacts(projectId, sessionId) {
   // flatten all results
   return results.flat();
 }
+
+export async function checkSummary(sessionId) {
+  try {
+    const res = await fetch(`http://localhost:8000/api/summary/${sessionId}`);
+    if (!res.ok) return false;
+
+    const data = await res.json();
+    return Boolean(data?.summary);
+  } catch {
+    return false;
+  }
+}
