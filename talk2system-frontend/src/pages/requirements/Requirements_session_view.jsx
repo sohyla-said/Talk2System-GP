@@ -515,7 +515,7 @@ const handleApprove = async () => {
       return;
     }
     if (type == 'uml') handleNavigation(`/projects/${projectId}/artifacts/uml`);
-    if (type == 'srs') handleNavigation(`/projects/${projectId}/artifacts/srs`);
+    if (type == 'srs') handleNavigation(`/projects/${projectId}/sessions/${sessionId}/srs/generate`);
   };
 
   // Get tag color classes
@@ -654,7 +654,7 @@ const handleApprove = async () => {
                 className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary px-4 py-3 font-bold text-white shadow-soft transition-colors hover:bg-primary/90"
               >
                 <span className="material-symbols-outlined text-xl">description</span>
-                Generate SRS
+                Generate SRS Document
               </button>
             </div>
 

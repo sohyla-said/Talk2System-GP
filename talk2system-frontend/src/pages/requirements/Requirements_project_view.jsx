@@ -464,7 +464,7 @@ const toggleSelectionMode = (sectionType) => {
   const handleGenerate = (type) => {
     const targetPath = type === 'uml'
       ? `/projects/${projectId}/artifacts/uml`
-      : `/projects/${projectId}/artifacts/srs`;
+      : `/projects/${projectId}/srs/generate`;
 
     if (!approved) {
       setPendingNavigation(targetPath);
@@ -590,7 +590,7 @@ const toggleSelectionMode = (sectionType) => {
                 className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary px-4 py-3 font-bold text-white shadow-soft transition-colors hover:bg-primary/90"
               >
                 <span className="material-symbols-outlined text-xl">description</span>
-                Generate SRS
+                Generate SRS Document
               </button>
             </div>
 
