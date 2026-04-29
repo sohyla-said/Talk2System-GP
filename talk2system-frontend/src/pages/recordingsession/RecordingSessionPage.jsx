@@ -103,7 +103,7 @@ export default function RecordingSessionPage() {
         formData.append("title", sessionTitle);
       }
 
-      const res = await fetch(`http://localhost:8000/api/projects/${projectId}/transcribe`, {
+      const res = await fetch(`http://localhost:8000/api/projects/${projectId}/transcribe?title=${encodeURIComponent(sessionTitle)}`, {
         method: "POST",
         body: formData,
       });

@@ -173,12 +173,14 @@ def get_transcript(session_id: int, db: Session = Depends(get_db)):
         return {
             "session_id": session_id,
             "project_id": session.project_id,
+            "title": session.title,
             "transcript": []
         }
 
     return {
         "session_id": session_id,
         "project_id": session.project_id,
+        "title": session.title,
         "transcript": transcript
     }
 
