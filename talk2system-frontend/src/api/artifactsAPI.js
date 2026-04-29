@@ -54,3 +54,31 @@ export async function checkSummary(sessionId) {
     return false;
   }
 }
+
+export async function checkSRS(projectId, sessionId) {
+  try {
+    const res = await fetch(
+      `${BASE_URL}/api/projects/${projectId}/sessions/${sessionId}/srs/versions`,
+      { headers: { Authorization: `Bearer ${getToken()}` } }
+    );
+    if (!res.ok) return false;
+    const data = await res.json();
+    return (data.versions || []).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+export async function getProjectSRS(projectId) {
+  try {
+    const res = await fetch(
+      `${BASE_URL}/api/projects/${projectId}/srs/versions`,
+      { headers: { Authorization: `Bearer ${getToken()}` } }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.versions || [];
+  } catch {
+    return [];
+  }
+}

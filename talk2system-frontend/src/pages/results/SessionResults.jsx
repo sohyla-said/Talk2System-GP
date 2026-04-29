@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import EmptyArtifacts from "../../pages/artifacts/EmptyArtifactsPage";
-import { getSessionArtifacts,checkSummary } from "../../api/artifactsAPI";
+import { getSessionArtifacts,checkSummary, checkSRS } from "../../api/artifactsAPI";
 import { useNavigate, useParams } from "react-router-dom";
 
 export default function SessionResults() {
@@ -9,7 +9,7 @@ export default function SessionResults() {
   const [loading, setLoading] = useState(true);
   const [hasUML, setHasUML] = useState(false);
   const [hasSummary, setHasSummary] = useState(false);
-  // const [hasSRS, setHasSRS] = useState(false); // future-ready
+  const [hasSRS, setHasSRS] = useState(false); 
 
   useEffect(() => {
     const load = async () => {
@@ -20,9 +20,8 @@ export default function SessionResults() {
         const summaryExists = await checkSummary(sessionId);
         setHasSummary(summaryExists);
 
-        // 🔜 later when SRS exists:
-        // const srsExists = await checkSRS(sessionId);
-        // setHasSRS(srsExists);
+        const srsExists = await checkSRS(projectId, sessionId);
+        setHasSRS(srsExists);
 
       } catch (e) {
         console.error(e);
@@ -36,7 +35,7 @@ export default function SessionResults() {
 
   if (loading) return <p className="p-8 text-gray-400">Loading...</p>;
 
-  if (!hasUML && !hasSummary /* && !hasSRS */) {
+  if (!hasUML && !hasSummary && !hasSRS) {
     return (
       <EmptyArtifacts
         projectId={projectId}
@@ -85,6 +84,27 @@ export default function SessionResults() {
             </div>
             <p className="text-sm text-gray-500 mb-4">
               View generated UML diagrams for this session (Usecase, Class, Sequence)
+            </p>
+            <div className="flex justify-end">
+              <button className="text-primary font-bold flex items-center gap-1">
+                View <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* SRS CARD */}
+        {hasSRS && (
+          <div
+            onClick={() => navigate(`/projects/${projectId}/sessions/${sessionId}/artifacts/srs`)}
+            className="bg-card-light dark:bg-card-dark rounded-xl border p-5 shadow-sm hover:shadow-lg transition cursor-pointer"
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <span className="material-symbols-outlined text-purple-500">account_tree</span>
+              <h3 className="font-bold">Software Requirements Specification (SRS)</h3>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">
+              View the SRS document for this session
             </p>
             <div className="flex justify-end">
               <button className="text-primary font-bold flex items-center gap-1">

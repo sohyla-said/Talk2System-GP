@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import EmptyArtifacts from "../../pages/artifacts/EmptyArtifactsPage";
-import { getProjectArtifacts } from "../../api/artifactsAPI";
+import { getProjectArtifacts, getProjectSRS } from "../../api/artifactsAPI";
 
 export default function ProjectResults() {
   const navigate = useNavigate();
@@ -9,15 +9,15 @@ export default function ProjectResults() {
 
   const [loading, setLoading] = useState(true);
   const [hasUML, setHasUML] = useState(false);
-  // const [hasSRS, setHasSRS] = useState(false); // future-ready
+  const [hasSRS, setHasSRS] = useState(false); 
 
   useEffect(() => {
     const load = async () => {
       try {
         const umlData = await getProjectArtifacts(projectId);
         setHasUML(umlData.length > 0);
-        // const srsData = await getProjectSRS(projectId);
-        // setHasSRS(srsData.length > 0);
+        const srsData = await getProjectSRS(projectId);
+        setHasSRS(srsData.length > 0);
       } catch (e) {
         console.error(e);
       } finally {
@@ -31,7 +31,7 @@ export default function ProjectResults() {
   if (loading) return <p className="p-8 text-gray-400">Loading...</p>;
 
   // 🔥 KEY CHANGE
-  if (!hasUML /* && !hasSRS */) {
+  if (!hasUML && !hasSRS) {
     return <EmptyArtifacts projectId={projectId} isSession={false} />;
   }
 
@@ -59,27 +59,6 @@ export default function ProjectResults() {
       {/* ================= CARDS ================= */}
       <div className="mt-6 w-full max-w-[1200px] grid grid-cols-1 md:grid-cols-2 gap-6">
 
-        {/* ================= SRS CARD ================= */}
-        {/* <div className="bg-card-light dark:bg-card-dark rounded-xl border p-5 shadow-sm hover:shadow-lg transition">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="material-symbols-outlined text-blue-500">description</span>
-            <h3 className="font-bold">SRS Document</h3>
-          </div>
-
-          <p className="text-sm text-gray-500 mb-4">
-            Software Requirements Specification
-          </p>
-
-          <div className="flex justify-end">
-            <button
-              onClick={() => alert("SRS coming soon")}
-              className="text-primary font-bold flex items-center gap-1"
-            >
-              View <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-            </button>
-          </div>
-        </div> */}
-
         {/* ================= UML CARD ================= */}
         {hasUML && (
           <div className="bg-card-light dark:bg-card-dark rounded-xl border p-5 shadow-sm hover:shadow-lg transition">
@@ -94,7 +73,7 @@ export default function ProjectResults() {
 
             <div className="flex justify-end">
               <button
-                onClick={() => navigate(`/projects/${projectId}/artifacts/uml-view`)} 
+                onClick={() => navigate(`/projects/${projectId}/artifacts/uml-view`)}
                 className="text-primary font-bold flex items-center gap-1"
               >
                 View <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
@@ -102,6 +81,29 @@ export default function ProjectResults() {
             </div>
           </div>
         )}
+
+        {/* ================= SRS CARD ================= */}
+        {hasSRS && (
+          <div className="bg-card-light dark:bg-card-dark rounded-xl border p-5 shadow-sm hover:shadow-lg transition">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="material-symbols-outlined text-blue-500">description</span>
+              <h3 className="font-bold">SRS Document</h3>
+            </div>
+
+            <p className="text-sm text-gray-500 mb-4">
+              Software Requirements Specification
+          </p>
+
+          <div className="flex justify-end">
+            <button
+              onClick={() => navigate(`/projects/${projectId}/artifacts/srs`)}
+              className="text-primary font-bold flex items-center gap-1"
+            >
+              View <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       </div>
     </div>
