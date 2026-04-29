@@ -74,7 +74,6 @@ def get_session_members(
             full_name=m.user.full_name,
             role=m.role,
             joined_at=m.joined_at,
-            left_at=m.left_at,
             user_status=m.user.status,
         )
         for m in memberships
