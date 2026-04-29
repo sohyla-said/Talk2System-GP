@@ -382,7 +382,8 @@ export default function ProjectDetailsPage() {
           <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {sessions.length === 0 ? (<p className="text-gray-400 col-span-3">No sessions yet.</p>) : (
               sessions.map((session) => (
-                <div key={session.id} onClick={() => navigate(`/projects/${projectId}/sessions/${session.id}`)} className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border shadow-sm hover:shadow-md cursor-pointer transition">
+                <div key={session.id} onClick={() => navigate(`/transcript/${session.id}/requirements`)} className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border shadow-sm hover:shadow-md cursor-pointer transition">
+                {/* <div key={session.id} onClick={() => navigate(`/projects/${projectId}/sessions/${session.id}`)} className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border shadow-sm hover:shadow-md cursor-pointer transition"> */}
                   <h3 className="font-bold text-lg">{session.title || `Session #${session.id}`}</h3>
                   <span className="text-sm text-gray-500">{new Date(session.created_at).toLocaleDateString()}</span>
                 </div>
