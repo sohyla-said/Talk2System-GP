@@ -38,6 +38,7 @@ export default function TranscriptPage() {
 
   // Summarize loading state
   const [isSummarizing, setIsSummarizing] = useState(false);
+  
 
   // -----------------------------
   // Multi-select & delete state
