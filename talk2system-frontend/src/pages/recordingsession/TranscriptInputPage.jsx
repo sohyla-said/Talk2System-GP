@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams,useLocation } from "react-router-dom";
 import { getToken } from "../../api/authApi";
+import EngineChoiceModal from "../../components/modals/EngineChoiceModal";
 
 const TranscriptInputPage = () => {
   const [transcript, setTranscript] = useState('');
@@ -10,6 +11,7 @@ const TranscriptInputPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState(null);
+  const [showEngineModal, setShowEngineModal] = useState(false);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const navigate = useNavigate();
@@ -66,7 +68,13 @@ const TranscriptInputPage = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleSubmit = async () => {
+  const handleGenerateClick = () => {
+    if (!transcript.trim()) return;
+    setShowEngineModal(true);
+  };
+
+  const handleSubmit = async (engine = "both") => {
+    setShowEngineModal(false);
     if (!transcript.trim()) return;
 
     const token = getToken();
@@ -118,7 +126,7 @@ const TranscriptInputPage = () => {
           },
           body: JSON.stringify({
             transcript: transcript,
-            engine: "both",
+            engine,
           }),
         }
       );
@@ -131,18 +139,39 @@ const TranscriptInputPage = () => {
 
       setSubmitted(true);
 
-      navigate(`/transcript/${sessionId}/requirements/choice`, {
-        state: {
-          projectId,
-          commonData: requirementsData.common_data,
-          hybridRunId: requirementsData.Hybrid_run_id,
-          hybridData: requirementsData.Hybrid_data,
-          hybridOnlyData: requirementsData.Hybrid_only_data,
-          llmRunId: requirementsData.LLM_run_id,
-          llmData: requirementsData.LLM_data,
-          llmOnlyData: requirementsData.LLM_only_data
-        },
-      });
+      // Navigate based on chosen engine
+      if (engine === "both") {
+        navigate(`/transcript/${sessionId}/requirements/choice`, {
+          state: {
+            projectId,
+            commonData: requirementsData.common_data,
+            hybridRunId: requirementsData.Hybrid_run_id,
+            hybridData: requirementsData.Hybrid_data,
+            hybridOnlyData: requirementsData.Hybrid_only_data,
+            llmRunId: requirementsData.LLM_run_id,
+            llmData: requirementsData.LLM_data,
+            llmOnlyData: requirementsData.LLM_only_data,
+          },
+        });
+      } else if (engine === "hybrid") {
+        // TODO: navigate to hybrid-only results page
+        navigate(`/transcript/${sessionId}/requirements/hybrid`, {
+          state: {
+            projectId,
+            hybridRunId: requirementsData.Hybrid_run_id,
+            hybridData: requirementsData.Hybrid_data,
+          },
+        });
+      } else if (engine === "llm") {
+        // TODO: navigate to llm-only results page
+        navigate(`/transcript/${sessionId}/requirements/llm`, {
+          state: {
+            projectId,
+            llmRunId: requirementsData.LLM_run_id,
+            llmData: requirementsData.LLM_data,
+          },
+        });
+      }
 
     } catch (error) {
       console.error(error);
@@ -269,7 +298,7 @@ const TranscriptInputPage = () => {
               </div>
 
               <button
-                onClick={handleSubmit}
+                onClick={handleGenerateClick}
                 disabled={!transcript.trim() || isSubmitting || submitted}
                 className={`flex items-center gap-2 px-7 py-3 rounded-lg font-bold text-sm shadow-md transition-all duration-200 ${
                   transcript.trim() && !isSubmitting && !submitted
@@ -339,6 +368,13 @@ const TranscriptInputPage = () => {
 
         </div>
       </div>
+
+      <EngineChoiceModal
+        open={showEngineModal}
+        onClose={() => setShowEngineModal(false)}
+        onConfirm={handleSubmit}
+        isLoading={isSubmitting}
+      />
     </div>
   );
 };
