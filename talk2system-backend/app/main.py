@@ -11,6 +11,7 @@ from app.db.session import engine
 from app.models import user, project
 from app.models import project_membership, invitation
 from app.api import requirements
+from app.api.approval import router as approval_router
 from app.api.transcription_router import router as transcription_router
 from app.api.document import router as document_router
 from app.api import project_routes, session_routes
@@ -37,6 +38,7 @@ app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(notification_router)
 app.include_router(requirements.router, prefix="/api")
+app.include_router(approval_router)
 app.include_router(transcription_router, prefix="/api")
 app.include_router(document_router, prefix="/api")
 app.mount("/storage", StaticFiles(directory="storage"), name="storage")

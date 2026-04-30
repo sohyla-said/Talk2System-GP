@@ -223,6 +223,10 @@ def get_transcript(session_id: int, db: Session = Depends(get_db)):
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    
+    transcript_obj = db.query(TranscriptSegment).filter(TranscriptSegment.session_id == session_id).first()
+    if not transcript_obj:
+        raise HTTPException(status_code=404, detail="Transcript not found")
 
     transcript = get_transcript_by_session(db, session_id)
 
@@ -234,7 +238,7 @@ def get_transcript(session_id: int, db: Session = Depends(get_db)):
             "project_id": session.project_id,
             "title": session.title,
             "transcript": [],
-            "approval_status": session.transcript_approval_status or "pending",
+            "approval_status": transcript_obj.approval_status or "pending",
         }
 
     return {
@@ -242,7 +246,7 @@ def get_transcript(session_id: int, db: Session = Depends(get_db)):
         "project_id": session.project_id,
         "title": session.title,
         "transcript": transcript,
-        "approval_status": session.transcript_approval_status or "pending",
+        "approval_status": transcript_obj.approval_status or "pending",
     }
 
 
@@ -316,16 +320,17 @@ def approve_transcript(
     current_user: User = Depends(get_current_user),
 ):
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    transcript = db.query(TranscriptSegment).filter(TranscriptSegment.session_id == session_id).first()
+    if not transcript:
+        raise HTTPException(status_code=404, detail="Transcript not found")
 
-    if session.transcript_approval_status == "approved":
+    if transcript.approval_status == "approved":
         raise HTTPException(status_code=400, detail="Transcript is already approved")
 
     try:
-        session.transcript_approval_status = "approved"
+        transcript.approval_status = "approved"
         db.commit()
-        db.refresh(session)
+        db.refresh(transcript)
 
         log_action(
             db,
@@ -339,7 +344,7 @@ def approve_transcript(
         return {
             "session_id": session_id,
             "project_id": session.project_id,
-            "approval_status": session.transcript_approval_status,
+            "approval_status": transcript.approval_status,
         }
 
     except ValueError as e:

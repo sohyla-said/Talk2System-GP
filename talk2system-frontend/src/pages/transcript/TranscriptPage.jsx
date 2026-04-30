@@ -10,6 +10,13 @@ export default function TranscriptPage() {
   const { sessionId } = useParams(); // only sessionId needed from URL
 
   const [approved, setApproved] = useState(false);
+  const [transcriptApproval, setTranscriptApproval] = useState({
+    approved_members_count: 0,
+    total_members_count: 0,
+    current_user_approved: false,
+    all_members_approved: false,
+    status: "pending",
+  });
   const [showModal, setShowModal] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -72,10 +79,6 @@ export default function TranscriptPage() {
         if (data.title) {
           setSessionTitle(data.title);
         }
-        // Restore approval state from backend so it survives page navigation
-        if (data.approval_status === "approved") {
-          setApproved(true);
-        }
 
         if (!data.transcript || !data.transcript.length) {
           setTranscriptData([]);
@@ -103,6 +106,29 @@ export default function TranscriptPage() {
     };
 
     fetchTranscript();
+  }, [sessionId]);
+
+  useEffect(() => {
+    const fetchTranscriptApproval = async () => {
+      try {
+        const res = await fetch(
+          `http://localhost:8000/api/sessions/${sessionId}/features/approval-status`,
+          { headers: { Authorization: `Bearer ${getToken()}` } }
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const transcriptFeature = Array.isArray(data.features)
+          ? data.features.find((f) => f.feature === "transcript")
+          : null;
+        if (!transcriptFeature) return;
+        setTranscriptApproval(transcriptFeature);
+        setApproved(Boolean(transcriptFeature.current_user_approved));
+      } catch (err) {
+        console.error("Error fetching transcript feature approval:", err);
+      }
+    };
+
+    fetchTranscriptApproval();
   }, [sessionId]);
 
   // -----------------------------
@@ -313,6 +339,12 @@ export default function TranscriptPage() {
   };
 
   const handleGenerate = (type) => {
+    if (type === "req" && !transcriptApproval.all_members_approved) {
+      alert(
+        `All session members must approve transcript first (${transcriptApproval.approved_members_count}/${transcriptApproval.total_members_count}).`
+      );
+      return;
+    }
     if (!approved) {
       setPendingNavigation(type);
       setShowModal(true);
@@ -323,33 +355,56 @@ export default function TranscriptPage() {
 
   // approved is still false when this runs, so pass pending directly
   // to executeNavigation instead of re-calling handleGenerate
-  const handleApprove = async () => {
-    try {
-      const res = await fetch(
-        `http://localhost:8000/api/sessions/${sessionId}/transcript/approve`,
-        {
-          method: "PATCH",
-          headers: { Authorization: `Bearer ${getToken()}` },
+  const handleApprove = () => {
+    const approveTranscript = async () => {
+      try {
+        const res = await fetch(
+          `http://localhost:8000/api/sessions/${sessionId}/features/transcript/approve`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${getToken()}` },
+          }
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "Failed to approve transcript");
+
+        setTranscriptApproval(data);
+        setApproved(Boolean(data.current_user_approved));
+        setShowModal(false);
+        if (data.all_members_approved){
+          try{
+            const response = await fetch(
+              `http://localhost:8000/api/sessions/${sessionId}/transcript/approve`,
+              {
+                method: "PATCH",
+                headers: { Authorization: `Bearer ${getToken()}` },
+              }
+            );
+          }catch (err) {
+            console.error(err);
+          }
         }
-      );
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail ?? "Failed to approve transcript");
+        if (pendingNavigation === "req" && !data.all_members_approved) {
+          alert(
+            `Your approval is saved. Waiting for others: ${data.approved_members_count}/${data.total_members_count}.`
+          );
+          setPendingNavigation(null);
+          return;
+        }
+
+        if (pendingNavigation) {
+          const pending = pendingNavigation;
+          setPendingNavigation(null);
+          executeNavigation(pending);
+        }
+      } catch (error) {
+        console.error(error);
+        alert(error.message);
       }
+    };
 
-      setApproved(true);
-      setShowModal(false);
-
-      if (pendingNavigation) {
-        const pending = pendingNavigation;
-        setPendingNavigation(null);
-        executeNavigation(pending);
-      }
-    } catch (error) {
-      console.error("Approval error:", error);
-      alert(error.message);
-    }
+    approveTranscript();
   };
 
   // -----------------------------
@@ -714,7 +769,11 @@ export default function TranscriptPage() {
                       </button>
                       <button
                         onClick={() => handleGenerate("req")}
-                        disabled={isSubmittingReq || isCheckingReq}
+                        disabled={
+                          isSubmittingReq ||
+                          isCheckingReq ||
+                          !transcriptApproval.all_members_approved
+                        }
                         className="flex w-full items-center justify-center gap-3 rounded-lg border border-primary-accent/50 bg-transparent px-4 py-2.5 text-sm font-semibold text-primary-accent hover:bg-primary-accent/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {isSubmittingReq ? (
@@ -737,7 +796,11 @@ export default function TranscriptPage() {
                     // No requirement yet — show the primary generate button
                     <button
                       onClick={() => handleGenerate("req")}
-                      disabled={isSubmittingReq || isCheckingReq}
+                      disabled={
+                        isSubmittingReq ||
+                        isCheckingReq ||
+                        !transcriptApproval.all_members_approved
+                      }
                       className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-primary-accent/90 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       {isSubmittingReq || isCheckingReq ? (
@@ -773,6 +836,11 @@ export default function TranscriptPage() {
                     Transcript approved — ready to generate
                   </p>
                 )}
+                <p className="text-xs text-text-dark/60 dark:text-text-light/60 text-center">
+                  Session approvals: {transcriptApproval.approved_members_count}/
+                  {transcriptApproval.total_members_count}
+                  {transcriptApproval.all_members_approved ? " (all approved)" : " (waiting for members)"}
+                </p>
                 {existingRequirementId && (
                   <p className="text-xs text-blue-600 dark:text-blue-400 text-center flex items-center justify-center gap-1">
                     <span className="material-symbols-outlined text-sm">info</span>
@@ -815,4 +883,3 @@ export default function TranscriptPage() {
     </>
   );
 }
-

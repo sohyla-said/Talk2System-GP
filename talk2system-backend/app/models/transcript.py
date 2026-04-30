@@ -14,5 +14,6 @@ class TranscriptSegment(Base):
     start_time = Column(Integer)
     end_time = Column(Integer)
     text = Column(Text)
+    approval_status = Column(String, default='pending')
 
     session = relationship("Session", back_populates="transcripts")

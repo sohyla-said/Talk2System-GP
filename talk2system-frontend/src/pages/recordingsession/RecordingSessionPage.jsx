@@ -7,6 +7,7 @@ export default function RecordingSessionPage() {
   const [hours, setHours] = useState(0);
   const [minutes, setMinutes] = useState(0);
   const [seconds, setSeconds] = useState(0);
+  const [sessionId, setSessionId] = useState(null);
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -119,6 +120,7 @@ export default function RecordingSessionPage() {
       if (!res.ok) throw new Error("Upload failed");
 
       const data = await res.json();
+      setSessionId(data.sessionId);
       navigate(`/transcript/${data.session_id}`);
     } catch (err) {
       console.error(err);
@@ -244,7 +246,7 @@ export default function RecordingSessionPage() {
 
                 {/* Upload Transcript */}
                 <button
-                  onClick={() => navigate(`/projects/${projectId}/transcript-input`, { state: { sessionTitle, participants, pmId } })}
+                  onClick={() => navigate(`/projects/${projectId}/transcript-input`, { state: { sessionTitle, participants, pmId, sessionId } })}
                   disabled={isRecording || loading}
                   className="flex flex-col items-center justify-center gap-2 p-4 bg-[#e9e7f4] dark:bg-primary/20 text-primary dark:text-indigo-300 rounded-lg hover:bg-[#dcd9f0] dark:hover:bg-primary/30 transition-colors duration-200 h-28 disabled:opacity-50 disabled:cursor-not-allowed"
                 >

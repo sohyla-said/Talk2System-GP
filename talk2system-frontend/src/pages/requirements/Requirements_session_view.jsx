@@ -6,6 +6,14 @@ import { getToken } from "../../api/authApi";
 
 export default function RequirementsSessionView() {
   const [approved, setApproved] = useState(false);
+  const [requirementsApproval, setRequirementsApproval] = useState({
+    approved_members_count: 0,
+    total_members_count: 0,
+    current_user_approved: false,
+    all_members_approved: false,
+    status: "pending",
+    exists: false,
+  });
   const [showApprovalModal, setShowApprovalModal] = useState(false);  // controls visibility of the approval modal
   const [pendingNavigation, setPendingNavigation] = useState(null);   // Stores target route temporarily when user tries to move to another tab before approval.
   const [showEditModal, setShowEditModal] = useState(false);  // controls whether the edit modal is opened
@@ -72,6 +80,11 @@ export default function RequirementsSessionView() {
       fetchLatestRequirements();
     }
   }, [initialData, projectId, sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    refreshRequirementsApproval();
+  }, [sessionId]);
 
   // useEffect(() => {
   //   if (versions.length > 0) {
@@ -167,7 +180,6 @@ export default function RequirementsSessionView() {
 
       setRequirementId(data.id ?? null);
       setCurrentRequirementId(data.id ?? null);
-      setApproved(data.approval_status === "approved");
       setChosenRunType(data.preferred_type ?? location.state?.preferredType ?? null);
       mapBackendData(data.data || data);
     }
@@ -216,7 +228,6 @@ export default function RequirementsSessionView() {
 
       setCurrentRequirementId(data.id);
       setRequirementId(data.id);
-      setApproved(data.approval_status === "approved");
       setChosenRunType(data.preferred_type ?? chosenRunType ?? null);
       mapBackendData(data.data);
     }
@@ -225,6 +236,26 @@ export default function RequirementsSessionView() {
     }
   };
 
+
+    const refreshRequirementsApproval = async () => {
+    if (!sessionId) return;
+    try {
+      const res = await fetch(
+        `http://localhost:8000/api/sessions/${sessionId}/features/approval-status`,
+        { headers: getAuthHeaders() }
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      const feature = Array.isArray(data.features)
+        ? data.features.find((f) => f.feature === "requirements")
+        : null;
+      if (!feature) return;
+      setRequirementsApproval(feature);
+      setApproved(Boolean(feature.current_user_approved));
+    } catch (err) {
+      console.error("Failed to load requirements approval status:", err);
+    }
+  };
 
     const hasExtractedRequirements =
     requirements.functional.length > 0 ||
@@ -408,32 +439,44 @@ export default function RequirementsSessionView() {
 
 
 const handleApprove = async () => {
-  const targetRequirementId = currentRequirementId ?? requirementId;
-
-  if (!targetRequirementId) {
-    console.error("No requirement ID available for approval");
-    return;
-  }
-
   try {
     const response = await fetch(
-      `http://localhost:8000/api/sessions/requirements/${targetRequirementId}/approve`,
+      `http://localhost:8000/api/sessions/${sessionId}/features/requirements/approve`,
       {
-        method: 'PATCH',
+        method: 'POST',
         headers: getAuthHeaders()
       }
     );
 
+    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const data = await response.json();
       throw new Error(data.detail || "Failed to approve requirements");
     }
 
-    setApproved(true);
-    setRequirementId(targetRequirementId);
-    setCurrentRequirementId(targetRequirementId);
+    setRequirementsApproval(data);
+    setApproved(Boolean(data.current_user_approved));
     setShowApprovalModal(false);
 
+    if (data.all_members_approved){
+      const targetRequirementId = currentRequirementId ?? requirementId;
+
+      if (!targetRequirementId) {
+        console.error("No requirement ID available for approval");
+        return;
+      }
+      try{
+          const response = await fetch(
+          `http://localhost:8000/api/sessions/requirements/${targetRequirementId}/approve`,
+          {
+            method: 'PATCH',
+            headers: getAuthHeaders()
+          }
+        );
+        fetchVersions();
+      }catch (err) {
+        console.error(err);
+      }
+    }
     if (pendingNavigation) {
       const { path, state } = typeof pendingNavigation === "string"
         ? { path: pendingNavigation, state: null }
@@ -484,12 +527,13 @@ const handleApprove = async () => {
       setCurrentRequirementId(data.id);
       setRequirementId(data.id);
       setSelectedVersionId(data.id);
-      setApproved(data.approval_status === "approved");
       setChosenRunType(data.preferred_type ?? chosenRunType ?? null);
       mapBackendData(data.data);
 
       // Refresh versions list
       fetchVersions();
+      // Any edit creates a new requirement version; user needs to re-approve this feature.
+      refreshRequirementsApproval();
 
       setShowEditModal(false);
 
@@ -499,23 +543,14 @@ const handleApprove = async () => {
   };
 
   const handleNavigation = (path, state = null) => {
-    if (!approved) {
-      setPendingNavigation({ path, state });
-      setShowApprovalModal(true);
-    } else {
-      navigate(path, state ? { state } : undefined);
-    }
+    navigate(path, state ? { state } : undefined);
   };
 
 
   const handleGenerate = (type) => {
-    if (!approved) {
-      setPendingNavigation(type);
-      setShowModal(true);
-      return;
-    }
+    if (!requirementsApproval.all_members_approved) return;
     if (type == 'uml') handleNavigation(`/projects/${projectId}/artifacts/uml`);
-    if (type == 'srs') handleNavigation(`/projects/${projectId}/sessions/${sessionId}/srs/generate`);
+    if (type == 'srs') handleNavigation(`/projects/${projectId}/artifacts/srs`);
   };
 
   // Get tag color classes
@@ -584,6 +619,11 @@ const handleApprove = async () => {
                 </span>
                 <span>{approved ? 'Approved' : 'Approve Requirements'}</span>
               </button>
+              <p className="text-xs text-slate-500 dark:text-slate-400 text-center sm:text-right">
+                Session approvals: {requirementsApproval.approved_members_count}/
+                {requirementsApproval.total_members_count}
+                {requirementsApproval.all_members_approved ? " (all approved)" : " (waiting for members)"}
+              </p>
 
               <div className={`relative min-w-[220px] h-12 rounded-xl border border-[#d9d2f2] dark:border-[#3a3360] bg-[#f3f0ff] dark:bg-[#1f1a36] transition-all shadow-sm ${
                 approved ? 'text-green-600 dark:text-green-300' : 'text-primary'
@@ -644,17 +684,19 @@ const handleApprove = async () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-4 pb-4">
               <button
                 onClick={() => handleGenerate("uml")}
-                className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary px-4 py-3 font-bold text-white shadow-soft transition-colors hover:bg-primary/90"
+                disabled={!requirementsApproval.all_members_approved}
+                className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary px-4 py-3 font-bold text-white shadow-soft transition-colors hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined text-xl">schema</span>
                 Generate UML Diagrams
               </button>
               <button
                 onClick={() => handleGenerate("srs")}
-                className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary px-4 py-3 font-bold text-white shadow-soft transition-colors hover:bg-primary/90"
+                disabled={!requirementsApproval.all_members_approved}
+                className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary px-4 py-3 font-bold text-white shadow-soft transition-colors hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined text-xl">description</span>
-                Generate SRS Document
+                Generate SRS
               </button>
             </div>
 
