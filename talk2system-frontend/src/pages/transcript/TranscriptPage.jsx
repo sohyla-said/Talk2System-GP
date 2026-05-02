@@ -367,10 +367,20 @@ export default function TranscriptPage() {
         );
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.detail || "Failed to approve transcript");
+        
 
         setTranscriptApproval(data);
         setApproved(Boolean(data.current_user_approved));
         setShowModal(false);
+        const newStatus = data.all_members_approved? "processing": "pending approval";
+
+        await fetch(
+        `http://localhost:8000/api/sessions/${sessionId}/status?status=${newStatus}`,
+        {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${getToken()}` },
+        }
+        );
         if (data.all_members_approved){
           try{
             const response = await fetch(
@@ -384,6 +394,7 @@ export default function TranscriptPage() {
             console.error(err);
           }
         }
+        
 
         if (pendingNavigation === "req" && !data.all_members_approved) {
           alert(

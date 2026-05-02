@@ -5,6 +5,8 @@ from datetime import datetime
 from docx import Document
 from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from app.db.session import get_db
+from app.services.session_service import SessionService
 
 # ==========================
 # CONFIG
@@ -272,6 +274,12 @@ def generate_srs_pipeline(
     try:
         srs_text = generate_srs_text_with_ollama(requirements_json, project_name)
         file_path = save_srs_as_docx(srs_text, project_id, session_id)
+        if session_id:
+            db = next(get_db())
+            try:
+                SessionService.update_session_status(db, session_id, "pending approval")
+            finally:
+                db.close()
         return {
             "srs_text": srs_text,
             "file_path": file_path

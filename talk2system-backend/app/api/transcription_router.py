@@ -108,8 +108,8 @@ async def transcribe(
         # Save transcript segments
         transcript_text = save_transcription(db, session.id, diarization)
         session.transcript_text = transcript_text
-        # Update status
-        session.status = "completed"
+        # # Update status
+        session.status = "pending approval"
         db.commit()
 
     except Exception as e:
@@ -190,7 +190,7 @@ def upload_transcript_text(
     try:
         transcript_text = save_transcript_text(db, session.id, payload.transcript)
         session.transcript_text = transcript_text
-        session.status = "completed"
+        # session.status = "completed"
         db.commit()
 
     except ValueError as ve:

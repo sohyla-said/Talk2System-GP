@@ -185,6 +185,7 @@ export default function UmlPage() {
           headers: getAuthHeaders(),
         }
       );
+      
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -194,6 +195,15 @@ export default function UmlPage() {
       setUmlApproval(data);
       setApproved(Boolean(data.current_user_approved));
       setShowApprovalModal(false);
+      const newStatus = data.all_members_approved? "processing": "pending approval";
+
+        await fetch(
+        `http://localhost:8000/api/sessions/${sessionId}/status?status=${newStatus}`,
+        {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${getToken()}` },
+        }
+        );
 
       if (data.all_members_approved && artifactId) {
         await approveArtifact(artifactId);

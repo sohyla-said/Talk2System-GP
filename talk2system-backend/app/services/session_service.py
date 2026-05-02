@@ -92,3 +92,13 @@ class SessionService:
         db.delete(session)
         db.commit()
         return True
+    @staticmethod
+    def update_session_status(db: Session, session_id: int, status: str):
+        session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+
+        if not session:
+            return False
+
+        session.status = status
+        db.commit()
+        return True

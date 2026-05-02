@@ -258,11 +258,11 @@ class RequirementService:
             project_id=old_req.project_id,
             aggregated_req_json=grouped_data,
             version=new_version,
-            approval_status="pending"
+            approval_status="pending approval"
         )
         db.query(ProjectRequirement).filter(
             ProjectRequirement.project_id == old_req.project_id,
-            ProjectRequirement.approval_status == "pending"
+            ProjectRequirement.approval_status == "pending approval"
         ).update({"approval_status": "superseded"})
 
         db.add(new_req)
@@ -384,12 +384,12 @@ class RequirementService:
             session_id = old_req.session_id,
             requirements_json=grouped_data,
             version=new_version,
-            approval_status="pending",
+            approval_status="pending approval",
             src_run_id = old_req.src_run_id
         )
         db.query(SessionRequirement).filter(
             SessionRequirement.project_id == old_req.project_id,
-            SessionRequirement.approval_status == "pending"
+            SessionRequirement.approval_status == "pending approval"
         ).update({"approval_status": "superseded"})
 
         db.add(new_req)

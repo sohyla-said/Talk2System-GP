@@ -456,6 +456,11 @@ const handleApprove = async () => {
     setRequirementsApproval(data);
     setApproved(Boolean(data.current_user_approved));
     setShowApprovalModal(false);
+    const newStatus = data.all_members_approved ? "processing" : "pending approval";
+    await fetch(
+      `http://localhost:8000/api/sessions/${sessionId}/status?status=${newStatus}`,
+      { method: "PUT", headers: getAuthHeaders() }
+    );
 
     if (data.all_members_approved){
       const targetRequirementId = currentRequirementId ?? requirementId;
@@ -472,11 +477,12 @@ const handleApprove = async () => {
             headers: getAuthHeaders()
           }
         );
-        fetchVersions();
+        
       }catch (err) {
         console.error(err);
       }
     }
+    
     if (pendingNavigation) {
       const { path, state } = typeof pendingNavigation === "string"
         ? { path: pendingNavigation, state: null }
@@ -484,6 +490,7 @@ const handleApprove = async () => {
       navigate(path, state ? { state } : undefined);
       setPendingNavigation(null);
     }
+    
   } catch (err) {
     console.error(err);
   }

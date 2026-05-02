@@ -5,6 +5,8 @@ from google import genai
 from google.genai import types
 from datetime import datetime
 from dotenv import load_dotenv
+from app.db.session import get_db
+from app.services.session_service import SessionService
 
 load_dotenv()
 
@@ -257,6 +259,13 @@ def generate_uml_pipeline(
             diagram_type,
             session_id=session_id
         )
+        if session_id:
+            db = next(get_db())
+            try:
+                SessionService.update_session_status(db, session_id, "pending approval")
+            finally:
+                db.close()
+
 
         return {
             "uml_code": uml_code,
