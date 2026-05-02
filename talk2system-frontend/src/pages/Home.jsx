@@ -1,9 +1,50 @@
 import { Link } from "react-router-dom";
-
+import { isLoggedIn, getCurrentUser, isAdmin } from "../api/authApi";
+import Header from "../components/layout/Header";
 export default function Home() {
+  const loggedIn = isLoggedIn();
+  const user = getCurrentUser();
+
   return (
     <div className="min-h-screen font-display bg-background-light dark:bg-background-dark">
-      
+      {loggedIn ? (
+        // LOGGED IN: Show full app header (Dashboard, Projects, Avatar, Logout)
+        <Header />
+      ) : (
+        // NOT LOGGED IN: Show simple header (Logo, Login, Sign up)
+        <header className="
+          h-14 flex items-center justify-between
+          whitespace-nowrap
+          border-b border-gray-200 dark:border-gray-700
+          px-6 sm:px-10 py-2
+          bg-white/80 dark:bg-background-dark/80
+          backdrop-blur-sm sticky top-0 z-20
+        ">   
+          <Link
+            to="/"
+            className="flex items-center gap-3 text-[#100d1c] dark:text-white hover:opacity-90 transition-opacity"
+          >
+            <img 
+              src="/logo.png" 
+              alt="Talk2System Logo" 
+              className="h-12 w-auto object-contain"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.style.display = 'none';
+              }}
+            />
+          </Link>
+
+          <nav className="flex items-center gap-6">
+            <Link to="/login" className="text-sm font-semibold text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-white transition-colors">
+              Login
+            </Link>
+            <Link to="/signup" className="text-sm font-semibold text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-white transition-colors">
+              Sign up
+            </Link>
+          </nav>
+        </header>
+      )}
       {/* Hero Section */}
       <div className="relative overflow-hidden">
         {/* Background Gradient */}
