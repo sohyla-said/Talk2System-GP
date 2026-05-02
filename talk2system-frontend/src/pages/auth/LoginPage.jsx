@@ -5,6 +5,7 @@ import { loginApi } from "../../api/authApi";
 export default function LoginPage() {
   const navigate = useNavigate();
   const [form, setForm]       = useState({ email: "", password: "" });
+  const [rememberMe, setRememberMe] = useState(false); 
   const [error, setError]     = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -22,8 +23,7 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const data = await loginApi(form);
-
+      const data = await loginApi(form, rememberMe); 
       // backend only returns a token for active / admin accounts
       if (data.role === "admin") {
         navigate("/role-approval");
@@ -31,7 +31,6 @@ export default function LoginPage() {
         navigate("/dashboard");
       }
     } catch (err) {
-      // surface the exact backend message (pending / suspended / bad creds …)
       setError(err.message || "Login failed");
     } finally {
       setLoading(false);
@@ -104,6 +103,23 @@ export default function LoginPage() {
                       required
                       className="w-full h-12 mt-1 px-4 border rounded-lg focus:ring-2 focus:ring-primary"
                     />
+                  </div>
+
+                  {/* Remember Me Checkbox */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="rememberMe"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                    />
+                    <label
+                      htmlFor="rememberMe"
+                      className="text-sm text-[#100d1c] dark:text-white cursor-pointer select-none"
+                    >
+                      Remember me
+                    </label>
                   </div>
 
                   <button

@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-
+import { useState, useEffect } from "react";
 import AppLayout from "../components/layout/AppLayout";
 import AuthLayout from "../components/layout/AuthLayout";
 import { isLoggedIn, getCurrentUser } from "../api/authApi";
@@ -49,32 +49,45 @@ import UmlSessionViewPage from "../pages/artifacts/UmlSessionView";
 import ProjectResults from "../pages/results/ProjectResults";
 import SessionResults from "../pages/results/SessionResults";
 
-// If not logged in → redirect to /login
-// If logged in → render the page
-function ProtectedRoute({ children }) {
-  if (!isLoggedIn()) {
+function ProtectedRoute({ children, requireAdmin = false }) {
+  const user = getCurrentUser(); 
+  
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
+
+  if (requireAdmin && user.role !== "admin") {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return children;
 }
 
-//  Auth guard 
-// If already logged in → redirect to /dashboard (no need to see login again)
 function GuestRoute({ children }) {
-  if (isLoggedIn()) {
+  const user = getCurrentUser(); 
+  
+  if (user) {
     return <Navigate to="/dashboard" replace />;
   }
   return children;
 }
 
 export default function AppRoutes() {
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    // Check token every 60 seconds
+    const interval = setInterval(() => {
+      setTick((t) => t + 1);
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <Routes>
-      {/* Public */}
-      <Route element={<AuthLayout />}>
-        <Route path="/" element={<Home />} />
-      </Route>
-      
+      <Route path="/" element={<Home />} />
+
 
        {/* Auth pages */}
       <Route element={<AuthLayout />}>
@@ -85,11 +98,10 @@ export default function AppRoutes() {
           <GuestRoute><Signup /></GuestRoute>     
         } />
         <Route path="/pending-approval" element={<PendingApproval />} />
-        <Route path="/role-approval" element={
+      </Route>
+      <Route path="/role-approval" element={
           <ProtectedRoute><RoleApproval /></ProtectedRoute>  
         } />
-      </Route>
-      
       {/* Protected app pages — redirect to /login if not logged in */}
       <Route element={
         <ProtectedRoute><AppLayout /></ProtectedRoute>
@@ -99,11 +111,15 @@ export default function AppRoutes() {
       <Route element={<AppLayout />}>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/notifications" element={<NotificationsPage />} />
-        <Route path="/admin/all-users" element={<AllUsersPage />} />
+        <Route path="/admin/all-users" element={
+          <ProtectedRoute requireAdmin><AllUsersPage /></ProtectedRoute>
+        } />
 
         <Route path="/projects">
           <Route index element={<ProjectsPage />} />
-          <Route path="system-projects" element={<AdminSystemProjectsPage />} />
+          <Route path="system-projects" element={
+            <ProtectedRoute requireAdmin><AdminSystemProjectsPage /></ProtectedRoute>
+          } />
           <Route path="new" element={<AddProject />} />
           <Route path="new-admin" element={<AdminAddProject />} />
           <Route path="new" element={<AddProject />} />
