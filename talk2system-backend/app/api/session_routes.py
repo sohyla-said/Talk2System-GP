@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel
+
 from app.db.session import get_db
 from app.models.user import User
 from app.dependencies.auth import get_current_user
@@ -10,6 +11,8 @@ from app.services.session_service import SessionService
 
 router = APIRouter(prefix="/api/sessions", tags=["Sessions"])
 
+
+# ===================== SCHEMAS =====================
 
 class SessionCreate(BaseModel):
     title: str
@@ -29,15 +32,22 @@ class SessionResponse(BaseModel):
         from_attributes = True
 
 
+# ✅ FIXED MODEL
 class SessionMemberResponse(BaseModel):
     id: int
     session_id: int
     user_id: int
     role: str
+    email: str
+    full_name: str
+    joined_at: datetime
+    user_status: str
 
     class Config:
         from_attributes = True
 
+
+# ===================== ROUTES =====================
 
 @router.post("/project/{project_id}", response_model=SessionResponse)
 def create_session(
@@ -48,8 +58,7 @@ def create_session(
     return SessionService.create_session(db, project_id, data.title, data.participant_ids)
 
 
-@router.get("/{session_id}/members", response_model=list[SessionMemberResponse])
-
+@router.get("/{session_id}/members", response_model=List[SessionMemberResponse])
 def get_session_members(
     session_id: int,
     db: Session = Depends(get_db),
@@ -58,7 +67,6 @@ def get_session_members(
     session = SessionService.get_session(db, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-
 
     membership = SessionService.get_session_membership(db, session_id, current_user.id)
     if not membership:
@@ -69,6 +77,7 @@ def get_session_members(
     return [
         SessionMemberResponse(
             id=m.id,
+            session_id=m.session_id,
             user_id=m.user_id,
             email=m.user.email,
             full_name=m.user.full_name,

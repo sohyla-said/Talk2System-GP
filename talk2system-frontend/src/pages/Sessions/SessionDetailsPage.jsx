@@ -1,3390 +1,417 @@
-// // import React, { useEffect, useState } from "react";
-// // import { useNavigate, useParams } from "react-router-dom";
-// // import { getToken } from "../../api/authApi";
-// // import {
-// //   fetchProject,
-// //   fetchMyRole,
-// //   fetchPendingRequests,
-// //   acceptInvitation,
-// //   rejectInvitation,
-// //   fetchMembers,
-// //   fetchProjectAuditLogs,
-// // } from "../../api/projectApi";
-
-// // const BASE_URL = "http://127.0.0.1:8000";
-
-// // const TAB_LIST = ["Requirements", "Transcript", "Artifacts"];
-
-// // function ApprovalBar({ approved, total }) {
-// //   const pct = total > 0 ? Math.round((approved / total) * 100) : 0;
-// //   const color =
-// //     pct === 100
-// //       ? "var(--color-background-success)"
-// //       : pct >= 50
-// //       ? "#EF9F27"
-// //       : "var(--color-background-danger)";
-// //   return (
-// //     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-// //       <div
-// //         style={{
-// //           flex: 1,
-// //           height: 6,
-// //           borderRadius: 99,
-// //           background: "var(--color-border-tertiary)",
-// //           overflow: "hidden",
-// //         }}
-// //       >
-// //         <div
-// //           style={{
-// //             width: `${pct}%`,
-// //             height: "100%",
-// //             background: color,
-// //             borderRadius: 99,
-// //             transition: "width 0.4s ease",
-// //           }}
-// //         />
-// //       </div>
-// //       <span
-// //         style={{
-// //           fontSize: 12,
-// //           color: "var(--color-text-secondary)",
-// //           minWidth: 44,
-// //           textAlign: "right",
-// //         }}
-// //       >
-// //         {approved}/{total}
-// //       </span>
-// //     </div>
-// //   );
-// // }
-
-// // function StatusBadge({ status }) {
-// //   const map = {
-// //     approved: {
-// //       bg: "var(--color-background-success)",
-// //       color: "var(--color-text-success)",
-// //       label: "Approved",
-// //     },
-// //     pending: {
-// //       bg: "var(--color-background-warning)",
-// //       color: "var(--color-text-warning)",
-// //       label: "Pending",
-// //     },
-// //     rejected: {
-// //       bg: "var(--color-background-danger)",
-// //       color: "var(--color-text-danger)",
-// //       label: "Rejected",
-// //     },
-// //     in_review: {
-// //       bg: "var(--color-background-info)",
-// //       color: "var(--color-text-info)",
-// //       label: "In Review",
-// //     },
-// //   };
-// //   const s = map[status] || map["pending"];
-// //   return (
-// //     <span
-// //       style={{
-// //         background: s.bg,
-// //         color: s.color,
-// //         fontSize: 11,
-// //         fontWeight: 700,
-// //         padding: "2px 10px",
-// //         borderRadius: 99,
-// //         letterSpacing: "0.02em",
-// //         whiteSpace: "nowrap",
-// //       }}
-// //     >
-// //       {s.label}
-// //     </span>
-// //   );
-// // }
-
-// // function SectionHeader({ icon, title, count }) {
-// //   return (
-// //     <div
-// //       style={{
-// //         display: "flex",
-// //         alignItems: "center",
-// //         gap: 8,
-// //         marginBottom: 12,
-// //       }}
-// //     >
-// //       <span
-// //         className="material-symbols-outlined"
-// //         style={{ fontSize: 18, color: "var(--color-text-secondary)" }}
-// //       >
-// //         {icon}
-// //       </span>
-// //       <span
-// //         style={{
-// //           fontSize: 13,
-// //           fontWeight: 700,
-// //           color: "var(--color-text-primary)",
-// //           textTransform: "uppercase",
-// //           letterSpacing: "0.08em",
-// //         }}
-// //       >
-// //         {title}
-// //       </span>
-// //       {count !== undefined && (
-// //         <span
-// //           style={{
-// //             marginLeft: 4,
-// //             background: "var(--color-background-secondary)",
-// //             color: "var(--color-text-secondary)",
-// //             fontSize: 11,
-// //             fontWeight: 700,
-// //             padding: "1px 8px",
-// //             borderRadius: 99,
-// //           }}
-// //         >
-// //           {count}
-// //         </span>
-// //       )}
-// //     </div>
-// //   );
-// // }
-
-// // export default function SessionDetailsPage() {
-// //   const navigate = useNavigate();
-// //   const { projectId, sessionId } = useParams();
-
-// //   const [project, setProject] = useState(null);
-// //   const [session, setSession] = useState(null);
-// //   const [myRole, setMyRole] = useState(null);
-// //   const [members, setMembers] = useState([]);
-// //   const [loading, setLoading] = useState(true);
-// //   const [activeTab, setActiveTab] = useState("Requirements");
-
-// //   const [requirements, setRequirements] = useState([]);
-// //   const [transcript, setTranscript] = useState([]);
-// //   const [artifacts, setArtifacts] = useState({ uml: null, srs: null });
-
-// //   const [pendingRequests, setPendingRequests] = useState([]);
-// //   const [showRequestsPanel, setShowRequestsPanel] = useState(false);
-// //   const [showMembersModal, setShowMembersModal] = useState(false);
-// //   const [notification, setNotification] = useState(null);
-
-// //   const [auditLogs, setAuditLogs] = useState([]);
-// //   const [showLogsModal, setShowLogsModal] = useState(false);
-
-// //   useEffect(() => {
-// //     const load = async () => {
-// //       try {
-// //         const [proj, roleData, membersData, sessRes] = await Promise.all([
-// //           fetchProject(projectId),
-// //           fetchMyRole(projectId),
-// //           fetchMembers(projectId),
-// //           fetch(`${BASE_URL}/api/sessions/${sessionId}`, {
-// //             headers: { Authorization: `Bearer ${getToken()}` },
-// //           }).then((r) => r.json()),
-// //         ]);
-
-// //         setProject(proj);
-// //         setMyRole(roleData.role);
-// //         setMembers(membersData);
-// //         setSession(sessRes);
-
-// //         if (sessRes.transcript) {
-// //           setTranscript(
-// //             Array.isArray(sessRes.transcript)
-// //               ? sessRes.transcript
-// //               : [{ text: sessRes.transcript, speaker: "Unknown", timestamp: null }]
-// //           );
-// //         }
-
-// //         const reqRes = await fetch(
-// //           `${BASE_URL}/api/sessions/${sessionId}/requirements`,
-// //           { headers: { Authorization: `Bearer ${getToken()}` } }
-// //         ).then((r) => r.json().catch(() => null));
-
-// //         if (reqRes) {
-// //           const functional = reqRes.functional_requirements || reqRes.data?.functional_requirements || [];
-// //           const nonFunctional =
-// //             reqRes.nonfunctional_requirements ||
-// //             reqRes.non_functional_requirements ||
-// //             reqRes.data?.nonfunctional_requirements ||
-// //             reqRes.data?.non_functional_requirements ||
-// //             [];
-// //           setRequirements([
-// //             ...functional.map((r) => ({ ...r, type: "Functional" })),
-// //             ...nonFunctional.map((r) => ({ ...r, type: "Non-Functional" })),
-// //           ]);
-// //         }
-
-// //         const umlRes = await fetch(
-// //           `${BASE_URL}/api/sessions/${sessionId}/uml`,
-// //           { headers: { Authorization: `Bearer ${getToken()}` } }
-// //         )
-// //           .then((r) => r.json().catch(() => null))
-// //           .catch(() => null);
-
-// //         const srsRes = await fetch(
-// //           `${BASE_URL}/api/sessions/${sessionId}/srs`,
-// //           { headers: { Authorization: `Bearer ${getToken()}` } }
-// //         )
-// //           .then((r) => r.json().catch(() => null))
-// //           .catch(() => null);
-
-// //         setArtifacts({ uml: umlRes, srs: srsRes });
-
-// //         if (roleData.role === "project_manager") {
-// //           const reqs = await fetchPendingRequests();
-// //           setPendingRequests(reqs.filter((r) => r.project_id === Number(projectId)));
-// //         }
-// //       } catch (err) {
-// //         console.error(err);
-// //       } finally {
-// //         setLoading(false);
-// //       }
-// //     };
-// //     load();
-// //   }, [projectId, sessionId]);
-
-// //   const openLogsModal = async () => {
-// //     try {
-// //       const logData = await fetchProjectAuditLogs(projectId);
-// //       setAuditLogs(logData.filter((l) => String(l.session_id) === String(sessionId)));
-// //       setShowLogsModal(true);
-// //     } catch (err) {
-// //       console.error(err);
-// //     }
-// //   };
-
-// //   const getActingRole = (userEmail) => {
-// //     if (!userEmail) return "";
-// //     const member = members.find((m) => m.email === userEmail);
-// //     if (member) return member.role.replace(/_/g, " ");
-// //     return "Admin";
-// //   };
-
-// //   const handleAccept = async (invId, userName) => {
-// //     try {
-// //       await acceptInvitation(invId);
-// //       setPendingRequests((prev) => prev.filter((r) => r.id !== invId));
-// //       showToast(`${userName} accepted as participant`, "success");
-// //     } catch (err) {
-// //       showToast(err.message, "error");
-// //     }
-// //   };
-
-// //   const handleReject = async (invId, userName) => {
-// //     try {
-// //       await rejectInvitation(invId);
-// //       setPendingRequests((prev) => prev.filter((r) => r.id !== invId));
-// //       showToast(`${userName} rejected`, "error");
-// //     } catch (err) {
-// //       showToast(err.message, "error");
-// //     }
-// //   };
-
-// //   function showToast(message, type) {
-// //     setNotification({ message, type });
-// //     setTimeout(() => setNotification(null), 3000);
-// //   }
-
-// //   const sessionMembersCount = members.length;
-
-// //   const getApprovalStats = (req) => {
-// //     const approvals = req.approvals || [];
-// //     const approved = approvals.filter((a) => a.status === "approved").length;
-// //     return { approved, total: sessionMembersCount };
-// //   };
-
-// //   const overallStats = (() => {
-// //     const total = requirements.length;
-// //     const approved = requirements.filter((r) => r.status === "approved").length;
-// //     const pending = requirements.filter((r) => !r.status || r.status === "pending").length;
-// //     const rejected = requirements.filter((r) => r.status === "rejected").length;
-// //     return { total, approved, pending, rejected };
-// //   })();
-
-// //   if (loading)
-// //     return (
-// //       <p style={{ padding: "2rem", color: "var(--color-text-secondary)" }}>
-// //         Loading...
-// //       </p>
-// //     );
-
-// //   return (
-// //     <div style={{ width: "100%", fontFamily: "var(--font-sans)" }}>
-// //       {/* ── Requests panel ── */}
-// //       {showRequestsPanel && myRole === "project_manager" && (
-// //         <div
-// //           style={{
-// //             position: "fixed",
-// //             inset: 0,
-// //             background: "rgba(0,0,0,0.4)",
-// //             display: "flex",
-// //             alignItems: "center",
-// //             justifyContent: "center",
-// //             zIndex: 50,
-// //           }}
-// //         >
-// //           <div
-// //             style={{
-// //               background: "var(--color-background-primary)",
-// //               borderRadius: "var(--border-radius-xl)",
-// //               width: "100%",
-// //               maxWidth: 480,
-// //               maxHeight: "80vh",
-// //               overflowY: "auto",
-// //               padding: "1.5rem",
-// //               boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-// //               border: "0.5px solid var(--color-border-tertiary)",
-// //             }}
-// //           >
-// //             <div
-// //               style={{
-// //                 display: "flex",
-// //                 justifyContent: "space-between",
-// //                 alignItems: "center",
-// //                 marginBottom: 16,
-// //               }}
-// //             >
-// //               <h2
-// //                 style={{
-// //                   fontSize: 18,
-// //                   fontWeight: 700,
-// //                   color: "var(--color-text-primary)",
-// //                   margin: 0,
-// //                 }}
-// //               >
-// //                 Join Requests
-// //                 {pendingRequests.length > 0 && (
-// //                   <span
-// //                     style={{
-// //                       marginLeft: 8,
-// //                       background: "var(--color-background-danger)",
-// //                       color: "var(--color-text-danger)",
-// //                       fontSize: 11,
-// //                       fontWeight: 700,
-// //                       padding: "2px 8px",
-// //                       borderRadius: 99,
-// //                     }}
-// //                   >
-// //                     {pendingRequests.length}
-// //                   </span>
-// //                 )}
-// //               </h2>
-// //               <button
-// //                 onClick={() => setShowRequestsPanel(false)}
-// //                 style={{ background: "none", border: "none", cursor: "pointer" }}
-// //               >
-// //                 <span
-// //                   className="material-symbols-outlined"
-// //                   style={{ color: "var(--color-text-secondary)" }}
-// //                 >
-// //                   close
-// //                 </span>
-// //               </button>
-// //             </div>
-// //             {pendingRequests.length === 0 ? (
-// //               <p
-// //                 style={{
-// //                   color: "var(--color-text-secondary)",
-// //                   textAlign: "center",
-// //                   padding: "2rem 0",
-// //                   fontSize: 14,
-// //                 }}
-// //               >
-// //                 No pending requests.
-// //               </p>
-// //             ) : (
-// //               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-// //                 {pendingRequests.map((req) => (
-// //                   <div
-// //                     key={req.id}
-// //                     style={{
-// //                       display: "flex",
-// //                       alignItems: "center",
-// //                       justifyContent: "space-between",
-// //                       background: "var(--color-background-secondary)",
-// //                       borderRadius: "var(--border-radius-lg)",
-// //                       padding: "12px 16px",
-// //                     }}
-// //                   >
-// //                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-// //                       <img
-// //                         src={`https://ui-avatars.com/api/?name=${encodeURIComponent(req.invitee_full_name || "User")}&background=random&color=fff`}
-// //                         style={{ width: 36, height: 36, borderRadius: "50%" }}
-// //                         alt=""
-// //                       />
-// //                       <div>
-// //                         <p
-// //                           style={{
-// //                             fontWeight: 600,
-// //                             fontSize: 13,
-// //                             margin: 0,
-// //                             color: "var(--color-text-primary)",
-// //                           }}
-// //                         >
-// //                           {req.invitee_full_name || "Unknown User"}
-// //                         </p>
-// //                         <p
-// //                           style={{
-// //                             fontSize: 11,
-// //                             color: "var(--color-text-secondary)",
-// //                             margin: 0,
-// //                           }}
-// //                         >
-// //                           {req.invitee_email}
-// //                         </p>
-// //                       </div>
-// //                     </div>
-// //                     <div style={{ display: "flex", gap: 8 }}>
-// //                       <button
-// //                         onClick={() =>
-// //                           handleAccept(
-// //                             req.id,
-// //                             req.invitee_full_name || `User #${req.invitee_user_id}`
-// //                           )
-// //                         }
-// //                         style={{
-// //                           padding: "4px 14px",
-// //                           borderRadius: "var(--border-radius-md)",
-// //                           background: "var(--color-background-success)",
-// //                           color: "var(--color-text-success)",
-// //                           border: "none",
-// //                           fontSize: 12,
-// //                           fontWeight: 700,
-// //                           cursor: "pointer",
-// //                         }}
-// //                       >
-// //                         Accept
-// //                       </button>
-// //                       <button
-// //                         onClick={() =>
-// //                           handleReject(
-// //                             req.id,
-// //                             req.invitee_full_name || `User #${req.invitee_user_id}`
-// //                           )
-// //                         }
-// //                         style={{
-// //                           padding: "4px 14px",
-// //                           borderRadius: "var(--border-radius-md)",
-// //                           background: "var(--color-background-danger)",
-// //                           color: "var(--color-text-danger)",
-// //                           border: "none",
-// //                           fontSize: 12,
-// //                           fontWeight: 700,
-// //                           cursor: "pointer",
-// //                         }}
-// //                       >
-// //                         Reject
-// //                       </button>
-// //                     </div>
-// //                   </div>
-// //                 ))}
-// //               </div>
-// //             )}
-// //           </div>
-// //         </div>
-// //       )}
-
-// //       {/* ── Members modal ── */}
-// //       {showMembersModal && (
-// //         <div
-// //           style={{
-// //             position: "fixed",
-// //             inset: 0,
-// //             background: "rgba(0,0,0,0.4)",
-// //             display: "flex",
-// //             alignItems: "center",
-// //             justifyContent: "center",
-// //             zIndex: 50,
-// //           }}
-// //         >
-// //           <div
-// //             style={{
-// //               background: "var(--color-background-primary)",
-// //               borderRadius: "var(--border-radius-xl)",
-// //               width: "100%",
-// //               maxWidth: 420,
-// //               maxHeight: "80vh",
-// //               display: "flex",
-// //               flexDirection: "column",
-// //               boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-// //               border: "0.5px solid var(--color-border-tertiary)",
-// //             }}
-// //           >
-// //             <div
-// //               style={{
-// //                 display: "flex",
-// //                 justifyContent: "space-between",
-// //                 alignItems: "center",
-// //                 padding: "1.25rem 1.5rem",
-// //                 borderBottom: "0.5px solid var(--color-border-tertiary)",
-// //               }}
-// //             >
-// //               <h2
-// //                 style={{
-// //                   fontSize: 16,
-// //                   fontWeight: 700,
-// //                   margin: 0,
-// //                   color: "var(--color-text-primary)",
-// //                 }}
-// //               >
-// //                 Project Members{" "}
-// //                 <span
-// //                   style={{ fontWeight: 400, color: "var(--color-text-secondary)", fontSize: 13 }}
-// //                 >
-// //                   ({members.length})
-// //                 </span>
-// //               </h2>
-// //               <button
-// //                 onClick={() => setShowMembersModal(false)}
-// //                 style={{ background: "none", border: "none", cursor: "pointer" }}
-// //               >
-// //                 <span
-// //                   className="material-symbols-outlined"
-// //                   style={{ color: "var(--color-text-secondary)" }}
-// //                 >
-// //                   close
-// //                 </span>
-// //               </button>
-// //             </div>
-// //             <div
-// //               style={{
-// //                 padding: "1rem",
-// //                 overflowY: "auto",
-// //                 display: "flex",
-// //                 flexDirection: "column",
-// //                 gap: 8,
-// //               }}
-// //             >
-// //               {members.map((member) => (
-// //                 <div
-// //                   key={member.id}
-// //                   style={{
-// //                     display: "flex",
-// //                     alignItems: "center",
-// //                     justifyContent: "space-between",
-// //                     padding: "10px 12px",
-// //                     borderRadius: "var(--border-radius-md)",
-// //                     background: "var(--color-background-secondary)",
-// //                   }}
-// //                 >
-// //                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-// //                     <img
-// //                       src={`https://ui-avatars.com/api/?name=${encodeURIComponent(member.full_name || member.email || "User")}&background=random&color=fff`}
-// //                       style={{ width: 36, height: 36, borderRadius: "50%" }}
-// //                       alt=""
-// //                     />
-// //                     <div>
-// //                       <p
-// //                         style={{
-// //                           fontWeight: 600,
-// //                           fontSize: 13,
-// //                           margin: 0,
-// //                           color: "var(--color-text-primary)",
-// //                         }}
-// //                       >
-// //                         {member.full_name || "Unknown User"}
-// //                       </p>
-// //                       <p
-// //                         style={{
-// //                           fontSize: 11,
-// //                           color: "var(--color-text-secondary)",
-// //                           margin: 0,
-// //                         }}
-// //                       >
-// //                         {member.email}
-// //                       </p>
-// //                     </div>
-// //                   </div>
-// //                   <span
-// //                     style={{
-// //                       fontSize: 10,
-// //                       fontWeight: 700,
-// //                       padding: "2px 8px",
-// //                       borderRadius: 99,
-// //                       background:
-// //                         member.role === "project_manager"
-// //                           ? "var(--color-background-info)"
-// //                           : "var(--color-background-secondary)",
-// //                       color:
-// //                         member.role === "project_manager"
-// //                           ? "var(--color-text-info)"
-// //                           : "var(--color-text-secondary)",
-// //                       border: "0.5px solid var(--color-border-tertiary)",
-// //                     }}
-// //                   >
-// //                     {member.role === "project_manager" ? "Project Manager" : "Member"}
-// //                   </span>
-// //                 </div>
-// //               ))}
-// //             </div>
-// //           </div>
-// //         </div>
-// //       )}
-
-// //       {/* ── Activity log modal ── */}
-// //       {showLogsModal && (
-// //         <div
-// //           style={{
-// //             position: "fixed",
-// //             inset: 0,
-// //             background: "rgba(0,0,0,0.4)",
-// //             display: "flex",
-// //             alignItems: "center",
-// //             justifyContent: "center",
-// //             zIndex: 50,
-// //           }}
-// //         >
-// //           <div
-// //             style={{
-// //               background: "var(--color-background-primary)",
-// //               borderRadius: "var(--border-radius-xl)",
-// //               width: "100%",
-// //               maxWidth: 640,
-// //               maxHeight: "80vh",
-// //               display: "flex",
-// //               flexDirection: "column",
-// //               margin: "1rem",
-// //               boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-// //               border: "0.5px solid var(--color-border-tertiary)",
-// //             }}
-// //           >
-// //             <div
-// //               style={{
-// //                 display: "flex",
-// //                 justifyContent: "space-between",
-// //                 alignItems: "center",
-// //                 padding: "1.25rem 1.5rem",
-// //                 borderBottom: "0.5px solid var(--color-border-tertiary)",
-// //               }}
-// //             >
-// //               <h2
-// //                 style={{
-// //                   fontSize: 16,
-// //                   fontWeight: 700,
-// //                   margin: 0,
-// //                   color: "var(--color-text-primary)",
-// //                 }}
-// //               >
-// //                 Session Activity Log
-// //               </h2>
-// //               <button
-// //                 onClick={() => setShowLogsModal(false)}
-// //                 style={{ background: "none", border: "none", cursor: "pointer" }}
-// //               >
-// //                 <span
-// //                   className="material-symbols-outlined"
-// //                   style={{ color: "var(--color-text-secondary)" }}
-// //                 >
-// //                   close
-// //                 </span>
-// //               </button>
-// //             </div>
-// //             <div
-// //               style={{
-// //                 padding: "1.25rem 1.5rem",
-// //                 overflowY: "auto",
-// //                 display: "flex",
-// //                 flexDirection: "column",
-// //                 gap: 10,
-// //               }}
-// //             >
-// //               {auditLogs.length === 0 ? (
-// //                 <p
-// //                   style={{
-// //                     color: "var(--color-text-secondary)",
-// //                     textAlign: "center",
-// //                     padding: "2rem 0",
-// //                     fontSize: 14,
-// //                   }}
-// //                 >
-// //                   No actions recorded yet.
-// //                 </p>
-// //               ) : (
-// //                 auditLogs.map((log) => {
-// //                   const roleName = getActingRole(log.user_email);
-// //                   return (
-// //                     <div
-// //                       key={log.id}
-// //                       style={{
-// //                         display: "flex",
-// //                         alignItems: "flex-start",
-// //                         gap: 12,
-// //                         padding: "10px 14px",
-// //                         borderRadius: "var(--border-radius-md)",
-// //                         background: "var(--color-background-secondary)",
-// //                       }}
-// //                     >
-// //                       <span
-// //                         className="material-symbols-outlined"
-// //                         style={{
-// //                           fontSize: 16,
-// //                           color: "var(--color-text-info)",
-// //                           marginTop: 2,
-// //                         }}
-// //                       >
-// //                         circle
-// //                       </span>
-// //                       <div style={{ flex: 1 }}>
-// //                         <p
-// //                           style={{
-// //                             fontSize: 13,
-// //                             fontWeight: 600,
-// //                             margin: 0,
-// //                             color: "var(--color-text-primary)",
-// //                           }}
-// //                         >
-// //                           {log.user_name || "Unknown"}{" "}
-// //                           {roleName && (
-// //                             <span
-// //                               style={{
-// //                                 fontWeight: 400,
-// //                                 color: "var(--color-text-secondary)",
-// //                                 fontSize: 11,
-// //                               }}
-// //                             >
-// //                               ({roleName})
-// //                             </span>
-// //                           )}{" "}
-// //                           <span
-// //                             style={{
-// //                               fontWeight: 400,
-// //                               color: "var(--color-text-secondary)",
-// //                             }}
-// //                           >
-// //                             {log.action.replace(/_/g, " ")}
-// //                           </span>
-// //                         </p>
-// //                         <p
-// //                           style={{
-// //                             fontSize: 11,
-// //                             color: "var(--color-text-secondary)",
-// //                             margin: "4px 0 0",
-// //                           }}
-// //                         >
-// //                           {new Date(log.created_at).toLocaleString()} · {log.user_email}
-// //                         </p>
-// //                       </div>
-// //                     </div>
-// //                   );
-// //                 })
-// //               )}
-// //             </div>
-// //           </div>
-// //         </div>
-// //       )}
-
-// //       {/* ── Main content ── */}
-// //       <div
-// //         style={{
-// //           padding: "2rem 1.5rem",
-// //           maxWidth: 1080,
-// //           margin: "0 auto",
-// //           display: "flex",
-// //           flexDirection: "column",
-// //           gap: 0,
-// //         }}
-// //       >
-// //         {/* Header row */}
-// //         <div
-// //           style={{
-// //             display: "flex",
-// //             flexWrap: "wrap",
-// //             justifyContent: "space-between",
-// //             alignItems: "flex-start",
-// //             gap: 16,
-// //             paddingBottom: "1rem",
-// //           }}
-// //         >
-// //           {/* Left: back + title + role */}
-// //           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-// //             <button
-// //               onClick={() => navigate(`/projects/${projectId}`)}
-// //               style={{
-// //                 display: "inline-flex",
-// //                 alignItems: "center",
-// //                 gap: 4,
-// //                 background: "none",
-// //                 border: "none",
-// //                 cursor: "pointer",
-// //                 color: "var(--color-text-secondary)",
-// //                 fontSize: 13,
-// //                 padding: 0,
-// //                 marginBottom: 4,
-// //               }}
-// //             >
-// //               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-// //                 arrow_back
-// //               </span>
-// //               {project?.name}
-// //             </button>
-// //             <h1
-// //               style={{
-// //                 fontSize: 28,
-// //                 fontWeight: 800,
-// //                 margin: 0,
-// //                 color: "var(--color-text-primary)",
-// //                 lineHeight: 1.2,
-// //               }}
-// //             >
-// //               {session?.title || `Session #${sessionId}`}
-// //             </h1>
-// //             {myRole && (
-// //               <span
-// //                 style={{
-// //                   width: "fit-content",
-// //                   fontSize: 11,
-// //                   fontWeight: 700,
-// //                   padding: "3px 10px",
-// //                   borderRadius: 99,
-// //                   background: "var(--color-background-info)",
-// //                   color: "var(--color-text-info)",
-// //                 }}
-// //               >
-// //                 Your role: {myRole.replace("_", " ")}
-// //               </span>
-// //             )}
-// //           </div>
-
-// //           {/* Right: action buttons */}
-// //           <div
-// //             style={{
-// //               display: "flex",
-// //               flexDirection: "column",
-// //               alignItems: "flex-end",
-// //               gap: 10,
-// //             }}
-// //           >
-// //             <div
-// //               style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
-// //             >
-// //               {myRole && (
-// //                 <button
-// //                   onClick={() => setShowMembersModal(true)}
-// //                   style={{
-// //                     display: "inline-flex",
-// //                     alignItems: "center",
-// //                     gap: 6,
-// //                     height: 32,
-// //                     padding: "0 12px",
-// //                     borderRadius: "var(--border-radius-md)",
-// //                     border: "0.5px solid var(--color-border-secondary)",
-// //                     background: "var(--color-background-primary)",
-// //                     fontSize: 12,
-// //                     fontWeight: 700,
-// //                     cursor: "pointer",
-// //                     color: "var(--color-text-primary)",
-// //                   }}
-// //                 >
-// //                   <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-// //                     group
-// //                   </span>
-// //                   Members
-// //                   <span
-// //                     style={{
-// //                       background: "var(--color-background-secondary)",
-// //                       color: "var(--color-text-secondary)",
-// //                       fontSize: 10,
-// //                       fontWeight: 700,
-// //                       padding: "1px 6px",
-// //                       borderRadius: 99,
-// //                     }}
-// //                   >
-// //                     {members.length}
-// //                   </span>
-// //                 </button>
-// //               )}
-
-// //               {myRole === "project_manager" && (
-// //                 <button
-// //                   onClick={() => navigate(`/projects/${projectId}/add-participant`)}
-// //                   style={{
-// //                     display: "inline-flex",
-// //                     alignItems: "center",
-// //                     gap: 6,
-// //                     height: 32,
-// //                     padding: "0 12px",
-// //                     borderRadius: "var(--border-radius-md)",
-// //                     border: "none",
-// //                     background: "#059669",
-// //                     color: "#fff",
-// //                     fontSize: 12,
-// //                     fontWeight: 700,
-// //                     cursor: "pointer",
-// //                   }}
-// //                 >
-// //                   <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-// //                     person_add
-// //                   </span>
-// //                   Add Participant
-// //                 </button>
-// //               )}
-
-// //               {myRole === "project_manager" && (
-// //                 <button
-// //                   onClick={() => setShowRequestsPanel(true)}
-// //                   style={{
-// //                     position: "relative",
-// //                     display: "inline-flex",
-// //                     alignItems: "center",
-// //                     gap: 6,
-// //                     height: 32,
-// //                     padding: "0 12px",
-// //                     borderRadius: "var(--border-radius-md)",
-// //                     border: "0.5px solid var(--color-border-secondary)",
-// //                     background: "var(--color-background-primary)",
-// //                     fontSize: 12,
-// //                     fontWeight: 700,
-// //                     cursor: "pointer",
-// //                     color: "var(--color-text-primary)",
-// //                   }}
-// //                 >
-// //                   <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-// //                     group_add
-// //                   </span>
-// //                   Requests
-// //                   {pendingRequests.length > 0 && (
-// //                     <span
-// //                       style={{
-// //                         position: "absolute",
-// //                         top: -6,
-// //                         right: -6,
-// //                         width: 16,
-// //                         height: 16,
-// //                         borderRadius: "50%",
-// //                         background: "var(--color-background-danger)",
-// //                         color: "var(--color-text-danger)",
-// //                         fontSize: 9,
-// //                         display: "flex",
-// //                         alignItems: "center",
-// //                         justifyContent: "center",
-// //                         fontWeight: 700,
-// //                       }}
-// //                     >
-// //                       {pendingRequests.length}
-// //                     </span>
-// //                   )}
-// //                 </button>
-// //               )}
-
-// //               {myRole === "project_manager" && (
-// //                 <button
-// //                   onClick={openLogsModal}
-// //                   style={{
-// //                     display: "inline-flex",
-// //                     alignItems: "center",
-// //                     gap: 6,
-// //                     height: 32,
-// //                     padding: "0 12px",
-// //                     borderRadius: "var(--border-radius-md)",
-// //                     border: "0.5px solid var(--color-border-secondary)",
-// //                     background: "var(--color-background-primary)",
-// //                     fontSize: 12,
-// //                     fontWeight: 700,
-// //                     cursor: "pointer",
-// //                     color: "var(--color-text-primary)",
-// //                   }}
-// //                 >
-// //                   <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-// //                     history
-// //                   </span>
-// //                   Activity
-// //                 </button>
-// //               )}
-// //             </div>
-// //           </div>
-// //         </div>
-
-// //         {/* Meta chips */}
-// //         <div
-// //           style={{
-// //             display: "flex",
-// //             gap: 8,
-// //             flexWrap: "wrap",
-// //             paddingBottom: "1rem",
-// //           }}
-// //         >
-// //           {session?.created_at && (
-// //             <span
-// //               style={{
-// //                 height: 28,
-// //                 display: "inline-flex",
-// //                 alignItems: "center",
-// //                 padding: "0 12px",
-// //                 borderRadius: 99,
-// //                 background: "var(--color-background-info)",
-// //                 color: "var(--color-text-info)",
-// //                 fontSize: 12,
-// //                 fontWeight: 500,
-// //               }}
-// //             >
-// //               {new Date(session.created_at).toLocaleDateString()}
-// //             </span>
-// //           )}
-// //           {session?.status && (
-// //             <span
-// //               style={{
-// //                 height: 28,
-// //                 display: "inline-flex",
-// //                 alignItems: "center",
-// //                 padding: "0 12px",
-// //                 borderRadius: 99,
-// //                 background: "var(--color-background-secondary)",
-// //                 color: "var(--color-text-secondary)",
-// //                 fontSize: 12,
-// //                 fontWeight: 500,
-// //                 border: "0.5px solid var(--color-border-tertiary)",
-// //               }}
-// //             >
-// //               Status: {session.status}
-// //             </span>
-// //           )}
-// //           <span
-// //             style={{
-// //               height: 28,
-// //               display: "inline-flex",
-// //               alignItems: "center",
-// //               padding: "0 12px",
-// //               borderRadius: 99,
-// //               background: "var(--color-background-secondary)",
-// //               color: "var(--color-text-secondary)",
-// //               fontSize: 12,
-// //               fontWeight: 500,
-// //               border: "0.5px solid var(--color-border-tertiary)",
-// //             }}
-// //           >
-// //             <span className="material-symbols-outlined" style={{ fontSize: 13, marginRight: 4 }}>
-// //               group
-// //             </span>
-// //             {sessionMembersCount} members
-// //           </span>
-// //         </div>
-
-// //         {/* ── Approval summary cards (PM only) ── */}
-// //         {myRole === "project_manager" && requirements.length > 0 && (
-// //           <div
-// //             style={{
-// //               display: "grid",
-// //               gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-// //               gap: 10,
-// //               marginBottom: "1.5rem",
-// //             }}
-// //           >
-// //             {[
-// //               {
-// //                 label: "Total Requirements",
-// //                 value: overallStats.total,
-// //                 color: "var(--color-text-primary)",
-// //                 bg: "var(--color-background-secondary)",
-// //               },
-// //               {
-// //                 label: "Approved",
-// //                 value: overallStats.approved,
-// //                 color: "var(--color-text-success)",
-// //                 bg: "var(--color-background-success)",
-// //               },
-// //               {
-// //                 label: "Pending Approval",
-// //                 value: overallStats.pending,
-// //                 color: "var(--color-text-warning)",
-// //                 bg: "var(--color-background-warning)",
-// //               },
-// //               {
-// //                 label: "Rejected",
-// //                 value: overallStats.rejected,
-// //                 color: "var(--color-text-danger)",
-// //                 bg: "var(--color-background-danger)",
-// //               },
-// //             ].map((stat) => (
-// //               <div
-// //                 key={stat.label}
-// //                 style={{
-// //                   background: stat.bg,
-// //                   borderRadius: "var(--border-radius-md)",
-// //                   padding: "14px 16px",
-// //                   display: "flex",
-// //                   flexDirection: "column",
-// //                   gap: 4,
-// //                 }}
-// //               >
-// //                 <span
-// //                   style={{
-// //                     fontSize: 12,
-// //                     color: stat.color,
-// //                     opacity: 0.75,
-// //                     fontWeight: 500,
-// //                   }}
-// //                 >
-// //                   {stat.label}
-// //                 </span>
-// //                 <span
-// //                   style={{ fontSize: 26, fontWeight: 700, color: stat.color, lineHeight: 1 }}
-// //                 >
-// //                   {stat.value}
-// //                 </span>
-// //               </div>
-// //             ))}
-// //           </div>
-// //         )}
-
-// //         {/* ── Tabs ── */}
-// //         <div
-// //           style={{
-// //             borderBottom: "0.5px solid var(--color-border-tertiary)",
-// //             marginBottom: "1.5rem",
-// //           }}
-// //         >
-// //           <div style={{ display: "flex", gap: "2rem" }}>
-// //             {TAB_LIST.map((tab) => (
-// //               <button
-// //                 key={tab}
-// //                 onClick={() => setActiveTab(tab)}
-// //                 style={{
-// //                   background: "none",
-// //                   border: "none",
-// //                   borderBottom: activeTab === tab
-// //                     ? "2.5px solid var(--color-text-info)"
-// //                     : "2.5px solid transparent",
-// //                   padding: "12px 0 10px",
-// //                   fontSize: 13,
-// //                   fontWeight: 700,
-// //                   cursor: "pointer",
-// //                   color:
-// //                     activeTab === tab
-// //                       ? "var(--color-text-primary)"
-// //                       : "var(--color-text-secondary)",
-// //                   transition: "color 0.15s",
-// //                 }}
-// //               >
-// //                 {tab}
-// //               </button>
-// //             ))}
-// //           </div>
-// //         </div>
-
-// //         {/* ── Tab content ── */}
-
-// //         {/* REQUIREMENTS TAB */}
-// //         {activeTab === "Requirements" && (
-// //           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-// //             {requirements.length === 0 ? (
-// //               <p style={{ color: "var(--color-text-secondary)", fontSize: 14 }}>
-// //                 No requirements extracted yet.
-// //               </p>
-// //             ) : (
-// //               <>
-// //                 {/* Functional */}
-// //                 {requirements.filter((r) => r.type === "Functional").length > 0 && (
-// //                   <div>
-// //                     <SectionHeader
-// //                       icon="check_circle"
-// //                       title="Functional Requirements"
-// //                       count={requirements.filter((r) => r.type === "Functional").length}
-// //                     />
-// //                     <div
-// //                       style={{
-// //                         display: "flex",
-// //                         flexDirection: "column",
-// //                         gap: 8,
-// //                       }}
-// //                     >
-// //                       {requirements
-// //                         .filter((r) => r.type === "Functional")
-// //                         .map((req, i) => {
-// //                           const { approved, total } = getApprovalStats(req);
-// //                           const isPending = !req.status || req.status === "pending";
-// //                           return (
-// //                             <div
-// //                               key={req.id || i}
-// //                               style={{
-// //                                 background: "var(--color-background-primary)",
-// //                                 border: "0.5px solid var(--color-border-tertiary)",
-// //                                 borderRadius: "var(--border-radius-lg)",
-// //                                 padding: "14px 18px",
-// //                                 display: "flex",
-// //                                 flexDirection: "column",
-// //                                 gap: 10,
-// //                               }}
-// //                             >
-// //                               <div
-// //                                 style={{
-// //                                   display: "flex",
-// //                                   justifyContent: "space-between",
-// //                                   alignItems: "flex-start",
-// //                                   gap: 12,
-// //                                 }}
-// //                               >
-// //                                 <p
-// //                                   style={{
-// //                                     margin: 0,
-// //                                     fontSize: 14,
-// //                                     color: "var(--color-text-primary)",
-// //                                     lineHeight: 1.6,
-// //                                     flex: 1,
-// //                                   }}
-// //                                 >
-// //                                   {req.text || req.description || `Requirement ${i + 1}`}
-// //                                 </p>
-// //                                 <StatusBadge status={req.status || "pending"} />
-// //                               </div>
-// //                               {isPending && total > 0 && (
-// //                                 <div>
-// //                                   <p
-// //                                     style={{
-// //                                       margin: "0 0 6px",
-// //                                       fontSize: 11,
-// //                                       color: "var(--color-text-secondary)",
-// //                                       fontWeight: 500,
-// //                                     }}
-// //                                   >
-// //                                     Member approvals
-// //                                   </p>
-// //                                   <ApprovalBar approved={approved} total={total} />
-// //                                 </div>
-// //                               )}
-// //                             </div>
-// //                           );
-// //                         })}
-// //                     </div>
-// //                   </div>
-// //                 )}
-
-// //                 {/* Non-Functional */}
-// //                 {requirements.filter((r) => r.type === "Non-Functional").length > 0 && (
-// //                   <div>
-// //                     <SectionHeader
-// //                       icon="tune"
-// //                       title="Non-Functional Requirements"
-// //                       count={requirements.filter((r) => r.type === "Non-Functional").length}
-// //                     />
-// //                     <div
-// //                       style={{
-// //                         display: "flex",
-// //                         flexDirection: "column",
-// //                         gap: 8,
-// //                       }}
-// //                     >
-// //                       {requirements
-// //                         .filter((r) => r.type === "Non-Functional")
-// //                         .map((req, i) => {
-// //                           const { approved, total } = getApprovalStats(req);
-// //                           const isPending = !req.status || req.status === "pending";
-// //                           return (
-// //                             <div
-// //                               key={req.id || i}
-// //                               style={{
-// //                                 background: "var(--color-background-primary)",
-// //                                 border: "0.5px solid var(--color-border-tertiary)",
-// //                                 borderRadius: "var(--border-radius-lg)",
-// //                                 padding: "14px 18px",
-// //                                 display: "flex",
-// //                                 flexDirection: "column",
-// //                                 gap: 10,
-// //                               }}
-// //                             >
-// //                               <div
-// //                                 style={{
-// //                                   display: "flex",
-// //                                   justifyContent: "space-between",
-// //                                   alignItems: "flex-start",
-// //                                   gap: 12,
-// //                                 }}
-// //                               >
-// //                                 <p
-// //                                   style={{
-// //                                     margin: 0,
-// //                                     fontSize: 14,
-// //                                     color: "var(--color-text-primary)",
-// //                                     lineHeight: 1.6,
-// //                                     flex: 1,
-// //                                   }}
-// //                                 >
-// //                                   {req.text || req.description || `Requirement ${i + 1}`}
-// //                                 </p>
-// //                                 <StatusBadge status={req.status || "pending"} />
-// //                               </div>
-// //                               {isPending && total > 0 && (
-// //                                 <div>
-// //                                   <p
-// //                                     style={{
-// //                                       margin: "0 0 6px",
-// //                                       fontSize: 11,
-// //                                       color: "var(--color-text-secondary)",
-// //                                       fontWeight: 500,
-// //                                     }}
-// //                                   >
-// //                                     Member approvals
-// //                                   </p>
-// //                                   <ApprovalBar approved={approved} total={total} />
-// //                                 </div>
-// //                               )}
-// //                             </div>
-// //                           );
-// //                         })}
-// //                     </div>
-// //                   </div>
-// //                 )}
-// //               </>
-// //             )}
-// //           </div>
-// //         )}
-
-// //         {/* TRANSCRIPT TAB */}
-// //         {activeTab === "Transcript" && (
-// //           <div>
-// //             <SectionHeader icon="record_voice_over" title="Session Transcript" count={transcript.length} />
-// //             {transcript.length === 0 ? (
-// //               <p style={{ color: "var(--color-text-secondary)", fontSize: 14 }}>
-// //                 No transcript available for this session.
-// //               </p>
-// //             ) : (
-// //               <div
-// //                 style={{
-// //                   display: "flex",
-// //                   flexDirection: "column",
-// //                   gap: 12,
-// //                 }}
-// //               >
-// //                 {transcript.map((entry, i) => (
-// //                   <div
-// //                     key={i}
-// //                     style={{
-// //                       display: "flex",
-// //                       gap: 14,
-// //                       alignItems: "flex-start",
-// //                     }}
-// //                   >
-// //                     <div
-// //                       style={{
-// //                         width: 32,
-// //                         height: 32,
-// //                         borderRadius: "50%",
-// //                         background: "var(--color-background-info)",
-// //                         display: "flex",
-// //                         alignItems: "center",
-// //                         justifyContent: "center",
-// //                         fontSize: 12,
-// //                         fontWeight: 700,
-// //                         color: "var(--color-text-info)",
-// //                         flexShrink: 0,
-// //                       }}
-// //                     >
-// //                       {(entry.speaker || "?")[0].toUpperCase()}
-// //                     </div>
-// //                     <div
-// //                       style={{
-// //                         flex: 1,
-// //                         background: "var(--color-background-secondary)",
-// //                         borderRadius: "var(--border-radius-lg)",
-// //                         padding: "10px 14px",
-// //                       }}
-// //                     >
-// //                       <div
-// //                         style={{
-// //                           display: "flex",
-// //                           justifyContent: "space-between",
-// //                           marginBottom: 4,
-// //                         }}
-// //                       >
-// //                         <span
-// //                           style={{
-// //                             fontSize: 12,
-// //                             fontWeight: 700,
-// //                             color: "var(--color-text-primary)",
-// //                           }}
-// //                         >
-// //                           {entry.speaker || "Speaker"}
-// //                         </span>
-// //                         {entry.timestamp && (
-// //                           <span
-// //                             style={{
-// //                               fontSize: 11,
-// //                               color: "var(--color-text-secondary)",
-// //                             }}
-// //                           >
-// //                             {entry.timestamp}
-// //                           </span>
-// //                         )}
-// //                       </div>
-// //                       <p
-// //                         style={{
-// //                           margin: 0,
-// //                           fontSize: 13,
-// //                           color: "var(--color-text-primary)",
-// //                           lineHeight: 1.6,
-// //                         }}
-// //                       >
-// //                         {entry.text}
-// //                       </p>
-// //                     </div>
-// //                   </div>
-// //                 ))}
-// //               </div>
-// //             )}
-// //           </div>
-// //         )}
-
-// //         {/* ARTIFACTS TAB */}
-// //         {activeTab === "Artifacts" && (
-// //           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-// //             <SectionHeader icon="widgets" title="Generated Artifacts" />
-
-// //             <div
-// //               style={{
-// //                 display: "grid",
-// //                 gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-// //                 gap: 14,
-// //               }}
-// //             >
-// //               {/* UML Diagram card */}
-// //               <div
-// //                 style={{
-// //                   background: "var(--color-background-primary)",
-// //                   border: "0.5px solid var(--color-border-tertiary)",
-// //                   borderRadius: "var(--border-radius-lg)",
-// //                   padding: "1.25rem",
-// //                   display: "flex",
-// //                   flexDirection: "column",
-// //                   gap: 12,
-// //                 }}
-// //               >
-// //                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-// //                   <div
-// //                     style={{
-// //                       width: 36,
-// //                       height: 36,
-// //                       borderRadius: "var(--border-radius-md)",
-// //                       background: "var(--color-background-info)",
-// //                       display: "flex",
-// //                       alignItems: "center",
-// //                       justifyContent: "center",
-// //                     }}
-// //                   >
-// //                     <span
-// //                       className="material-symbols-outlined"
-// //                       style={{ fontSize: 20, color: "var(--color-text-info)" }}
-// //                     >
-// //                       account_tree
-// //                     </span>
-// //                   </div>
-// //                   <div>
-// //                     <p
-// //                       style={{
-// //                         margin: 0,
-// //                         fontWeight: 700,
-// //                         fontSize: 14,
-// //                         color: "var(--color-text-primary)",
-// //                       }}
-// //                     >
-// //                       UML Diagram
-// //                     </p>
-// //                     <p
-// //                       style={{
-// //                         margin: 0,
-// //                         fontSize: 11,
-// //                         color: "var(--color-text-secondary)",
-// //                       }}
-// //                     >
-// //                       System architecture model
-// //                     </p>
-// //                   </div>
-// //                 </div>
-// //                 {artifacts.uml ? (
-// //                   <button
-// //                     onClick={() =>
-// //                       navigate(`/projects/${projectId}/sessions/${sessionId}/uml`)
-// //                     }
-// //                     style={{
-// //                       display: "inline-flex",
-// //                       alignItems: "center",
-// //                       justifyContent: "center",
-// //                       gap: 6,
-// //                       height: 34,
-// //                       borderRadius: "var(--border-radius-md)",
-// //                       border: "0.5px solid var(--color-border-secondary)",
-// //                       background: "var(--color-background-secondary)",
-// //                       fontSize: 12,
-// //                       fontWeight: 700,
-// //                       cursor: "pointer",
-// //                       color: "var(--color-text-primary)",
-// //                     }}
-// //                   >
-// //                     <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
-// //                       open_in_new
-// //                     </span>
-// //                     View UML
-// //                   </button>
-// //                 ) : (
-// //                   <span
-// //                     style={{
-// //                       fontSize: 12,
-// //                       color: "var(--color-text-secondary)",
-// //                       padding: "6px 0",
-// //                     }}
-// //                   >
-// //                     Not generated yet
-// //                   </span>
-// //                 )}
-// //               </div>
-
-// //               {/* SRS card */}
-// //               <div
-// //                 style={{
-// //                   background: "var(--color-background-primary)",
-// //                   border: "0.5px solid var(--color-border-tertiary)",
-// //                   borderRadius: "var(--border-radius-lg)",
-// //                   padding: "1.25rem",
-// //                   display: "flex",
-// //                   flexDirection: "column",
-// //                   gap: 12,
-// //                 }}
-// //               >
-// //                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-// //                   <div
-// //                     style={{
-// //                       width: 36,
-// //                       height: 36,
-// //                       borderRadius: "var(--border-radius-md)",
-// //                       background: "var(--color-background-success)",
-// //                       display: "flex",
-// //                       alignItems: "center",
-// //                       justifyContent: "center",
-// //                     }}
-// //                   >
-// //                     <span
-// //                       className="material-symbols-outlined"
-// //                       style={{ fontSize: 20, color: "var(--color-text-success)" }}
-// //                     >
-// //                       description
-// //                     </span>
-// //                   </div>
-// //                   <div>
-// //                     <p
-// //                       style={{
-// //                         margin: 0,
-// //                         fontWeight: 700,
-// //                         fontSize: 14,
-// //                         color: "var(--color-text-primary)",
-// //                       }}
-// //                     >
-// //                       SRS Document
-// //                     </p>
-// //                     <p
-// //                       style={{
-// //                         margin: 0,
-// //                         fontSize: 11,
-// //                         color: "var(--color-text-secondary)",
-// //                       }}
-// //                     >
-// //                       Software requirements spec
-// //                     </p>
-// //                   </div>
-// //                 </div>
-// //                 {artifacts.srs ? (
-// //                   <button
-// //                     onClick={() =>
-// //                       navigate(`/projects/${projectId}/sessions/${sessionId}/srs`)
-// //                     }
-// //                     style={{
-// //                       display: "inline-flex",
-// //                       alignItems: "center",
-// //                       justifyContent: "center",
-// //                       gap: 6,
-// //                       height: 34,
-// //                       borderRadius: "var(--border-radius-md)",
-// //                       border: "0.5px solid var(--color-border-secondary)",
-// //                       background: "var(--color-background-secondary)",
-// //                       fontSize: 12,
-// //                       fontWeight: 700,
-// //                       cursor: "pointer",
-// //                       color: "var(--color-text-primary)",
-// //                     }}
-// //                   >
-// //                     <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
-// //                       open_in_new
-// //                     </span>
-// //                     View SRS
-// //                   </button>
-// //                 ) : (
-// //                   <span
-// //                     style={{
-// //                       fontSize: 12,
-// //                       color: "var(--color-text-secondary)",
-// //                       padding: "6px 0",
-// //                     }}
-// //                   >
-// //                     Not generated yet
-// //                   </span>
-// //                 )}
-// //               </div>
-
-// //               {/* Transcript artifact card */}
-// //               <div
-// //                 style={{
-// //                   background: "var(--color-background-primary)",
-// //                   border: "0.5px solid var(--color-border-tertiary)",
-// //                   borderRadius: "var(--border-radius-lg)",
-// //                   padding: "1.25rem",
-// //                   display: "flex",
-// //                   flexDirection: "column",
-// //                   gap: 12,
-// //                 }}
-// //               >
-// //                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-// //                   <div
-// //                     style={{
-// //                       width: 36,
-// //                       height: 36,
-// //                       borderRadius: "var(--border-radius-md)",
-// //                       background: "var(--color-background-warning)",
-// //                       display: "flex",
-// //                       alignItems: "center",
-// //                       justifyContent: "center",
-// //                     }}
-// //                   >
-// //                     <span
-// //                       className="material-symbols-outlined"
-// //                       style={{ fontSize: 20, color: "var(--color-text-warning)" }}
-// //                     >
-// //                       mic
-// //                     </span>
-// //                   </div>
-// //                   <div>
-// //                     <p
-// //                       style={{
-// //                         margin: 0,
-// //                         fontWeight: 700,
-// //                         fontSize: 14,
-// //                         color: "var(--color-text-primary)",
-// //                       }}
-// //                     >
-// //                       Transcript
-// //                     </p>
-// //                     <p
-// //                       style={{
-// //                         margin: 0,
-// //                         fontSize: 11,
-// //                         color: "var(--color-text-secondary)",
-// //                       }}
-// //                     >
-// //                       Full meeting transcript
-// //                     </p>
-// //                   </div>
-// //                 </div>
-// //                 {transcript.length > 0 ? (
-// //                   <button
-// //                     onClick={() => setActiveTab("Transcript")}
-// //                     style={{
-// //                       display: "inline-flex",
-// //                       alignItems: "center",
-// //                       justifyContent: "center",
-// //                       gap: 6,
-// //                       height: 34,
-// //                       borderRadius: "var(--border-radius-md)",
-// //                       border: "0.5px solid var(--color-border-secondary)",
-// //                       background: "var(--color-background-secondary)",
-// //                       fontSize: 12,
-// //                       fontWeight: 700,
-// //                       cursor: "pointer",
-// //                       color: "var(--color-text-primary)",
-// //                     }}
-// //                   >
-// //                     <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
-// //                       visibility
-// //                     </span>
-// //                     View Transcript
-// //                   </button>
-// //                 ) : (
-// //                   <span
-// //                     style={{
-// //                       fontSize: 12,
-// //                       color: "var(--color-text-secondary)",
-// //                       padding: "6px 0",
-// //                     }}
-// //                   >
-// //                     Not available yet
-// //                   </span>
-// //                 )}
-// //               </div>
-// //             </div>
-// //           </div>
-// //         )}
-// //       </div>
-
-// //       {/* Toast */}
-// //       {notification && (
-// //         <div
-// //           style={{
-// //             position: "fixed",
-// //             bottom: 24,
-// //             right: 24,
-// //             padding: "12px 18px",
-// //             borderRadius: "var(--border-radius-lg)",
-// //             background: "var(--color-background-primary)",
-// //             border: `0.5px solid ${
-// //               notification.type === "success"
-// //                 ? "var(--color-border-success)"
-// //                 : "var(--color-border-danger)"
-// //             }`,
-// //             display: "flex",
-// //             alignItems: "center",
-// //             gap: 10,
-// //             zIndex: 99,
-// //             boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
-// //           }}
-// //         >
-// //           <span
-// //             className="material-symbols-outlined"
-// //             style={{
-// //               color:
-// //                 notification.type === "success"
-// //                   ? "var(--color-text-success)"
-// //                   : "var(--color-text-danger)",
-// //               fontSize: 18,
-// //             }}
-// //           >
-// //             {notification.type === "success" ? "check_circle" : "cancel"}
-// //           </span>
-// //           <p
-// //             style={{
-// //               margin: 0,
-// //               fontSize: 13,
-// //               fontWeight: 600,
-// //               color: "var(--color-text-primary)",
-// //             }}
-// //           >
-// //             {notification.message}
-// //           </p>
-// //         </div>
-// //       )}
-// //     </div>
-// //   );
-// // }
-// import React, { useEffect, useState } from "react";
-// import { useNavigate, useParams } from "react-router-dom";
-// import { getToken } from "../../api/authApi";
-// import {
-//   fetchProject,
-//   fetchMyRole,
-//   fetchPendingRequests,
-//   acceptInvitation,
-//   rejectInvitation,
-//   fetchProjectAuditLogs,
-// } from "../../api/projectApi";
-
-// const BASE_URL = "http://127.0.0.1:8000";
-
-// const TAB_LIST = ["Requirements", "Transcript", "Artifacts"];
-
-// function ApprovalBar({ approved, total }) {
-//   const pct = total > 0 ? Math.round((approved / total) * 100) : 0;
-//   const color =
-//     pct === 100
-//       ? "var(--color-background-success)"
-//       : pct >= 50
-//       ? "#EF9F27"
-//       : "var(--color-background-danger)";
-//   return (
-//     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-//       <div
-//         style={{
-//           flex: 1,
-//           height: 6,
-//           borderRadius: 99,
-//           background: "var(--color-border-tertiary)",
-//           overflow: "hidden",
-//         }}
-//       >
-//         <div
-//           style={{
-//             width: `${pct}%`,
-//             height: "100%",
-//             background: color,
-//             borderRadius: 99,
-//             transition: "width 0.4s ease",
-//           }}
-//         />
-//       </div>
-//       <span
-//         style={{
-//           fontSize: 12,
-//           color: "var(--color-text-secondary)",
-//           minWidth: 44,
-//           textAlign: "right",
-//         }}
-//       >
-//         {approved}/{total}
-//       </span>
-//     </div>
-//   );
-// }
-
-// function StatusBadge({ status }) {
-//   const map = {
-//     approved: {
-//       bg: "var(--color-background-success)",
-//       color: "var(--color-text-success)",
-//       label: "Approved",
-//     },
-//     pending: {
-//       bg: "var(--color-background-warning)",
-//       color: "var(--color-text-warning)",
-//       label: "Pending",
-//     },
-//     rejected: {
-//       bg: "var(--color-background-danger)",
-//       color: "var(--color-text-danger)",
-//       label: "Rejected",
-//     },
-//     in_review: {
-//       bg: "var(--color-background-info)",
-//       color: "var(--color-text-info)",
-//       label: "In Review",
-//     },
-//   };
-//   const s = map[status] || map["pending"];
-//   return (
-//     <span
-//       style={{
-//         background: s.bg,
-//         color: s.color,
-//         fontSize: 11,
-//         fontWeight: 700,
-//         padding: "2px 10px",
-//         borderRadius: 99,
-//         letterSpacing: "0.02em",
-//         whiteSpace: "nowrap",
-//       }}
-//     >
-//       {s.label}
-//     </span>
-//   );
-// }
-
-// function SectionHeader({ icon, title, count }) {
-//   return (
-//     <div
-//       style={{
-//         display: "flex",
-//         alignItems: "center",
-//         gap: 8,
-//         marginBottom: 12,
-//       }}
-//     >
-//       <span
-//         className="material-symbols-outlined"
-//         style={{ fontSize: 18, color: "var(--color-text-secondary)" }}
-//       >
-//         {icon}
-//       </span>
-//       <span
-//         style={{
-//           fontSize: 13,
-//           fontWeight: 700,
-//           color: "var(--color-text-primary)",
-//           textTransform: "uppercase",
-//           letterSpacing: "0.08em",
-//         }}
-//       >
-//         {title}
-//       </span>
-//       {count !== undefined && (
-//         <span
-//           style={{
-//             marginLeft: 4,
-//             background: "var(--color-background-secondary)",
-//             color: "var(--color-text-secondary)",
-//             fontSize: 11,
-//             fontWeight: 700,
-//             padding: "1px 8px",
-//             borderRadius: 99,
-//           }}
-//         >
-//           {count}
-//         </span>
-//       )}
-//     </div>
-//   );
-// }
-
-// export default function SessionDetailsPage() {
-//   const navigate = useNavigate();
-//   const { projectId, sessionId } = useParams();
-
-//   const [project, setProject] = useState(null);
-//   const [session, setSession] = useState(null);
-//   const [myRole, setMyRole] = useState(null);
-//   // ✅ members now holds SESSION members only (fetched from /api/sessions/:id/members)
-//   const [members, setMembers] = useState([]);
-//   const [loading, setLoading] = useState(true);
-//   const [activeTab, setActiveTab] = useState("Requirements");
-
-//   const [requirements, setRequirements] = useState([]);
-//   const [transcript, setTranscript] = useState([]);
-//   const [artifacts, setArtifacts] = useState({ uml: null, srs: null });
-
-//   const [pendingRequests, setPendingRequests] = useState([]);
-//   const [showRequestsPanel, setShowRequestsPanel] = useState(false);
-//   const [showMembersModal, setShowMembersModal] = useState(false);
-//   const [notification, setNotification] = useState(null);
-
-//   const [auditLogs, setAuditLogs] = useState([]);
-//   const [showLogsModal, setShowLogsModal] = useState(false);
-
-//   useEffect(() => {
-//     const load = async () => {
-//       try {
-//         const headers = { Authorization: `Bearer ${getToken()}` };
-
-//         // ✅ Fetch session members from the correct session-scoped endpoint
-//         const [proj, roleData, sessRes, sessionMembersData] = await Promise.all([
-//           fetchProject(projectId),
-//           fetchMyRole(projectId),
-//           fetch(`${BASE_URL}/api/sessions/${sessionId}`, { headers }).then((r) => r.json()),
-//           fetch(`${BASE_URL}/api/sessions/${sessionId}/members`, { headers }).then((r) => r.json()),
-//         ]);
-
-//         setProject(proj);
-//         setMyRole(roleData.role);
-//         setSession(sessRes);
-//         // ✅ Only participants of THIS session are stored in members
-//         setMembers(Array.isArray(sessionMembersData) ? sessionMembersData : []);
-
-//         if (sessRes.transcript) {
-//           setTranscript(
-//             Array.isArray(sessRes.transcript)
-//               ? sessRes.transcript
-//               : [{ text: sessRes.transcript, speaker: "Unknown", timestamp: null }]
-//           );
-//         }
-
-//         const reqRes = await fetch(
-//           `${BASE_URL}/api/sessions/${sessionId}/requirements`,
-//           { headers }
-//         ).then((r) => r.json().catch(() => null));
-
-//         if (reqRes) {
-//           const functional = reqRes.functional_requirements || reqRes.data?.functional_requirements || [];
-//           const nonFunctional =
-//             reqRes.nonfunctional_requirements ||
-//             reqRes.non_functional_requirements ||
-//             reqRes.data?.nonfunctional_requirements ||
-//             reqRes.data?.non_functional_requirements ||
-//             [];
-//           setRequirements([
-//             ...functional.map((r) => ({ ...r, type: "Functional" })),
-//             ...nonFunctional.map((r) => ({ ...r, type: "Non-Functional" })),
-//           ]);
-//         }
-
-//         const umlRes = await fetch(
-//           `${BASE_URL}/api/sessions/${sessionId}/uml`,
-//           { headers }
-//         )
-//           .then((r) => r.json().catch(() => null))
-//           .catch(() => null);
-
-//         const srsRes = await fetch(
-//           `${BASE_URL}/api/sessions/${sessionId}/srs`,
-//           { headers }
-//         )
-//           .then((r) => r.json().catch(() => null))
-//           .catch(() => null);
-
-//         setArtifacts({ uml: umlRes, srs: srsRes });
-
-//         if (roleData.role === "project_manager") {
-//           const reqs = await fetchPendingRequests();
-//           setPendingRequests(reqs.filter((r) => r.project_id === Number(projectId)));
-//         }
-//       } catch (err) {
-//         console.error(err);
-//       } finally {
-//         setLoading(false);
-//       }
-//     };
-//     load();
-//   }, [projectId, sessionId]);
-
-//   const openLogsModal = async () => {
-//     try {
-//       const logData = await fetchProjectAuditLogs(projectId);
-//       setAuditLogs(logData.filter((l) => String(l.session_id) === String(sessionId)));
-//       setShowLogsModal(true);
-//     } catch (err) {
-//       console.error(err);
-//     }
-//   };
-
-//   // ✅ Updated to use session member shape: { user_id, role, user: { full_name, email } }
-//   const getMemberName = (m) =>
-//     m.user?.full_name || m.user?.email || `User #${m.user_id}`;
-
-//   const getMemberEmail = (m) => m.user?.email || "";
-
-//   const getMemberRole = (m) => m.role?.toLowerCase() || "member";
-
-//   const getActingRole = (userEmail) => {
-//     if (!userEmail) return "";
-//     const member = members.find((m) => getMemberEmail(m) === userEmail);
-//     if (member) return getMemberRole(member).replace(/_/g, " ");
-//     return "Admin";
-//   };
-
-//   const handleAccept = async (invId, userName) => {
-//     try {
-//       await acceptInvitation(invId);
-//       setPendingRequests((prev) => prev.filter((r) => r.id !== invId));
-//       showToast(`${userName} accepted as participant`, "success");
-//     } catch (err) {
-//       showToast(err.message, "error");
-//     }
-//   };
-
-//   const handleReject = async (invId, userName) => {
-//     try {
-//       await rejectInvitation(invId);
-//       setPendingRequests((prev) => prev.filter((r) => r.id !== invId));
-//       showToast(`${userName} rejected`, "error");
-//     } catch (err) {
-//       showToast(err.message, "error");
-//     }
-//   };
-
-//   function showToast(message, type) {
-//     setNotification({ message, type });
-//     setTimeout(() => setNotification(null), 3000);
-//   }
-
-//   const sessionMembersCount = members.length;
-
-//   const getApprovalStats = (req) => {
-//     const approvals = req.approvals || [];
-//     const approved = approvals.filter((a) => a.status === "approved").length;
-//     return { approved, total: sessionMembersCount };
-//   };
-
-//   const overallStats = (() => {
-//     const total = requirements.length;
-//     const approved = requirements.filter((r) => r.status === "approved").length;
-//     const pending = requirements.filter((r) => !r.status || r.status === "pending").length;
-//     const rejected = requirements.filter((r) => r.status === "rejected").length;
-//     return { total, approved, pending, rejected };
-//   })();
-
-//   if (loading)
-//     return (
-//       <p style={{ padding: "2rem", color: "var(--color-text-secondary)" }}>
-//         Loading...
-//       </p>
-//     );
-
-//   return (
-//     <div style={{ width: "100%", fontFamily: "var(--font-sans)" }}>
-//       {/* ── Requests panel ── */}
-//       {showRequestsPanel && myRole === "project_manager" && (
-//         <div
-//           style={{
-//             position: "fixed",
-//             inset: 0,
-//             background: "rgba(0,0,0,0.4)",
-//             display: "flex",
-//             alignItems: "center",
-//             justifyContent: "center",
-//             zIndex: 50,
-//           }}
-//         >
-//           <div
-//             style={{
-//               background: "var(--color-background-primary)",
-//               borderRadius: "var(--border-radius-xl)",
-//               width: "100%",
-//               maxWidth: 480,
-//               maxHeight: "80vh",
-//               overflowY: "auto",
-//               padding: "1.5rem",
-//               boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-//               border: "0.5px solid var(--color-border-tertiary)",
-//             }}
-//           >
-//             <div
-//               style={{
-//                 display: "flex",
-//                 justifyContent: "space-between",
-//                 alignItems: "center",
-//                 marginBottom: 16,
-//               }}
-//             >
-//               <h2
-//                 style={{
-//                   fontSize: 18,
-//                   fontWeight: 700,
-//                   color: "var(--color-text-primary)",
-//                   margin: 0,
-//                 }}
-//               >
-//                 Join Requests
-//                 {pendingRequests.length > 0 && (
-//                   <span
-//                     style={{
-//                       marginLeft: 8,
-//                       background: "var(--color-background-danger)",
-//                       color: "var(--color-text-danger)",
-//                       fontSize: 11,
-//                       fontWeight: 700,
-//                       padding: "2px 8px",
-//                       borderRadius: 99,
-//                     }}
-//                   >
-//                     {pendingRequests.length}
-//                   </span>
-//                 )}
-//               </h2>
-//               <button
-//                 onClick={() => setShowRequestsPanel(false)}
-//                 style={{ background: "none", border: "none", cursor: "pointer" }}
-//               >
-//                 <span
-//                   className="material-symbols-outlined"
-//                   style={{ color: "var(--color-text-secondary)" }}
-//                 >
-//                   close
-//                 </span>
-//               </button>
-//             </div>
-//             {pendingRequests.length === 0 ? (
-//               <p
-//                 style={{
-//                   color: "var(--color-text-secondary)",
-//                   textAlign: "center",
-//                   padding: "2rem 0",
-//                   fontSize: 14,
-//                 }}
-//               >
-//                 No pending requests.
-//               </p>
-//             ) : (
-//               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-//                 {pendingRequests.map((req) => (
-//                   <div
-//                     key={req.id}
-//                     style={{
-//                       display: "flex",
-//                       alignItems: "center",
-//                       justifyContent: "space-between",
-//                       background: "var(--color-background-secondary)",
-//                       borderRadius: "var(--border-radius-lg)",
-//                       padding: "12px 16px",
-//                     }}
-//                   >
-//                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-//                       <img
-//                         src={`https://ui-avatars.com/api/?name=${encodeURIComponent(req.invitee_full_name || "User")}&background=random&color=fff`}
-//                         style={{ width: 36, height: 36, borderRadius: "50%" }}
-//                         alt=""
-//                       />
-//                       <div>
-//                         <p
-//                           style={{
-//                             fontWeight: 600,
-//                             fontSize: 13,
-//                             margin: 0,
-//                             color: "var(--color-text-primary)",
-//                           }}
-//                         >
-//                           {req.invitee_full_name || "Unknown User"}
-//                         </p>
-//                         <p
-//                           style={{
-//                             fontSize: 11,
-//                             color: "var(--color-text-secondary)",
-//                             margin: 0,
-//                           }}
-//                         >
-//                           {req.invitee_email}
-//                         </p>
-//                       </div>
-//                     </div>
-//                     <div style={{ display: "flex", gap: 8 }}>
-//                       <button
-//                         onClick={() =>
-//                           handleAccept(
-//                             req.id,
-//                             req.invitee_full_name || `User #${req.invitee_user_id}`
-//                           )
-//                         }
-//                         style={{
-//                           padding: "4px 14px",
-//                           borderRadius: "var(--border-radius-md)",
-//                           background: "var(--color-background-success)",
-//                           color: "var(--color-text-success)",
-//                           border: "none",
-//                           fontSize: 12,
-//                           fontWeight: 700,
-//                           cursor: "pointer",
-//                         }}
-//                       >
-//                         Accept
-//                       </button>
-//                       <button
-//                         onClick={() =>
-//                           handleReject(
-//                             req.id,
-//                             req.invitee_full_name || `User #${req.invitee_user_id}`
-//                           )
-//                         }
-//                         style={{
-//                           padding: "4px 14px",
-//                           borderRadius: "var(--border-radius-md)",
-//                           background: "var(--color-background-danger)",
-//                           color: "var(--color-text-danger)",
-//                           border: "none",
-//                           fontSize: 12,
-//                           fontWeight: 700,
-//                           cursor: "pointer",
-//                         }}
-//                       >
-//                         Reject
-//                       </button>
-//                     </div>
-//                   </div>
-//                 ))}
-//               </div>
-//             )}
-//           </div>
-//         </div>
-//       )}
-
-//       {/* ── Members modal ── */}
-//       {showMembersModal && (
-//         <div
-//           style={{
-//             position: "fixed",
-//             inset: 0,
-//             background: "rgba(0,0,0,0.4)",
-//             display: "flex",
-//             alignItems: "center",
-//             justifyContent: "center",
-//             zIndex: 50,
-//           }}
-//         >
-//           <div
-//             style={{
-//               background: "var(--color-background-primary)",
-//               borderRadius: "var(--border-radius-xl)",
-//               width: "100%",
-//               maxWidth: 420,
-//               maxHeight: "80vh",
-//               display: "flex",
-//               flexDirection: "column",
-//               boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-//               border: "0.5px solid var(--color-border-tertiary)",
-//             }}
-//           >
-//             <div
-//               style={{
-//                 display: "flex",
-//                 justifyContent: "space-between",
-//                 alignItems: "center",
-//                 padding: "1.25rem 1.5rem",
-//                 borderBottom: "0.5px solid var(--color-border-tertiary)",
-//               }}
-//             >
-//               <h2
-//                 style={{
-//                   fontSize: 16,
-//                   fontWeight: 700,
-//                   margin: 0,
-//                   color: "var(--color-text-primary)",
-//                 }}
-//               >
-//                 {/* ✅ Label clarified to "Session Participants" */}
-//                 Session Participants{" "}
-//                 <span
-//                   style={{ fontWeight: 400, color: "var(--color-text-secondary)", fontSize: 13 }}
-//                 >
-//                   ({members.length})
-//                 </span>
-//               </h2>
-//               <button
-//                 onClick={() => setShowMembersModal(false)}
-//                 style={{ background: "none", border: "none", cursor: "pointer" }}
-//               >
-//                 <span
-//                   className="material-symbols-outlined"
-//                   style={{ color: "var(--color-text-secondary)" }}
-//                 >
-//                   close
-//                 </span>
-//               </button>
-//             </div>
-//             <div
-//               style={{
-//                 padding: "1rem",
-//                 overflowY: "auto",
-//                 display: "flex",
-//                 flexDirection: "column",
-//                 gap: 8,
-//               }}
-//             >
-//               {members.length === 0 ? (
-//                 <p
-//                   style={{
-//                     color: "var(--color-text-secondary)",
-//                     textAlign: "center",
-//                     padding: "2rem 0",
-//                     fontSize: 14,
-//                   }}
-//                 >
-//                   No participants in this session.
-//                 </p>
-//               ) : (
-//                 // ✅ Uses session member shape: m.user.full_name, m.user.email, m.role
-//                 members.map((m) => {
-//                   const name = getMemberName(m);
-//                   const email = getMemberEmail(m);
-//                   const role = getMemberRole(m);
-//                   return (
-//                     <div
-//                       key={m.user_id}
-//                       style={{
-//                         display: "flex",
-//                         alignItems: "center",
-//                         justifyContent: "space-between",
-//                         padding: "10px 12px",
-//                         borderRadius: "var(--border-radius-md)",
-//                         background: "var(--color-background-secondary)",
-//                       }}
-//                     >
-//                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-//                         <img
-//                           src={`https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`}
-//                           style={{ width: 36, height: 36, borderRadius: "50%" }}
-//                           alt=""
-//                         />
-//                         <div>
-//                           <p
-//                             style={{
-//                               fontWeight: 600,
-//                               fontSize: 13,
-//                               margin: 0,
-//                               color: "var(--color-text-primary)",
-//                             }}
-//                           >
-//                             {name}
-//                           </p>
-//                           <p
-//                             style={{
-//                               fontSize: 11,
-//                               color: "var(--color-text-secondary)",
-//                               margin: 0,
-//                             }}
-//                           >
-//                             {email}
-//                           </p>
-//                         </div>
-//                       </div>
-//                       <span
-//                         style={{
-//                           fontSize: 10,
-//                           fontWeight: 700,
-//                           padding: "2px 8px",
-//                           borderRadius: 99,
-//                           background:
-//                             role === "session_owner"
-//                               ? "var(--color-background-info)"
-//                               : "var(--color-background-secondary)",
-//                           color:
-//                             role === "session_owner"
-//                               ? "var(--color-text-info)"
-//                               : "var(--color-text-secondary)",
-//                           border: "0.5px solid var(--color-border-tertiary)",
-//                         }}
-//                       >
-//                         {role === "session_owner"
-//                           ? "Owner"
-//                           : role.charAt(0).toUpperCase() + role.slice(1)}
-//                       </span>
-//                     </div>
-//                   );
-//                 })
-//               )}
-//             </div>
-//           </div>
-//         </div>
-//       )}
-
-//       {/* ── Activity log modal ── */}
-//       {showLogsModal && (
-//         <div
-//           style={{
-//             position: "fixed",
-//             inset: 0,
-//             background: "rgba(0,0,0,0.4)",
-//             display: "flex",
-//             alignItems: "center",
-//             justifyContent: "center",
-//             zIndex: 50,
-//           }}
-//         >
-//           <div
-//             style={{
-//               background: "var(--color-background-primary)",
-//               borderRadius: "var(--border-radius-xl)",
-//               width: "100%",
-//               maxWidth: 640,
-//               maxHeight: "80vh",
-//               display: "flex",
-//               flexDirection: "column",
-//               margin: "1rem",
-//               boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-//               border: "0.5px solid var(--color-border-tertiary)",
-//             }}
-//           >
-//             <div
-//               style={{
-//                 display: "flex",
-//                 justifyContent: "space-between",
-//                 alignItems: "center",
-//                 padding: "1.25rem 1.5rem",
-//                 borderBottom: "0.5px solid var(--color-border-tertiary)",
-//               }}
-//             >
-//               <h2
-//                 style={{
-//                   fontSize: 16,
-//                   fontWeight: 700,
-//                   margin: 0,
-//                   color: "var(--color-text-primary)",
-//                 }}
-//               >
-//                 Session Activity Log
-//               </h2>
-//               <button
-//                 onClick={() => setShowLogsModal(false)}
-//                 style={{ background: "none", border: "none", cursor: "pointer" }}
-//               >
-//                 <span
-//                   className="material-symbols-outlined"
-//                   style={{ color: "var(--color-text-secondary)" }}
-//                 >
-//                   close
-//                 </span>
-//               </button>
-//             </div>
-//             <div
-//               style={{
-//                 padding: "1.25rem 1.5rem",
-//                 overflowY: "auto",
-//                 display: "flex",
-//                 flexDirection: "column",
-//                 gap: 10,
-//               }}
-//             >
-//               {auditLogs.length === 0 ? (
-//                 <p
-//                   style={{
-//                     color: "var(--color-text-secondary)",
-//                     textAlign: "center",
-//                     padding: "2rem 0",
-//                     fontSize: 14,
-//                   }}
-//                 >
-//                   No actions recorded yet.
-//                 </p>
-//               ) : (
-//                 auditLogs.map((log) => {
-//                   const roleName = getActingRole(log.user_email);
-//                   return (
-//                     <div
-//                       key={log.id}
-//                       style={{
-//                         display: "flex",
-//                         alignItems: "flex-start",
-//                         gap: 12,
-//                         padding: "10px 14px",
-//                         borderRadius: "var(--border-radius-md)",
-//                         background: "var(--color-background-secondary)",
-//                       }}
-//                     >
-//                       <span
-//                         className="material-symbols-outlined"
-//                         style={{
-//                           fontSize: 16,
-//                           color: "var(--color-text-info)",
-//                           marginTop: 2,
-//                         }}
-//                       >
-//                         circle
-//                       </span>
-//                       <div style={{ flex: 1 }}>
-//                         <p
-//                           style={{
-//                             fontSize: 13,
-//                             fontWeight: 600,
-//                             margin: 0,
-//                             color: "var(--color-text-primary)",
-//                           }}
-//                         >
-//                           {log.user_name || "Unknown"}{" "}
-//                           {roleName && (
-//                             <span
-//                               style={{
-//                                 fontWeight: 400,
-//                                 color: "var(--color-text-secondary)",
-//                                 fontSize: 11,
-//                               }}
-//                             >
-//                               ({roleName})
-//                             </span>
-//                           )}{" "}
-//                           <span
-//                             style={{
-//                               fontWeight: 400,
-//                               color: "var(--color-text-secondary)",
-//                             }}
-//                           >
-//                             {log.action.replace(/_/g, " ")}
-//                           </span>
-//                         </p>
-//                         <p
-//                           style={{
-//                             fontSize: 11,
-//                             color: "var(--color-text-secondary)",
-//                             margin: "4px 0 0",
-//                           }}
-//                         >
-//                           {new Date(log.created_at).toLocaleString()} · {log.user_email}
-//                         </p>
-//                       </div>
-//                     </div>
-//                   );
-//                 })
-//               )}
-//             </div>
-//           </div>
-//         </div>
-//       )}
-
-//       {/* ── Main content ── */}
-//       <div
-//         style={{
-//           padding: "2rem 1.5rem",
-//           maxWidth: 1080,
-//           margin: "0 auto",
-//           display: "flex",
-//           flexDirection: "column",
-//           gap: 0,
-//         }}
-//       >
-//         {/* Header row */}
-//         <div
-//           style={{
-//             display: "flex",
-//             flexWrap: "wrap",
-//             justifyContent: "space-between",
-//             alignItems: "flex-start",
-//             gap: 16,
-//             paddingBottom: "1rem",
-//           }}
-//         >
-//           {/* Left: back + title + role */}
-//           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-//             <button
-//               onClick={() => navigate(`/projects/${projectId}`)}
-//               style={{
-//                 display: "inline-flex",
-//                 alignItems: "center",
-//                 gap: 4,
-//                 background: "none",
-//                 border: "none",
-//                 cursor: "pointer",
-//                 color: "var(--color-text-secondary)",
-//                 fontSize: 13,
-//                 padding: 0,
-//                 marginBottom: 4,
-//               }}
-//             >
-//               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-//                 arrow_back
-//               </span>
-//               {project?.name}
-//             </button>
-//             <h1
-//               style={{
-//                 fontSize: 28,
-//                 fontWeight: 800,
-//                 margin: 0,
-//                 color: "var(--color-text-primary)",
-//                 lineHeight: 1.2,
-//               }}
-//             >
-//               {session?.title || `Session #${sessionId}`}
-//             </h1>
-//             {myRole && (
-//               <span
-//                 style={{
-//                   width: "fit-content",
-//                   fontSize: 11,
-//                   fontWeight: 700,
-//                   padding: "3px 10px",
-//                   borderRadius: 99,
-//                   background: "var(--color-background-info)",
-//                   color: "var(--color-text-info)",
-//                 }}
-//               >
-//                 Your role: {myRole.replace("_", " ")}
-//               </span>
-//             )}
-//           </div>
-
-//           {/* Right: action buttons */}
-//           <div
-//             style={{
-//               display: "flex",
-//               flexDirection: "column",
-//               alignItems: "flex-end",
-//               gap: 10,
-//             }}
-//           >
-//             <div
-//               style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
-//             >
-//               {myRole && (
-//                 <button
-//                   onClick={() => setShowMembersModal(true)}
-//                   style={{
-//                     display: "inline-flex",
-//                     alignItems: "center",
-//                     gap: 6,
-//                     height: 32,
-//                     padding: "0 12px",
-//                     borderRadius: "var(--border-radius-md)",
-//                     border: "0.5px solid var(--color-border-secondary)",
-//                     background: "var(--color-background-primary)",
-//                     fontSize: 12,
-//                     fontWeight: 700,
-//                     cursor: "pointer",
-//                     color: "var(--color-text-primary)",
-//                   }}
-//                 >
-//                   <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-//                     group
-//                   </span>
-//                   Participants
-//                   <span
-//                     style={{
-//                       background: "var(--color-background-secondary)",
-//                       color: "var(--color-text-secondary)",
-//                       fontSize: 10,
-//                       fontWeight: 700,
-//                       padding: "1px 6px",
-//                       borderRadius: 99,
-//                     }}
-//                   >
-//                     {members.length}
-//                   </span>
-//                 </button>
-//               )}
-
-//               {myRole === "project_manager" && (
-//                 <button
-//                   onClick={() => navigate(`/projects/${projectId}/add-participant`)}
-//                   style={{
-//                     display: "inline-flex",
-//                     alignItems: "center",
-//                     gap: 6,
-//                     height: 32,
-//                     padding: "0 12px",
-//                     borderRadius: "var(--border-radius-md)",
-//                     border: "none",
-//                     background: "#059669",
-//                     color: "#fff",
-//                     fontSize: 12,
-//                     fontWeight: 700,
-//                     cursor: "pointer",
-//                   }}
-//                 >
-//                   <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-//                     person_add
-//                   </span>
-//                   Add Participant
-//                 </button>
-//               )}
-
-//               {myRole === "project_manager" && (
-//                 <button
-//                   onClick={() => setShowRequestsPanel(true)}
-//                   style={{
-//                     position: "relative",
-//                     display: "inline-flex",
-//                     alignItems: "center",
-//                     gap: 6,
-//                     height: 32,
-//                     padding: "0 12px",
-//                     borderRadius: "var(--border-radius-md)",
-//                     border: "0.5px solid var(--color-border-secondary)",
-//                     background: "var(--color-background-primary)",
-//                     fontSize: 12,
-//                     fontWeight: 700,
-//                     cursor: "pointer",
-//                     color: "var(--color-text-primary)",
-//                   }}
-//                 >
-//                   <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-//                     group_add
-//                   </span>
-//                   Requests
-//                   {pendingRequests.length > 0 && (
-//                     <span
-//                       style={{
-//                         position: "absolute",
-//                         top: -6,
-//                         right: -6,
-//                         width: 16,
-//                         height: 16,
-//                         borderRadius: "50%",
-//                         background: "var(--color-background-danger)",
-//                         color: "var(--color-text-danger)",
-//                         fontSize: 9,
-//                         display: "flex",
-//                         alignItems: "center",
-//                         justifyContent: "center",
-//                         fontWeight: 700,
-//                       }}
-//                     >
-//                       {pendingRequests.length}
-//                     </span>
-//                   )}
-//                 </button>
-//               )}
-
-//               {myRole === "project_manager" && (
-//                 <button
-//                   onClick={openLogsModal}
-//                   style={{
-//                     display: "inline-flex",
-//                     alignItems: "center",
-//                     gap: 6,
-//                     height: 32,
-//                     padding: "0 12px",
-//                     borderRadius: "var(--border-radius-md)",
-//                     border: "0.5px solid var(--color-border-secondary)",
-//                     background: "var(--color-background-primary)",
-//                     fontSize: 12,
-//                     fontWeight: 700,
-//                     cursor: "pointer",
-//                     color: "var(--color-text-primary)",
-//                   }}
-//                 >
-//                   <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-//                     history
-//                   </span>
-//                   Activity
-//                 </button>
-//               )}
-//             </div>
-//           </div>
-//         </div>
-
-//         {/* Meta chips */}
-//         <div
-//           style={{
-//             display: "flex",
-//             gap: 8,
-//             flexWrap: "wrap",
-//             paddingBottom: "1rem",
-//           }}
-//         >
-//           {session?.created_at && (
-//             <span
-//               style={{
-//                 height: 28,
-//                 display: "inline-flex",
-//                 alignItems: "center",
-//                 padding: "0 12px",
-//                 borderRadius: 99,
-//                 background: "var(--color-background-info)",
-//                 color: "var(--color-text-info)",
-//                 fontSize: 12,
-//                 fontWeight: 500,
-//               }}
-//             >
-//               {new Date(session.created_at).toLocaleDateString()}
-//             </span>
-//           )}
-//           {session?.status && (
-//             <span
-//               style={{
-//                 height: 28,
-//                 display: "inline-flex",
-//                 alignItems: "center",
-//                 padding: "0 12px",
-//                 borderRadius: 99,
-//                 background: "var(--color-background-secondary)",
-//                 color: "var(--color-text-secondary)",
-//                 fontSize: 12,
-//                 fontWeight: 500,
-//                 border: "0.5px solid var(--color-border-tertiary)",
-//               }}
-//             >
-//               Status: {session.status}
-//             </span>
-//           )}
-//           <span
-//             style={{
-//               height: 28,
-//               display: "inline-flex",
-//               alignItems: "center",
-//               padding: "0 12px",
-//               borderRadius: 99,
-//               background: "var(--color-background-secondary)",
-//               color: "var(--color-text-secondary)",
-//               fontSize: 12,
-//               fontWeight: 500,
-//               border: "0.5px solid var(--color-border-tertiary)",
-//             }}
-//           >
-//             <span className="material-symbols-outlined" style={{ fontSize: 13, marginRight: 4 }}>
-//               group
-//             </span>
-//             {/* ✅ Now shows session participant count, not project member count */}
-//             {sessionMembersCount} participants
-//           </span>
-//         </div>
-
-//         {/* ── Approval summary cards (PM only) ── */}
-//         {myRole === "project_manager" && requirements.length > 0 && (
-//           <div
-//             style={{
-//               display: "grid",
-//               gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-//               gap: 10,
-//               marginBottom: "1.5rem",
-//             }}
-//           >
-//             {[
-//               {
-//                 label: "Total Requirements",
-//                 value: overallStats.total,
-//                 color: "var(--color-text-primary)",
-//                 bg: "var(--color-background-secondary)",
-//               },
-//               {
-//                 label: "Approved",
-//                 value: overallStats.approved,
-//                 color: "var(--color-text-success)",
-//                 bg: "var(--color-background-success)",
-//               },
-//               {
-//                 label: "Pending Approval",
-//                 value: overallStats.pending,
-//                 color: "var(--color-text-warning)",
-//                 bg: "var(--color-background-warning)",
-//               },
-//               {
-//                 label: "Rejected",
-//                 value: overallStats.rejected,
-//                 color: "var(--color-text-danger)",
-//                 bg: "var(--color-background-danger)",
-//               },
-//             ].map((stat) => (
-//               <div
-//                 key={stat.label}
-//                 style={{
-//                   background: stat.bg,
-//                   borderRadius: "var(--border-radius-md)",
-//                   padding: "14px 16px",
-//                   display: "flex",
-//                   flexDirection: "column",
-//                   gap: 4,
-//                 }}
-//               >
-//                 <span
-//                   style={{
-//                     fontSize: 12,
-//                     color: stat.color,
-//                     opacity: 0.75,
-//                     fontWeight: 500,
-//                   }}
-//                 >
-//                   {stat.label}
-//                 </span>
-//                 <span
-//                   style={{ fontSize: 26, fontWeight: 700, color: stat.color, lineHeight: 1 }}
-//                 >
-//                   {stat.value}
-//                 </span>
-//               </div>
-//             ))}
-//           </div>
-//         )}
-
-//         {/* ── Tabs ── */}
-//         <div
-//           style={{
-//             borderBottom: "0.5px solid var(--color-border-tertiary)",
-//             marginBottom: "1.5rem",
-//           }}
-//         >
-//           <div style={{ display: "flex", gap: "2rem" }}>
-//             {TAB_LIST.map((tab) => (
-//               <button
-//                 key={tab}
-//                 onClick={() => setActiveTab(tab)}
-//                 style={{
-//                   background: "none",
-//                   border: "none",
-//                   borderBottom: activeTab === tab
-//                     ? "2.5px solid var(--color-text-info)"
-//                     : "2.5px solid transparent",
-//                   padding: "12px 0 10px",
-//                   fontSize: 13,
-//                   fontWeight: 700,
-//                   cursor: "pointer",
-//                   color:
-//                     activeTab === tab
-//                       ? "var(--color-text-primary)"
-//                       : "var(--color-text-secondary)",
-//                   transition: "color 0.15s",
-//                 }}
-//               >
-//                 {tab}
-//               </button>
-//             ))}
-//           </div>
-//         </div>
-
-//         {/* ── Tab content ── */}
-
-//         {/* REQUIREMENTS TAB */}
-//         {activeTab === "Requirements" && (
-//           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-//             {requirements.length === 0 ? (
-//               <p style={{ color: "var(--color-text-secondary)", fontSize: 14 }}>
-//                 No requirements extracted yet.
-//               </p>
-//             ) : (
-//               <>
-//                 {/* Functional */}
-//                 {requirements.filter((r) => r.type === "Functional").length > 0 && (
-//                   <div>
-//                     <SectionHeader
-//                       icon="check_circle"
-//                       title="Functional Requirements"
-//                       count={requirements.filter((r) => r.type === "Functional").length}
-//                     />
-//                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-//                       {requirements
-//                         .filter((r) => r.type === "Functional")
-//                         .map((req, i) => {
-//                           const { approved, total } = getApprovalStats(req);
-//                           const isPending = !req.status || req.status === "pending";
-//                           return (
-//                             <div
-//                               key={req.id || i}
-//                               style={{
-//                                 background: "var(--color-background-primary)",
-//                                 border: "0.5px solid var(--color-border-tertiary)",
-//                                 borderRadius: "var(--border-radius-lg)",
-//                                 padding: "14px 18px",
-//                                 display: "flex",
-//                                 flexDirection: "column",
-//                                 gap: 10,
-//                               }}
-//                             >
-//                               <div
-//                                 style={{
-//                                   display: "flex",
-//                                   justifyContent: "space-between",
-//                                   alignItems: "flex-start",
-//                                   gap: 12,
-//                                 }}
-//                               >
-//                                 <p
-//                                   style={{
-//                                     margin: 0,
-//                                     fontSize: 14,
-//                                     color: "var(--color-text-primary)",
-//                                     lineHeight: 1.6,
-//                                     flex: 1,
-//                                   }}
-//                                 >
-//                                   {req.text || req.description || `Requirement ${i + 1}`}
-//                                 </p>
-//                                 <StatusBadge status={req.status || "pending"} />
-//                               </div>
-//                               {isPending && total > 0 && (
-//                                 <div>
-//                                   <p
-//                                     style={{
-//                                       margin: "0 0 6px",
-//                                       fontSize: 11,
-//                                       color: "var(--color-text-secondary)",
-//                                       fontWeight: 500,
-//                                     }}
-//                                   >
-//                                     Participant approvals
-//                                   </p>
-//                                   <ApprovalBar approved={approved} total={total} />
-//                                 </div>
-//                               )}
-//                             </div>
-//                           );
-//                         })}
-//                     </div>
-//                   </div>
-//                 )}
-
-//                 {/* Non-Functional */}
-//                 {requirements.filter((r) => r.type === "Non-Functional").length > 0 && (
-//                   <div>
-//                     <SectionHeader
-//                       icon="tune"
-//                       title="Non-Functional Requirements"
-//                       count={requirements.filter((r) => r.type === "Non-Functional").length}
-//                     />
-//                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-//                       {requirements
-//                         .filter((r) => r.type === "Non-Functional")
-//                         .map((req, i) => {
-//                           const { approved, total } = getApprovalStats(req);
-//                           const isPending = !req.status || req.status === "pending";
-//                           return (
-//                             <div
-//                               key={req.id || i}
-//                               style={{
-//                                 background: "var(--color-background-primary)",
-//                                 border: "0.5px solid var(--color-border-tertiary)",
-//                                 borderRadius: "var(--border-radius-lg)",
-//                                 padding: "14px 18px",
-//                                 display: "flex",
-//                                 flexDirection: "column",
-//                                 gap: 10,
-//                               }}
-//                             >
-//                               <div
-//                                 style={{
-//                                   display: "flex",
-//                                   justifyContent: "space-between",
-//                                   alignItems: "flex-start",
-//                                   gap: 12,
-//                                 }}
-//                               >
-//                                 <p
-//                                   style={{
-//                                     margin: 0,
-//                                     fontSize: 14,
-//                                     color: "var(--color-text-primary)",
-//                                     lineHeight: 1.6,
-//                                     flex: 1,
-//                                   }}
-//                                 >
-//                                   {req.text || req.description || `Requirement ${i + 1}`}
-//                                 </p>
-//                                 <StatusBadge status={req.status || "pending"} />
-//                               </div>
-//                               {isPending && total > 0 && (
-//                                 <div>
-//                                   <p
-//                                     style={{
-//                                       margin: "0 0 6px",
-//                                       fontSize: 11,
-//                                       color: "var(--color-text-secondary)",
-//                                       fontWeight: 500,
-//                                     }}
-//                                   >
-//                                     Participant approvals
-//                                   </p>
-//                                   <ApprovalBar approved={approved} total={total} />
-//                                 </div>
-//                               )}
-//                             </div>
-//                           );
-//                         })}
-//                     </div>
-//                   </div>
-//                 )}
-//               </>
-//             )}
-//           </div>
-//         )}
-
-//         {/* TRANSCRIPT TAB */}
-//         {activeTab === "Transcript" && (
-//           <div>
-//             <SectionHeader icon="record_voice_over" title="Session Transcript" count={transcript.length} />
-//             {transcript.length === 0 ? (
-//               <p style={{ color: "var(--color-text-secondary)", fontSize: 14 }}>
-//                 No transcript available for this session.
-//               </p>
-//             ) : (
-//               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-//                 {transcript.map((entry, i) => (
-//                   <div key={i} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-//                     <div
-//                       style={{
-//                         width: 32,
-//                         height: 32,
-//                         borderRadius: "50%",
-//                         background: "var(--color-background-info)",
-//                         display: "flex",
-//                         alignItems: "center",
-//                         justifyContent: "center",
-//                         fontSize: 12,
-//                         fontWeight: 700,
-//                         color: "var(--color-text-info)",
-//                         flexShrink: 0,
-//                       }}
-//                     >
-//                       {(entry.speaker || "?")[0].toUpperCase()}
-//                     </div>
-//                     <div
-//                       style={{
-//                         flex: 1,
-//                         background: "var(--color-background-secondary)",
-//                         borderRadius: "var(--border-radius-lg)",
-//                         padding: "10px 14px",
-//                       }}
-//                     >
-//                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-//                         <span style={{ fontSize: 12, fontWeight: 700, color: "var(--color-text-primary)" }}>
-//                           {entry.speaker || "Speaker"}
-//                         </span>
-//                         {entry.timestamp && (
-//                           <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
-//                             {entry.timestamp}
-//                           </span>
-//                         )}
-//                       </div>
-//                       <p style={{ margin: 0, fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.6 }}>
-//                         {entry.text}
-//                       </p>
-//                     </div>
-//                   </div>
-//                 ))}
-//               </div>
-//             )}
-//           </div>
-//         )}
-
-//         {/* ARTIFACTS TAB */}
-//         {activeTab === "Artifacts" && (
-//           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-//             <SectionHeader icon="widgets" title="Generated Artifacts" />
-//             <div
-//               style={{
-//                 display: "grid",
-//                 gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-//                 gap: 14,
-//               }}
-//             >
-//               {/* UML Diagram card */}
-//               <div
-//                 style={{
-//                   background: "var(--color-background-primary)",
-//                   border: "0.5px solid var(--color-border-tertiary)",
-//                   borderRadius: "var(--border-radius-lg)",
-//                   padding: "1.25rem",
-//                   display: "flex",
-//                   flexDirection: "column",
-//                   gap: 12,
-//                 }}
-//               >
-//                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-//                   <div
-//                     style={{
-//                       width: 36, height: 36,
-//                       borderRadius: "var(--border-radius-md)",
-//                       background: "var(--color-background-info)",
-//                       display: "flex", alignItems: "center", justifyContent: "center",
-//                     }}
-//                   >
-//                     <span className="material-symbols-outlined" style={{ fontSize: 20, color: "var(--color-text-info)" }}>
-//                       account_tree
-//                     </span>
-//                   </div>
-//                   <div>
-//                     <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "var(--color-text-primary)" }}>
-//                       UML Diagram
-//                     </p>
-//                     <p style={{ margin: 0, fontSize: 11, color: "var(--color-text-secondary)" }}>
-//                       System architecture model
-//                     </p>
-//                   </div>
-//                 </div>
-//                 {artifacts.uml ? (
-//                   <button
-//                     onClick={() => navigate(`/projects/${projectId}/sessions/${sessionId}/uml`)}
-//                     style={{
-//                       display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-//                       height: 34, borderRadius: "var(--border-radius-md)",
-//                       border: "0.5px solid var(--color-border-secondary)",
-//                       background: "var(--color-background-secondary)",
-//                       fontSize: 12, fontWeight: 700, cursor: "pointer", color: "var(--color-text-primary)",
-//                     }}
-//                   >
-//                     <span className="material-symbols-outlined" style={{ fontSize: 15 }}>open_in_new</span>
-//                     View UML
-//                   </button>
-//                 ) : (
-//                   <span style={{ fontSize: 12, color: "var(--color-text-secondary)", padding: "6px 0" }}>
-//                     Not generated yet
-//                   </span>
-//                 )}
-//               </div>
-
-//               {/* SRS card */}
-//               <div
-//                 style={{
-//                   background: "var(--color-background-primary)",
-//                   border: "0.5px solid var(--color-border-tertiary)",
-//                   borderRadius: "var(--border-radius-lg)",
-//                   padding: "1.25rem",
-//                   display: "flex",
-//                   flexDirection: "column",
-//                   gap: 12,
-//                 }}
-//               >
-//                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-//                   <div
-//                     style={{
-//                       width: 36, height: 36,
-//                       borderRadius: "var(--border-radius-md)",
-//                       background: "var(--color-background-success)",
-//                       display: "flex", alignItems: "center", justifyContent: "center",
-//                     }}
-//                   >
-//                     <span className="material-symbols-outlined" style={{ fontSize: 20, color: "var(--color-text-success)" }}>
-//                       description
-//                     </span>
-//                   </div>
-//                   <div>
-//                     <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "var(--color-text-primary)" }}>
-//                       SRS Document
-//                     </p>
-//                     <p style={{ margin: 0, fontSize: 11, color: "var(--color-text-secondary)" }}>
-//                       Software requirements spec
-//                     </p>
-//                   </div>
-//                 </div>
-//                 {artifacts.srs ? (
-//                   <button
-//                     onClick={() => navigate(`/projects/${projectId}/sessions/${sessionId}/srs`)}
-//                     style={{
-//                       display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-//                       height: 34, borderRadius: "var(--border-radius-md)",
-//                       border: "0.5px solid var(--color-border-secondary)",
-//                       background: "var(--color-background-secondary)",
-//                       fontSize: 12, fontWeight: 700, cursor: "pointer", color: "var(--color-text-primary)",
-//                     }}
-//                   >
-//                     <span className="material-symbols-outlined" style={{ fontSize: 15 }}>open_in_new</span>
-//                     View SRS
-//                   </button>
-//                 ) : (
-//                   <span style={{ fontSize: 12, color: "var(--color-text-secondary)", padding: "6px 0" }}>
-//                     Not generated yet
-//                   </span>
-//                 )}
-//               </div>
-
-//               {/* Transcript artifact card */}
-//               <div
-//                 style={{
-//                   background: "var(--color-background-primary)",
-//                   border: "0.5px solid var(--color-border-tertiary)",
-//                   borderRadius: "var(--border-radius-lg)",
-//                   padding: "1.25rem",
-//                   display: "flex",
-//                   flexDirection: "column",
-//                   gap: 12,
-//                 }}
-//               >
-//                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-//                   <div
-//                     style={{
-//                       width: 36, height: 36,
-//                       borderRadius: "var(--border-radius-md)",
-//                       background: "var(--color-background-warning)",
-//                       display: "flex", alignItems: "center", justifyContent: "center",
-//                     }}
-//                   >
-//                     <span className="material-symbols-outlined" style={{ fontSize: 20, color: "var(--color-text-warning)" }}>
-//                       mic
-//                     </span>
-//                   </div>
-//                   <div>
-//                     <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "var(--color-text-primary)" }}>
-//                       Transcript
-//                     </p>
-//                     <p style={{ margin: 0, fontSize: 11, color: "var(--color-text-secondary)" }}>
-//                       Full meeting transcript
-//                     </p>
-//                   </div>
-//                 </div>
-//                 {transcript.length > 0 ? (
-//                   <button
-//                     onClick={() => setActiveTab("Transcript")}
-//                     style={{
-//                       display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-//                       height: 34, borderRadius: "var(--border-radius-md)",
-//                       border: "0.5px solid var(--color-border-secondary)",
-//                       background: "var(--color-background-secondary)",
-//                       fontSize: 12, fontWeight: 700, cursor: "pointer", color: "var(--color-text-primary)",
-//                     }}
-//                   >
-//                     <span className="material-symbols-outlined" style={{ fontSize: 15 }}>visibility</span>
-//                     View Transcript
-//                   </button>
-//                 ) : (
-//                   <span style={{ fontSize: 12, color: "var(--color-text-secondary)", padding: "6px 0" }}>
-//                     Not available yet
-//                   </span>
-//                 )}
-//               </div>
-//             </div>
-//           </div>
-//         )}
-//       </div>
-
-//       {/* Toast */}
-//       {notification && (
-//         <div
-//           style={{
-//             position: "fixed",
-//             bottom: 24,
-//             right: 24,
-//             padding: "12px 18px",
-//             borderRadius: "var(--border-radius-lg)",
-//             background: "var(--color-background-primary)",
-//             border: `0.5px solid ${
-//               notification.type === "success"
-//                 ? "var(--color-border-success)"
-//                 : "var(--color-border-danger)"
-//             }`,
-//             display: "flex",
-//             alignItems: "center",
-//             gap: 10,
-//             zIndex: 99,
-//             boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
-//           }}
-//         >
-//           <span
-//             className="material-symbols-outlined"
-//             style={{
-//               color:
-//                 notification.type === "success"
-//                   ? "var(--color-text-success)"
-//                   : "var(--color-text-danger)",
-//               fontSize: 18,
-//             }}
-//           >
-//             {notification.type === "success" ? "check_circle" : "cancel"}
-//           </span>
-//           <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
-//             {notification.message}
-//           </p>
-//         </div>
-//       )}
-//     </div>
-//   );
-// }
+import React, { useEffect, useState } from "react";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { getToken } from "../../api/authApi";
+
+const FEATURES = ["transcript", "requirements", "uml", "srs"];
+
+export default function SessionDetailsPage() {
+  const navigate = useNavigate();
+  const { id: projectId, sessionId: paramSessionId } = useParams();
+  const location = useLocation();
+
+  const sessionIdFromState = location.state?.sessionId;
+  const sessionId = paramSessionId || sessionIdFromState;
+
+  const [session, setSession] = useState(null);
+  const [members, setMembers] = useState([]);
+  const [approvalStatus, setApprovalStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [projectName, setProjectName] = useState(null);
+  const [notification, setNotification] = useState(null);
+
+  // Derive active tab from current path
+  const currentPath = location.pathname;
+  const getActiveTab = () => {
+    if (currentPath.includes("/artifacts")) return "artifacts";
+    if (currentPath.includes("/requirements")) return "requirements";
+    if (currentPath.includes("/transcript")) return "transcript";
+    return "overview";
+  };
+  const activeTab = getActiveTab();
+
+  const getAuthHeaders = () => {
+    const token = getToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const headers = getAuthHeaders();
+
+        const [sessionRes, membersRes, approvalRes] = await Promise.all([
+          fetch(`http://127.0.0.1:8000/api/sessions/${sessionId}`, { headers }).then(async (r) => {
+            if (!r.ok) throw new Error(`Session fetch failed: ${r.status}`);
+            return r.json();
+          }),
+          fetch(`http://127.0.0.1:8000/api/sessions/${sessionId}/members`, { headers }).then(async (r) => {
+            if (!r.ok) throw new Error(`Members fetch failed: ${r.status}`);
+            return r.json();
+          }),
+          fetch(`http://127.0.0.1:8000/api/sessions/${sessionId}/features/approval-status`, { headers }).then(async (r) => {
+            if (!r.ok) throw new Error(`Approval status fetch failed: ${r.status}`);
+            return r.json();
+          }),
+        ]);
+
+        setSession(sessionRes);
+        const membersList = Array.isArray(membersRes) ? membersRes : [];
+        setMembers(membersList);
+        setApprovalStatus(approvalRes);
+
+        const resolvedProjectId = projectId || sessionRes?.project_id;
+        if (resolvedProjectId) {
+          try {
+            const projectRes = await fetch(
+              `http://127.0.0.1:8000/api/projects/getproject/${resolvedProjectId}`,
+              { headers }
+            );
+            if (projectRes.ok) {
+              const projectData = await projectRes.json();
+              setProjectName(projectData.name ?? null);
+            }
+          } catch {
+            // silently fail
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load session details:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [sessionId, projectId]);
+
+  // Navigate to the feature's dedicated page for reviewing & approving
+  const handleNavigateToFeature = (feature) => {
+    const resolvedProjectId = projectId || session?.project_id;
+    if (feature === "transcript") {
+      navigate(`/transcript/${sessionId}`);
+    } else if (feature === "requirements") {
+      navigate(`/transcript/${sessionId}/requirements`);
+     } else if (feature === "uml") {
+      navigate(`/projects/${resolvedProjectId}/artifacts/uml`);
+    } else if (feature === "srs"){
+      navigate(`/projects/${resolvedProjectId}/sessions/${sessionId}/srs/generate`);
+    }
+  };
+
+  const getStatusStyle = (status) => {
+    const s = (status || "").toLowerCase();
+    if (s === "active" || s === "in_progress")
+      return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
+    if (s === "completed" || s === "done")
+      return "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300";
+    return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
+  };
+
+  const getPillStyle = (item) => {
+    if (item.all_members_approved)
+      return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
+    if (item.approved_members_count > 0)
+      return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
+    return "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300";
+  };
+
+  const getPillText = (item) => {
+    if (item.all_members_approved) return "all approved";
+    if (item.approved_members_count > 0) return "partial";
+    return "pending";
+  };
+
+  const getBarColor = (item) => {
+    if (item.all_members_approved) return "bg-emerald-500";
+    if (item.approved_members_count > 0) return "bg-amber-400";
+    return "bg-red-400";
+  };
+
+  const title = session?.title || `Session #${sessionId}`;
+  const status = session?.status || "pending";
+  const createdAt = session?.created_at;
+  const resolvedProjectId = projectId || session?.project_id;
+
+  const avatarColors = [
+    "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
+    "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
+    "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
+    "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300",
+  ];
+
+  // Tab class matches ProjectDetailsPage exactly
+  const tabClass = (tab) =>
+    `pb-[13px] pt-4 text-sm font-bold border-b-[3px] transition-colors whitespace-nowrap ${
+      activeTab === tab
+        ? "border-b-primary text-gray-900 dark:text-white"
+        : "border-b-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+    }`;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64 text-gray-400 text-sm">
+        Loading session...
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full font-display min-h-screen bg-gray-50 dark:bg-[#100d1c]">
+
+      {/* ── Header — mirrors ProjectDetailsPage structure exactly ── */}
+      <div className="px-4 sm:px-6 lg:px-10 flex flex-1 justify-center">
+        <div className="flex flex-col w-full max-w-5xl">
+
+          {/* Breadcrumb */}
+          <div className="flex flex-wrap gap-2 text-sm pt-6 mb-3">
+            <button
+              onClick={() => navigate("/projects")}
+              className="text-primary-accent dark:text-secondary-accent font-medium leading-normal"
+            >
+              Projects
+            </button>
+            <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
+            <button
+              onClick={() => navigate(`/projects/${resolvedProjectId}`)}
+              className="text-primary-accent dark:text-secondary-accent font-medium leading-normal"
+            >
+              {projectName ?? "Project"}
+            </button>
+            <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
+            <span className="text-text-dark dark:text-text-light font-medium leading-normal">{title}</span>
+          </div>
+
+          {/* Title + meta — same padding/sizing as project page */}
+          <div className="flex flex-wrap justify-between items-start gap-4 p-4 pl-0">
+            <div className="flex min-w-72 flex-col gap-2">
+              <p className="text-gray-900 dark:text-white text-4xl font-black leading-tight">{title}</p>
+
+              {/* Chips — styled identically to project page */}
+              <div className="flex gap-3 pt-1 flex-wrap">
+                {createdAt && (
+                  <span className="flex h-7 items-center rounded-full bg-primary/10 px-3 text-primary text-xs font-medium">
+                    Created: {new Date(createdAt).toLocaleDateString()}
+                  </span>
+                )}
+                <span className={`flex h-7 items-center rounded-full px-3 text-xs font-medium ${getStatusStyle(status)}`}>
+                  Status: {status.replace(/_/g, " ")}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Tabs — each navigates to its own route ── */}
+          <div className="border-b border-gray-200 dark:border-gray-700 mb-2">
+            <div className="flex gap-8">
+              <button
+                onClick={() =>
+                  navigate(
+                    `/projects/${resolvedProjectId}/sessions/${sessionId}/sessiondetails`,
+                    { state: { sessionId } }
+                  )
+                }
+                className={tabClass("overview")}
+              >
+                Overview
+              </button>
+              <button
+                onClick={() => navigate(`/transcript/${sessionId}`)}
+                className={tabClass("transcript")}
+              >
+                Transcript
+              </button>
+              <button
+                onClick={() => navigate(`/transcript/${sessionId}/requirements`)}
+                className={tabClass("requirements")}
+              >
+                Requirements
+              </button>
+              <button
+                onClick={() => navigate(`/projects/${resolvedProjectId}/sessions/${sessionId}/artifacts`)}
+                className={tabClass("artifacts")}
+              >
+                Artifacts
+              </button>
+            </div>
+          </div>
+
+          {/* ── Body ── */}
+          <div className="py-8 space-y-8">
+
+            {/* Members */}
+            <section>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-3">
+                Members ({members.length})
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {members.length === 0 ? (
+                  <p className="text-gray-400 text-sm col-span-4">No members found.</p>
+                ) : (
+                  members.map((member, idx) => (
+                    <div
+                      key={member.id}
+                      className="flex items-center gap-3 p-3 bg-white dark:bg-[#1a162e] rounded-xl border border-gray-200 dark:border-gray-700"
+                    >
+                      <div
+                        className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${
+                          avatarColors[idx % avatarColors.length]
+                        }`}
+                      >
+                        {(member.full_name || member.email || "?")
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")
+                          .toUpperCase()
+                          .slice(0, 2)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                          {member.full_name || member.email}
+                        </p>
+                        <p className="text-[11px] text-gray-400 capitalize">
+                          {member.role.replace(/_/g, " ")}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+
+            {/* Feature Approvals
+                - transcript: always shown (a session cannot exist without one)
+                - requirements, uml, srs: only shown when item.exists === true
+                  (the approval-status endpoint sets exists=true once the artifact is generated)
+            */}
+            <section>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-3">
+                Feature Approvals
+              </p>
+              {(() => {
+                // Build a lookup map from the API response
+                const featureMap = {};
+                (approvalStatus?.features || []).forEach((f) => {
+                  featureMap[f.feature] = f;
+                });
+
+                // transcript always gets a card; others only if exists
+                const visibleFeatures = FEATURES.filter((key) => {
+                  if (key === "transcript") return true;
+                  return featureMap[key]?.exists === true;
+                });
+
+                if (visibleFeatures.length === 0) {
+                  return (
+                    <p className="text-gray-400 text-sm">No features available yet.</p>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {visibleFeatures.map((key) => {
+                      // Use API data if present, otherwise sensible defaults for transcript
+                      const item = featureMap[key] || {
+                        feature: key,
+                        approved_members_count: 0,
+                        total_members_count: members.length || 1,
+                        current_user_approved: false,
+                        all_members_approved: false,
+                        exists: key === "transcript", // transcript always exists
+                      };
+
+                      const pct =
+                        item.total_members_count > 0
+                          ? Math.round((item.approved_members_count / item.total_members_count) * 100)
+                          : 0;
+
+                      const featureMeta = {
+                        transcript:   { label: "Transcript",    icon: "mic",          desc: "Review and approve the session transcript" },
+                        requirements: { label: "Requirements",  icon: "checklist",    desc: "Review extracted requirements for this session" },
+                        uml:          { label: "UML Diagrams",  icon: "account_tree", desc: "View and approve UML diagrams (Use-case, Class, Sequence)" },
+                        srs:          { label: "SRS Document",  icon: "description",  desc: "Review the Software Requirements Specification" },
+                      }[key] || { label: key.replace(/_/g, " "), icon: "folder", desc: "" };
+
+                      return (
+                        <div
+                          key={key}
+                          className="bg-white dark:bg-[#1a162e] rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm hover:shadow-md transition flex flex-col gap-3"
+                        >
+                          {/* Header */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-purple-500">{featureMeta.icon}</span>
+                              <p className="text-sm font-bold text-gray-900 dark:text-white">{featureMeta.label}</p>
+                            </div>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${getPillStyle(item)}`}>
+                              {getPillText(item)}
+                            </span>
+                          </div>
+
+                          {/* Description */}
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{featureMeta.desc}</p>
+
+                          {/* Progress bar */}
+                          <div className="h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${getBarColor(item)}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+
+                          {/* Footer */}
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-400">
+                              {item.approved_members_count}/{item.total_members_count} approved
+                            </span>
+                            <button
+                              onClick={() => handleNavigateToFeature(key)}
+                              className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-lg bg-primary text-white hover:opacity-90 transition"
+                            >
+                              <span className="material-symbols-outlined text-xs">open_in_new</span>
+                              {item.current_user_approved ? "View" : "Review & Approve"}
+                            </button>
+                          </div>
+
+                          {item.current_user_approved && (
+                            <p className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-xs">check_circle</span>
+                              You approved this
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </section>
+
+          </div>
+        </div>
+      </div>
+
+      {/* Toast */}
+      {notification && (
+        <div
+          className={`fixed bottom-6 right-6 p-4 rounded-xl shadow-xl flex gap-3 border z-50 ${
+            notification.type === "success"
+              ? "bg-white dark:bg-[#1a162e] border-emerald-500/30"
+              : "bg-white dark:bg-[#1a162e] border-red-500/30"
+          }`}
+        >
+          <span
+            className={`material-symbols-outlined ${
+              notification.type === "success" ? "text-emerald-500" : "text-red-500"
+            }`}
+          >
+            {notification.type === "success" ? "check_circle" : "cancel"}
+          </span>
+          <p className="font-bold text-sm">{notification.message}</p>
+        </div>
+      )}
+    </div>
+  );
+}

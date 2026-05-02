@@ -28,7 +28,7 @@ import AdminSystemProjectsPage from "../pages/projects/AdminSystemProjectsPage";
 import AllUsersPage from "../pages/admin/AllUsersPage";
 
 //sessions
-// import SessionDetailsPage from "../pages/sessions/SessionDetailsPage";
+import SessionDetailsPage from "../pages/sessions/SessionDetailsPage";
 import StartSessionPage from "../pages/Sessions/StartSessionPage";
 // Recording & Transcript
 import RecordingSession from "../pages/recordingsession/RecordingSessionPage";
@@ -146,12 +146,11 @@ export default function AppRoutes() {
         </Route>
 
         <Route path="/projects/:projectId/sessions/:sessionId" >
+          <Route path="sessiondetails" element={<SessionDetailsPage/>}/>
           <Route path="artifacts" element={<SessionResults />} />
           <Route path="artifacts/uml" element={<UmlSessionViewPage />} />
           <Route path="artifacts/srs" element={<SrsSessionView />} />
         </Route>
-
-        {/* <Route path="/requirements" element={<RequirementsView />} /> */}
         
         {/* Summary */}
         <Route path="/summary/:sessionId" element={<TranscriptSummary />} />
