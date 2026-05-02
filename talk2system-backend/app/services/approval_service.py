@@ -2,6 +2,7 @@ from typing import Dict
 from sqlalchemy.orm import Session
 from app.models.approval import Approval
 from app.models.artifact import Artifact
+from app.models.artifact_type import ArtifactType
 from app.models.session import Session as SessionModel
 from app.models.session_membership import SessionMembership
 from app.models.session_requirement import SessionRequirement
@@ -102,25 +103,31 @@ class ApprovalService:
             return req is not None
 
         if feature == "uml":
-            uml = ApprovalService._session_artifacts(db, session_id)
-            return any(a.file_path and "uml" in a.file_path.lower() for a in uml)
+            uml = (
+                   db.query(Artifact)
+                    .join(ArtifactType, Artifact.artifact_type_id == ArtifactType.id)
+                    .filter(
+                        Artifact.session_id == session_id,
+                        ArtifactType.name.like("UML_%"),
+                    )
+                    .first()
+                   
+            )
+            return uml  is not None
 
         if feature == "srs":
-            srs = ApprovalService._session_artifacts(db, session_id)
-            return any(a.file_path and "srs" in a.file_path.lower() for a in srs)
-
-        return False
-
-    @staticmethod
-    def _session_artifacts(db: Session, session_id: int):
-        return (
-            db.query(Artifact)
-            .filter(
-                Artifact.session_id == session_id,
-                Artifact.artifact_type_id.isnot(None),
+            srs = (
+                   db.query(Artifact)
+                    .join(ArtifactType, Artifact.artifact_type_id == ArtifactType.id)
+                    .filter(
+                        Artifact.session_id == session_id,
+                        ArtifactType.name.like("SRS_DOCUMENT"),
+                    )
+                    .first()
+                   
             )
-            .all()
-        )
+            return srs  is not None
+
 
     @staticmethod
     def _snapshot(db: Session, session_id: int, user_id: int, feature: str) -> Dict:

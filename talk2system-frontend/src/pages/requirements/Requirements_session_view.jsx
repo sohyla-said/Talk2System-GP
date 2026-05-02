@@ -550,7 +550,7 @@ const handleApprove = async () => {
   const handleGenerate = (type) => {
     if (!requirementsApproval.all_members_approved) return;
     if (type == 'uml') handleNavigation(`/projects/${projectId}/artifacts/uml`);
-    if (type == 'srs') handleNavigation(`/projects/${projectId}/artifacts/srs`);
+    if (type == 'srs') handleNavigation(`/projects/${projectId}/srs/generate`);
   };
 
   // Get tag color classes
@@ -620,7 +620,7 @@ const handleApprove = async () => {
                 <span>{approved ? 'Approved' : 'Approve Requirements'}</span>
               </button>
               <p className="text-xs text-slate-500 dark:text-slate-400 text-center sm:text-right">
-                Session approvals: {requirementsApproval.approved_members_count}/
+                Requirement approvals: {requirementsApproval.approved_members_count}/
                 {requirementsApproval.total_members_count}
                 {requirementsApproval.all_members_approved ? " (all approved)" : " (waiting for members)"}
               </p>

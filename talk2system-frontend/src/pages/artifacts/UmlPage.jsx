@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import UMLApprovalModal from "../../components/modals/UMLApprovalModal";
 import { useNavigate, useParams, useLocation } from "react-router-dom"; // ✅ add useLocation
+import { getToken } from "../../api/authApi";
 
 import {
   generateUML,
@@ -15,6 +16,14 @@ const BASE_URL = "http://localhost:8000";
 export default function UmlPage() {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [approved, setApproved] = useState(false);
+  const [umlApproval, setUmlApproval] = useState({
+    approved_members_count: 0,
+    total_members_count: 0,
+    current_user_approved: false,
+    all_members_approved: false,
+    status: "pending",
+    exists: false,
+  });
   const [diagramType, setDiagramType] = useState("usecase");
 
   const [diagramUrl, setDiagramUrl] = useState(null);
@@ -26,6 +35,11 @@ export default function UmlPage() {
   const location = useLocation(); // ✅ NEW
   const { id: projectId } = useParams();
   const [loading, setLoading] = useState(false);
+
+  const getAuthHeaders = () => {
+    const token = getToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
 
   // ===============================
   // RESOLVE SESSION ID
@@ -90,12 +104,36 @@ export default function UmlPage() {
     }
   };
 
+  const refreshUmlApproval = async (resolvedSessionId = sessionId) => {
+    if (!resolvedSessionId) return;
+
+    try {
+      const res = await fetch(
+        `${BASE_URL}/api/sessions/${resolvedSessionId}/features/approval-status`,
+        { headers: getAuthHeaders() }
+      );
+      if (!res.ok) return;
+
+      const data = await res.json();
+      const feature = Array.isArray(data.features)
+        ? data.features.find((f) => f.feature === "uml")
+        : null;
+      if (!feature) return;
+
+      setUmlApproval(feature);
+      setApproved(Boolean(feature.current_user_approved));
+    } catch (err) {
+      console.error("Failed to load UML approval status:", err);
+    }
+  };
+
   // In handleGenerate, pass sessionId explicitly:
   const handleGenerate = async () => {
     if (!sessionId) {
       alert("No session found for this project. Please start a meeting session first.");
       return;
     }
+    
     try {
       setLoading(true);
       const res = await generateUML(projectId, sessionId, diagramType);
@@ -105,6 +143,7 @@ export default function UmlPage() {
       setArtifactId(artifact.id);
       setApproved(false);
       fetchVersions(sessionId); // ✅ pass explicitly, no stale closure risk
+      refreshUmlApproval(sessionId);
     } catch (err) {
       console.error(err);
     } finally {
@@ -116,6 +155,7 @@ export default function UmlPage() {
   useEffect(() => {
     if (sessionId) {
       fetchVersions();
+      refreshUmlApproval();
     }
   }, [diagramType, sessionId]); // ✅ sessionId in deps ensures fetch waits for resolution
 
@@ -127,7 +167,7 @@ export default function UmlPage() {
       const res = await getArtifact(artifactId);
       setDiagramUrl(`${BASE_URL}/${res.data.file_path}`);
       setArtifactId(res.data.id);
-      setApproved(res.data.approval_status === "approved");
+      setApproved(Boolean(umlApproval.current_user_approved) || res.data.approval_status === "approved");
     } catch (err) {
       console.error(err);
     }
@@ -138,10 +178,27 @@ export default function UmlPage() {
   // ===============================
   const handleApprove = async () => {
     try {
-      await approveArtifact(artifactId);
-      setApproved(true);
+      const response = await fetch(
+        `${BASE_URL}/api/sessions/${sessionId}/features/uml/approve`,
+        {
+          method: "POST",
+          headers: getAuthHeaders(),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.detail || "Failed to approve UML");
+      }
+
+      setUmlApproval(data);
+      setApproved(Boolean(data.current_user_approved));
       setShowApprovalModal(false);
-      fetchVersions();
+
+      if (data.all_members_approved && artifactId) {
+        await approveArtifact(artifactId);
+        fetchVersions();
+      }
     } catch (err) {
       console.error(err);
     }
@@ -271,6 +328,13 @@ export default function UmlPage() {
 
             </div>
           </div>
+          {artifactId && (
+            <div className="px-4 pb-3 text-sm text-slate-500 dark:text-slate-400">
+              UML approvals: {umlApproval.approved_members_count}/
+              {umlApproval.total_members_count}
+              {umlApproval.all_members_approved ? " (all approved)" : " (waiting for members)"}
+            </div>
+          )}
         </div>
 
         {/* IMAGE */}

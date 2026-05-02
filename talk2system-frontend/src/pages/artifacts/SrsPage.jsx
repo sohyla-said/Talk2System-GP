@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { getToken } from "../../api/authApi";
 import SrsApprovalModal from "../../components/modals/SrsApprovalModal";
 import {
   generateSessionSRS,
@@ -142,6 +143,42 @@ export default function SrsPage() {
   const [approved, setApproved] = useState(false);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [srsContent, setSrsContent] = useState(null);
+  const [srsApproval, setSrsApproval] = useState({
+    approved_members_count: 0,
+    total_members_count: 0,
+    current_user_approved: false,
+    all_members_approved: false,
+    status: "pending",
+    exists: false,
+  });
+
+  const getAuthHeaders = () => {
+    const token = getToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  const refreshSrsApproval = async (resolvedSessionId = sessionId) => {
+    if (!resolvedSessionId) return;
+
+    try {
+      const res = await fetch(
+        `${BASE_URL}/api/sessions/${resolvedSessionId}/features/approval-status`,
+        { headers: getAuthHeaders() }
+      );
+      if (!res.ok) return;
+
+      const data = await res.json();
+      const feature = Array.isArray(data.features)
+        ? data.features.find((f) => f.feature === "srs")
+        : null;
+      if (!feature) return;
+
+      setSrsApproval(feature);
+      setApproved(Boolean(feature.current_user_approved));
+    } catch (err) {
+      console.error("Failed to load SRS approval status:", err);
+    }
+  };
 
   // ===============================
   // RESOLVE SESSION ID
@@ -196,7 +233,10 @@ export default function SrsPage() {
   };
 
   useEffect(() => {
-    if (sessionId) fetchVersions(sessionId);
+    if (sessionId) {
+      fetchVersions(sessionId);
+      refreshSrsApproval(sessionId);
+    }
   }, [sessionId]);
 
   // ===============================
@@ -230,6 +270,7 @@ export default function SrsPage() {
       fetchSrsText(artifact.id);
       setApproved(false);
       fetchVersions(sessionId);
+      refreshSrsApproval(sessionId);
     } catch (err) {
       console.error(err);
       alert("SRS generation failed. Make sure Ollama is running.");
@@ -246,7 +287,9 @@ export default function SrsPage() {
       const res = await getSrsArtifact(selectedId);
       setArtifactId(res.data.id);
       setSrsContent(res.data.file_path);
-      setApproved(res.data.approval_status === "approved");
+      setApproved(
+        Boolean(srsApproval.current_user_approved) || res.data.approval_status === "approved"
+      );
       setPreviewText(null);
       setPreviewMode(false);
       await fetchSrsText(res.data.id);
@@ -260,10 +303,27 @@ export default function SrsPage() {
   // ===============================
   const handleApprove = async () => {
     try {
-      await approveSrsArtifact(artifactId);
-      setApproved(true);
+      const response = await fetch(
+        `${BASE_URL}/api/sessions/${sessionId}/features/srs/approve`,
+        {
+          method: "POST",
+          headers: getAuthHeaders(),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.detail || "Failed to approve SRS");
+      }
+
+      setSrsApproval(data);
+      setApproved(Boolean(data.current_user_approved));
       setShowApprovalModal(false);
-      fetchVersions(sessionId);
+
+      if (data.all_members_approved && artifactId) {
+        await approveSrsArtifact(artifactId);
+        fetchVersions(sessionId);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -343,9 +403,13 @@ export default function SrsPage() {
 
         {/* Approval badge */}
         {artifactId && (
-          <div className="mb-3">
+          <div className="mb-3 flex flex-wrap items-center gap-3">
             <span className={`text-xs font-semibold px-3 py-1 rounded-full ${approved ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300" : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300"}`}>
               {approved ? "✓ Approved" : "Pending Approval"}
+            </span>
+            <span className="text-xs text-gray-600 dark:text-gray-300">
+              SRS approvals: {srsApproval.approved_members_count}/{srsApproval.total_members_count}
+              {srsApproval.all_members_approved ? " (all approved)" : " (waiting for members)"}
             </span>
           </div>
         )}
