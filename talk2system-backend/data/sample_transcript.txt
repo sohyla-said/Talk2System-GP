@@ -290,3 +290,62 @@ Omar: Which year?
 Mona: Okay, we’ll summarize and follow up with unclear points: deposits list, patient self-booking, room logic, notifications channel, billing depth, reports, permissions.
 Sara: Also dark mode please.
 Omar: That’s the clearest requirement so far.
+
+
+
+
+Project Manager: Good morning everyone. Today we need to finalize requirements for the new clinic management system.
+Client: Yes. We run three branches and need one centralized system for appointments, doctors, billing, and patient records.
+Business Analyst: Who are the main users?
+Client: Receptionists, doctors, accountants, branch managers, and system admins.
+Business Analyst: Let’s start with patient registration.
+Client: Receptionists must be able to register a new patient using name, phone number, and date of birth. Later they should be able to update address, insurance details, and national ID.
+Receptionist Representative: We also need to search patients quickly by phone number, patient code, or name because many patients call repeatedly.
+Business Analyst: What about duplicate patients?
+Client: The system must warn if the same phone number or national ID already exists.
+Business Analyst: Appointments?
+Client: Receptionists must be able to create, reschedule, cancel, and confirm appointments.
+Doctor Representative: Please allow double-booking only for emergency cases and only if approved by the branch manager.
+Client: Patients should receive SMS or email reminders one day before appointments.
+Business Analyst: Can patients book online?
+Client: Yes, patients should be able to request appointments from a portal, but receptionists must approve them before confirmation.
+Business Analyst: How do doctors use the system?
+Doctor Representative: Doctors must be able to view their daily schedule, open patient history, add diagnoses, prescriptions, lab requests, and follow-up notes.
+Client: Doctors should also upload attachments like x-rays or reports.
+Business Analyst: Billing requirements?
+Accountant: The system must generate invoices automatically after consultation or procedures.
+Accountant: It must support cash, card, and insurance payments.
+Accountant: If insurance is selected, the system should track approved amount, rejected amount, and patient share.
+Client: We also need refund handling for canceled services.
+Business Analyst: Reports?
+Branch Manager: I need daily revenue reports, doctor productivity reports, canceled appointment reports, and unpaid invoices.
+Branch Manager: Managers should only view reports for their own branch.
+Business Analyst: Inventory included?
+Client: Yes, but only simple pharmacy stock. Staff must record medicine purchases, stock quantities, and expiry dates.
+Client: The system should alert when stock is below minimum level or near expiry.
+Business Analyst: Security requirements?
+System Admin: Every user must log in with username and password.
+System Admin: Admins must manage user roles and permissions.
+System Admin: Sensitive data such as patient records and payments must be encrypted.
+System Admin: We need an audit trail showing who changed appointments, invoices, or medical records.
+Business Analyst: Performance expectations?
+Client: Searching patients should take less than 2 seconds.
+Client: Appointment booking should feel instant even during peak hours.
+Client: The system must support at least 300 concurrent users across branches.
+Business Analyst: Reliability?
+Client: We operate daily from 8 AM to midnight, so uptime should be at least 99.9%.
+Doctor Representative: Data loss is unacceptable. We need automatic backups every hour.
+Business Analyst: Usability?
+Receptionist Representative: Screens must be simple because some staff are not technical.
+Receptionist Representative: Common tasks should require no more than three clicks.
+Business Analyst: Any integrations?
+Client: Integrate with SMS gateway, email service, barcode scanners, and accounting software.
+Business Analyst: Export needs?
+Accountant: Reports should export to PDF and Excel.
+Doctor Representative: Prescriptions should be printable.
+Business Analyst: Multi-language support?
+Client: Arabic and English interfaces are required.
+Business Analyst: Anything else?
+System Admin: If login fails five times, the account should be temporarily locked for 15 minutes.
+Client: Also keep inactive sessions logged out after 10 minutes.
+Business Analyst: Great. We’ll convert these into functional and non-functional requirements.
