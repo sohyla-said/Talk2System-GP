@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from fastapi.responses import FileResponse
-
+from app.services.srs_service import SUPPORTED_FORMATS
 from app.db.session import get_db
 from app.services.uml_service import generate_uml_pipeline
 from app.services.requirement_service import RequirementService
@@ -155,6 +155,7 @@ def get_project_versions(project_id: int, type: str, db: Session = Depends(get_d
             .filter(
                 Artifact.project_id == project_id,
                 Artifact.artifact_type_id == artifact_type.id,
+                Artifact.session_id == None,
             )\
             .order_by(Artifact.created_at.desc())\
             .all()
@@ -265,8 +266,7 @@ def download_artifact(artifact_id: int, db: Session = Depends(get_db)):
 # ==========================================================================
 # SRS Document Endpoints
 # ==========================================================================
-
-
+ 
 # =========================================================
 # GENERATE SRS (SESSION LEVEL)
 # =========================================================
@@ -274,28 +274,34 @@ def download_artifact(artifact_id: int, db: Session = Depends(get_db)):
 def generate_session_srs(
     project_id: int,
     session_id: int,
+    format_version: str = "ieee_830",   # ← NEW: defaults to original behavior
     db: Session = Depends(get_db)
 ):
     try:
+        # Validate format
+        if format_version not in SUPPORTED_FORMATS:
+            raise HTTPException(400, f"Unsupported format. Choose from: {SUPPORTED_FORMATS}")
+ 
         # 1. Get session requirements
         req = RequirementService.get_latest_session_requirement(
             db, project_id, session_id
         )
         requirements_json = req["data"]
-
+ 
         # 2. Get project name for the document title
         from app.models.project import Project
         project = db.query(Project).filter(Project.id == project_id).first()
         project_name = project.name if project else "Software System"
-
+ 
         # 3. Generate SRS
         result = generate_srs_pipeline(
             requirements_json=requirements_json,
             project_id=project_id,
             project_name=project_name,
-            session_id=session_id
+            session_id=session_id,
+            format_version=format_version   # ← NEW
         )
-
+ 
         # 4. Save artifact
         artifact = ArtifactService.save_artifact(
             db=db,
@@ -304,44 +310,51 @@ def generate_session_srs(
             artifact_type_name="SRS_DOCUMENT",
             file_path=result["file_path"]
         )
-
+ 
         return {
             "message": "SRS generated successfully",
             "source": "session",
+            "format_version": format_version,
             "file_path": result["file_path"],
             "artifact": artifact
         }
-
+ 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
+ 
+ 
 # =========================================================
 # GENERATE SRS (PROJECT LEVEL)
 # =========================================================
 @router.post("/projects/{project_id}/generate-srs")
 def generate_project_srs(
     project_id: int,
+    format_version: str = "ieee_830",   # ← NEW: defaults to original behavior
     db: Session = Depends(get_db)
 ):
     try:
+        # Validate format
+        if format_version not in SUPPORTED_FORMATS:
+            raise HTTPException(400, f"Unsupported format. Choose from: {SUPPORTED_FORMATS}")
+ 
         # 1. Get aggregated project requirements
         req = RequirementService.get_latest_project_requirement(db, project_id)
         requirements_json = req["data"]
-
+ 
         # 2. Get project name
         from app.models.project import Project
         project = db.query(Project).filter(Project.id == project_id).first()
         project_name = project.name if project else "Software System"
-
+ 
         # 3. Generate SRS
         result = generate_srs_pipeline(
             requirements_json=requirements_json,
             project_id=project_id,
             project_name=project_name,
-            session_id=None
+            session_id=None,
+            format_version=format_version   # ← NEW
         )
-
+ 
         # 4. Save artifact
         artifact = ArtifactService.save_artifact(
             db=db,
@@ -350,18 +363,19 @@ def generate_project_srs(
             artifact_type_name="SRS_DOCUMENT",
             file_path=result["file_path"]
         )
-
+ 
         return {
             "message": "SRS generated successfully",
             "source": "project",
+            "format_version": format_version,
             "file_path": result["file_path"],
             "artifact": artifact
         }
-
+ 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
+ 
+ 
 # =========================================================
 # GET SRS VERSIONS (SESSION LEVEL)
 # =========================================================
@@ -370,10 +384,10 @@ def get_session_srs_versions(project_id: int, session_id: int, db: Session = Dep
     try:
         artifact_type = db.query(ArtifactType)\
             .filter(ArtifactType.name == "SRS_DOCUMENT").first()
-
+ 
         if not artifact_type:
             return {"project_id": project_id, "session_id": session_id, "versions": []}
-
+ 
         artifacts = db.query(Artifact)\
             .filter(
                 Artifact.project_id == project_id,
@@ -381,7 +395,7 @@ def get_session_srs_versions(project_id: int, session_id: int, db: Session = Dep
                 Artifact.artifact_type_id == artifact_type.id
             )\
             .order_by(Artifact.created_at.desc()).all()
-
+ 
         return {
             "project_id": project_id,
             "session_id": session_id,
@@ -398,8 +412,8 @@ def get_session_srs_versions(project_id: int, session_id: int, db: Session = Dep
         }
     except Exception as e:
         raise HTTPException(500, str(e))
-
-
+ 
+ 
 # =========================================================
 # GET SRS VERSIONS (PROJECT LEVEL)
 # =========================================================
@@ -408,17 +422,17 @@ def get_project_srs_versions(project_id: int, db: Session = Depends(get_db)):
     try:
         artifact_type = db.query(ArtifactType)\
             .filter(ArtifactType.name == "SRS_DOCUMENT").first()
-
+ 
         if not artifact_type:
             return {"project_id": project_id, "versions": []}
-
+ 
         artifacts = db.query(Artifact)\
             .filter(
                 Artifact.project_id == project_id,
                 Artifact.artifact_type_id == artifact_type.id
             )\
             .order_by(Artifact.created_at.desc()).all()
-
+ 
         return {
             "project_id": project_id,
             "versions": [
@@ -435,26 +449,24 @@ def get_project_srs_versions(project_id: int, db: Session = Depends(get_db)):
         }
     except Exception as e:
         raise HTTPException(500, str(e))
-    
+ 
+ 
 # =========================================================
 # GET SRS TEXT CONTENT (EXTRACT FROM DOCX)
-# ========================================================= 
+# =========================================================
 @router.get("/artifacts/{artifact_id}/srs-text")
 def get_srs_text(artifact_id: int, db: Session = Depends(get_db)):
     artifact = db.query(Artifact).filter(Artifact.id == artifact_id).first()
     if not artifact:
         raise HTTPException(404, "Artifact not found")
-    
+ 
     from docx import Document as DocxDocument
     doc = DocxDocument(artifact.file_path)
-    # lines = [para.text for para in doc.paragraphs]
-    # return {"text": "\n".join(lines)}
     lines = []
     for para in doc.paragraphs:
         text = para.text.strip()
         if not text:
             continue
-        # Convert headings to markdown
         if para.style.name.startswith("Heading 1"):
             lines.append(f"# {text}")
         elif para.style.name.startswith("Heading 2"):
@@ -463,21 +475,20 @@ def get_srs_text(artifact_id: int, db: Session = Depends(get_db)):
             lines.append(f"### {text}")
         else:
             lines.append(text)
-
+ 
     return {"text": "\n".join(lines)}
-
-
+ 
+ 
 # =========================================================
-# DOWNLOAD SRS (reuses existing download endpoint — artifact_id based)
-# Already handled by /artifacts/{artifact_id}/download but needs docx media type
+# DOWNLOAD SRS
 # =========================================================
 @router.get("/artifacts/{artifact_id}/download-srs")
 def download_srs(artifact_id: int, db: Session = Depends(get_db)):
     artifact = db.query(Artifact).filter(Artifact.id == artifact_id).first()
-
+ 
     if not artifact:
         raise HTTPException(404, "Artifact not found")
-
+ 
     return FileResponse(
         path=artifact.file_path,
         filename=Path(artifact.file_path).name,

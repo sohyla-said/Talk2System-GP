@@ -451,28 +451,23 @@ const toggleSelectionMode = (sectionType) => {
     }
   };
 
-    // Handle navigation with approval check
-  const handleNavigation = (path, state = null) => {
-    if (!approved) {
-      setPendingNavigation({ path, state });
-      setShowApprovalModal(true);
-    } else {
-      navigate(path, state ? { state } : undefined);
-    }
-  };
+  //   // Handle navigation with approval check
+  // const handleNavigation = (path, state = null) => {
+  //   if (!approved) {
+  //     setPendingNavigation({ path, state });
+  //     setShowApprovalModal(true);
+  //   } else {
+  //     navigate(path, state ? { state } : undefined);
+  //   }
+  // };
 
   const handleGenerate = (type) => {
-    const targetPath = type === 'uml'
-      ? `/projects/${projectId}/artifacts/uml`
-      : `/projects/${projectId}/srs/generate`;
-
-    if (!approved) {
-      setPendingNavigation(targetPath);
-      setShowApprovalModal(true);
-      return;
+    if (type === 'uml') {
+      navigate(`/projects/${projectId}/artifacts/uml`, { state: { source: "project" } });
     }
-
-    handleNavigation(targetPath);
+    if (type === 'srs') {
+      navigate(`/projects/${projectId}/srs/generate`, { state: { source: "project" } });
+    }
   };
 
   // Get tag color classes

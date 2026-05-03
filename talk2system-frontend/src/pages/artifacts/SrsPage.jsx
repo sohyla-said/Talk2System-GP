@@ -4,11 +4,55 @@ import { getToken } from "../../api/authApi";
 import SrsApprovalModal from "../../components/modals/SrsApprovalModal";
 import {
   generateSessionSRS,
+  generateProjectSRS,
   getSessionSrsVersions,
   getSrsArtifact,
   approveSrsArtifact,
   downloadSrs,
 } from "../../api/srsAPI";
+
+// =============================================
+// FORMAT OPTIONS
+// =============================================
+const FORMAT_OPTIONS = [
+  {
+    value: "ieee_830",
+    label: "IEEE 830",
+    badge: "1998 · Deprecated",
+    badgeColor: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+    description: "Classic, widely recognized standard. Simple structure, best for academic use.",
+  },
+  {
+    value: "iso_iec_29148",
+    label: "ISO/IEC/IEEE 29148",
+    badge: "2018 · Current Standard",
+    badgeColor: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+    description: "Full lifecycle coverage with traceability and verification sections. Industry gold standard.",
+  },
+  {
+    value: "modern_agile",
+    label: "Modern Agile SRS",
+    badge: "Recent · User-Centric",
+    badgeColor: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+    description: "User story format with acceptance criteria. Ideal for AI/modern systems and agile teams.",
+  },
+];
+
+// =============================================
+// BENCHMARKING TABLE DATA
+// =============================================
+const BENCHMARK_ROWS = [
+  { criteria: "Year",                 ieee: "1998",           iso: "2011 / 2018",       agile: "Recent" },
+  { criteria: "Status",               ieee: "⚠️ Deprecated",  iso: "✅ Current",         agile: "Not official" },
+  { criteria: "Complexity",           ieee: "Low",            iso: "High",               agile: "Medium" },
+  { criteria: "Lifecycle Coverage",   ieee: "❌ No",           iso: "✅ Full lifecycle",  agile: "⚠️ Partial" },
+  { criteria: "Verification Section", ieee: "❌",              iso: "✅",                 agile: "✅" },
+  { criteria: "Traceability",         ieee: "❌",              iso: "✅",                 agile: "✅ Often better" },
+  { criteria: "AI / Modern Systems",  ieee: "❌",              iso: "⚠️ Limited",        agile: "✅ Strong" },
+  { criteria: "Ease of Use",          ieee: "⭐⭐⭐⭐",          iso: "⭐⭐",                agile: "⭐⭐⭐⭐" },
+  { criteria: "Academic Use",         ieee: "⭐⭐⭐⭐⭐",         iso: "⭐⭐⭐",               agile: "⭐⭐⭐" },
+  { criteria: "Industry Use",         ieee: "⭐⭐",             iso: "⭐⭐⭐⭐⭐",             agile: "⭐⭐⭐⭐" },
+];
 
 const BASE_URL = "http://localhost:8000";
 
@@ -126,6 +170,74 @@ function SrsMarkdownRenderer({ text }) {
 }
 
 // =============================================
+// BENCHMARKING TABLE COMPONENT
+// =============================================
+function BenchmarkTable({ selectedFormat, onSelect }) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <div>
+      <button
+        onClick={() => setVisible(v => !v)}
+        className="flex items-center gap-1.5 text-sm font-semibold text-primary dark:text-indigo-300 hover:underline"
+      >
+        <span className="material-symbols-outlined text-base">
+          {visible ? "expand_less" : "expand_more"}
+        </span>
+        {visible ? "Hide format comparison" : "Compare formats to help you choose"}
+      </button>
+
+      {visible && (
+        <div className="mt-3 rounded-xl border border-gray-200 dark:border-gray-700 overflow-x-auto shadow-sm">
+          <table className="w-full text-sm border-collapse min-w-[560px]">
+            <thead>
+              <tr className="bg-[#1E105F] text-white">
+                <th className="px-4 py-3 text-left font-bold w-[200px]">Criteria</th>
+                {FORMAT_OPTIONS.map(f => (
+                  <th
+                    key={f.value}
+                    className={`px-4 py-3 text-center font-bold cursor-pointer transition-colors ${
+                      selectedFormat === f.value ? "bg-white/20" : "hover:bg-white/10"
+                    }`}
+                    onClick={() => onSelect(f.value)}
+                  >
+                    {f.label}
+                    {selectedFormat === f.value && (
+                      <span className="ml-1.5 text-[10px] bg-white/25 px-1.5 py-0.5 rounded-full align-middle">selected</span>
+                    )}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {BENCHMARK_ROWS.map((row, i) => (
+                <tr key={row.criteria} className={i % 2 === 0 ? "bg-white dark:bg-[#1a1730]" : "bg-gray-50 dark:bg-[#13112a]"}>
+                  <td className="px-4 py-2.5 font-semibold text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-gray-800">
+                    {row.criteria}
+                  </td>
+                  <td className={`px-4 py-2.5 text-center border-b border-gray-100 dark:border-gray-800 text-gray-600 dark:text-gray-400 ${selectedFormat === "ieee_830" ? "bg-primary/5 dark:bg-primary/10" : ""}`}>
+                    {row.ieee}
+                  </td>
+                  <td className={`px-4 py-2.5 text-center border-b border-gray-100 dark:border-gray-800 text-gray-600 dark:text-gray-400 ${selectedFormat === "iso_iec_29148" ? "bg-primary/5 dark:bg-primary/10" : ""}`}>
+                    {row.iso}
+                  </td>
+                  <td className={`px-4 py-2.5 text-center border-b border-gray-100 dark:border-gray-800 text-gray-600 dark:text-gray-400 ${selectedFormat === "modern_agile" ? "bg-primary/5 dark:bg-primary/10" : ""}`}>
+                    {row.agile}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-xs text-gray-400 dark:text-gray-500 px-4 py-2 italic">
+            Tip: Click a column header to select that format directly.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================
 // MAIN PAGE
 // =============================================
 export default function SrsPage() {
@@ -152,6 +264,10 @@ export default function SrsPage() {
     status: "pending",
     exists: false,
   });
+
+  // track whether we came from the project-level requirements page
+  const [isProjectSource, setIsProjectSource] = useState(false);
+  const [formatVersion, setFormatVersion] = useState("ieee_830");
 
   const getAuthHeaders = () => {
     const token = getToken();
@@ -185,22 +301,32 @@ export default function SrsPage() {
   // RESOLVE SESSION ID
   // ===============================
   useEffect(() => {
-    const stateSessionId = location.state?.sessionId;
-    if (stateSessionId) {
-      setSessionId(stateSessionId);
-    } else if (urlSessionId) {
-      setSessionId(parseInt(urlSessionId));
+    const source = location.state?.source;
+
+    if (source === "project") {
+      // Came from Requirements_project_view — use project-level generation
+      setIsProjectSource(true);
+      // No session needed for project-level generation
     } else {
-      const fetchLatestSession = async () => {
-        try {
-          const res = await fetch(`${BASE_URL}/api/sessions/project/${projectId}`);
-          const data = await res.json();
-          if (data && data.length > 0) setSessionId(data[0].id);
-        } catch (err) {
-          console.error("Failed to fetch sessions:", err);
-        }
-      };
-      fetchLatestSession();
+      // Session-level flow (existing behavior unchanged)
+      setIsProjectSource(false);
+      const stateSessionId = location.state?.sessionId;
+      if (stateSessionId) {
+        setSessionId(stateSessionId);
+      } else if (urlSessionId) {
+        setSessionId(parseInt(urlSessionId));
+      } else {
+        const fetchLatestSession = async () => {
+          try {
+            const res = await fetch(`${BASE_URL}/api/sessions/project/${projectId}`);
+            const data = await res.json();
+            if (data && data.length > 0) setSessionId(data[0].id);
+          } catch (err) {
+            console.error("Failed to fetch sessions:", err);
+          }
+        };
+        fetchLatestSession();
+      }
     }
   }, [projectId, urlSessionId, location.state]);
 
@@ -208,14 +334,28 @@ export default function SrsPage() {
   // FETCH VERSIONS
   // ===============================
   const fetchVersions = async (resolvedSessionId = sessionId) => {
-    if (!resolvedSessionId) return;
     try {
-      const res = await fetch(
-        `${BASE_URL}/api/projects/${projectId}/sessions/${resolvedSessionId}/srs/versions`
-      );
+      let res;
+
+      if (isProjectSource) {
+        // Project-level: fetch from project SRS versions endpoint
+        res = await fetch(`${BASE_URL}/api/projects/${projectId}/srs/versions`);
+      } else {
+        if (!resolvedSessionId) return;
+        res = await fetch(
+          `${BASE_URL}/api/projects/${projectId}/sessions/${resolvedSessionId}/srs/versions`
+        );
+      }
+
       if (!res.ok) { setVersions([]); return; }
       const data = await res.json();
-      const fetched = data.versions || [];
+      let fetched = data.versions || [];
+
+      // For project source, only show artifacts with no session_id (project-level only)
+      if (isProjectSource) {
+        fetched = fetched.filter((v) => !v.session_id);
+      }
+
       setVersions(fetched);
       if (fetched.length > 0) {
         const latest = fetched[0];
@@ -234,11 +374,14 @@ export default function SrsPage() {
   };
 
   useEffect(() => {
-    if (sessionId) {
+    if (isProjectSource) {
+      fetchVersions();
+      // No approval refresh needed for project-level artifacts
+    } else if (sessionId) {
       fetchVersions(sessionId);
       refreshSrsApproval(sessionId);
     }
-  }, [sessionId]);
+  }, [sessionId, isProjectSource]);
 
   // ===============================
   // FETCH SRS TEXT FOR PREVIEW
@@ -258,14 +401,44 @@ export default function SrsPage() {
   // GENERATE SRS
   // ===============================
   const handleGenerate = async () => {
+        if (isProjectSource) {
+      // PROJECT-LEVEL generation — new path, touches nothing in session logic
+      try {
+        setLoading(true);
+        const res = await fetch(
+          `${BASE_URL}/api/projects/${projectId}/generate-srs?format_version=${formatVersion}`,
+          { method: "POST", headers: getAuthHeaders() }
+        );
+        if (!res.ok) throw new Error("SRS generation failed");
+        const data = await res.json();
+        const artifact = data.artifact;
+        setArtifactId(artifact.id);
+        setSrsContent(artifact.file_path);
+        fetchSrsText(artifact.id);
+        setApproved(false);
+        fetchVersions(); // project-level fetchVersions (no sessionId needed)
+      } catch (err) {
+        console.error(err);
+        alert("SRS generation failed. Make sure Ollama is running.");
+      } finally {
+        setLoading(false);
+      }
+      return; // ✅ Early return — session logic below never runs for project source
+    }
+
     if (!sessionId) {
       alert("No session found. Please start a meeting session first.");
       return;
     }
     try {
       setLoading(true);
-      const res = await generateSessionSRS(projectId, sessionId);
-      const artifact = res.data.artifact;
+      const res = await fetch(
+        `${BASE_URL}/api/projects/${projectId}/sessions/${sessionId}/generate-srs?format_version=${formatVersion}`,
+        { method: "POST", headers: getAuthHeaders() }
+      );
+      if (!res.ok) throw new Error("SRS generation failed");
+      const data = await res.json();
+      const artifact = data.artifact;
       setArtifactId(artifact.id);
       setSrsContent(artifact.file_path);
       fetchSrsText(artifact.id);
@@ -288,12 +461,26 @@ export default function SrsPage() {
       );
 
       fetchVersions(sessionId);
-      await refreshSrsApproval(sessionId);
+      refreshSrsApproval(sessionId);
     } catch (err) {
       console.error(err);
       alert("SRS generation failed. Make sure Ollama is running.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ===============================
+  // APPROVE (project-level — direct artifact approval)
+  // ===============================
+  const handleProjectApprove = async () => {
+    if (!artifactId) return;
+    try {
+      const res = await approveSrsArtifact(artifactId); // calls POST /api/artifacts/{id}/approve
+      setApproved(res.data.status === "approved" || res.data.approval_status === "approved");
+      fetchVersions(); // refresh version dropdown to show updated status
+    } catch (err) {
+      console.error("Failed to approve project SRS artifact:", err);
     }
   };
 
@@ -371,14 +558,77 @@ export default function SrsPage() {
           <button onClick={() => navigate(`/projects/${projectId}`)} className="text-primary-accent dark:text-secondary-accent font-medium">Project</button>
           <span>/</span>
           <span>SRS Document</span>
+          {isProjectSource && (
+            <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
+              Project-Level
+            </span>
+          )}
         </div>
+
 
         {/* Title */}
         <div className="mb-6">
           <h1 className="text-4xl font-black">SRS Document</h1>
-          {sessionId && (
+          {!isProjectSource && sessionId && (
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Session #{sessionId}</p>
           )}
+          {isProjectSource && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Generated from all project sessions' aggregated requirements
+            </p>
+          )}
+        </div>
+
+        {/* =============================================
+            FORMAT SELECTOR SECTION
+        ============================================= */}
+        <div className="bg-white dark:bg-[#1a1730] rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5 mb-4">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="material-symbols-outlined text-primary dark:text-indigo-300">auto_stories</span>
+            <h2 className="text-sm font-bold text-gray-800 dark:text-white">Choose SRS Format Standard</h2>
+          </div>
+
+          {/* Radio cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+            {FORMAT_OPTIONS.map((opt) => (
+              <label
+                key={opt.value}
+                className={`cursor-pointer rounded-xl border-2 p-4 transition-all ${
+                  formatVersion === opt.value
+                    ? "border-primary bg-primary/5 dark:bg-primary/10"
+                    : "border-gray-200 dark:border-gray-700 hover:border-primary/40"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="formatVersion"
+                  value={opt.value}
+                  checked={formatVersion === opt.value}
+                  onChange={() => setFormatVersion(opt.value)}
+                  className="hidden"
+                />
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`text-sm font-bold ${formatVersion === opt.value ? "text-primary dark:text-indigo-300" : "text-gray-800 dark:text-white"}`}>
+                      {opt.label}
+                    </span>
+                    {formatVersion === opt.value && (
+                      <span className="material-symbols-outlined text-primary dark:text-indigo-300 text-base">check_circle</span>
+                    )}
+                  </div>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit ${opt.badgeColor}`}>
+                    {opt.badge}
+                  </span>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                    {opt.description}
+                  </p>
+                </div>
+              </label>
+            ))}
+          </div>
+
+          {/* Benchmarking comparison toggle */}
+          <BenchmarkTable selectedFormat={formatVersion} onSelect={setFormatVersion} />
         </div>
 
         {/* Controls */}
@@ -389,11 +639,21 @@ export default function SrsPage() {
             <div className="flex gap-3 items-center">
               <button
                 onClick={handleGenerate}
-                disabled={loading || !sessionId}
+                disabled={loading || (!isProjectSource && !sessionId)}
                 className="h-10 px-4 rounded-lg bg-primary text-white disabled:opacity-50"
               >
                 {loading ? "Generating..." : "Generate SRS"}
               </button>
+
+              {/* Format badge shown next to button so user sees what will be generated */}
+              {(() => {
+                const opt = FORMAT_OPTIONS.find(f => f.value === formatVersion);
+                return opt ? (
+                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${opt.badgeColor}`}>
+                    {opt.label}
+                  </span>
+                ) : null;
+              })()}
 
               <select
                 onChange={(e) => handleSelectVersion(e.target.value)}
@@ -420,6 +680,18 @@ export default function SrsPage() {
                 Export
               </button>
 
+              {/* APPROVE */}
+              {isProjectSource ? (
+                // Project-level: direct artifact approval
+                <button
+                  onClick={handleProjectApprove}
+                  disabled={approved || !artifactId}
+                  className={`h-10 px-6 rounded-lg flex items-center gap-2 text-white ${approved ? "bg-green-600" : "bg-primary"}`}
+                >
+                  <span className="material-symbols-outlined">{approved ? "check_circle" : "approval"}</span>
+                  {approved ? "Approved" : "Approve"}
+                </button>
+              ) : (
               <button
                 onClick={() => setShowApprovalModal(true)}
                 disabled={isApprovedState || !artifactId}
@@ -428,6 +700,7 @@ export default function SrsPage() {
                 <span className="material-symbols-outlined">{isApprovedState ? "check_circle" : "approval"}</span>
                 {isApprovedState ? "Approved" : "Approve"}
               </button>
+              )}
             </div>
           </div>
         </div>
@@ -438,10 +711,17 @@ export default function SrsPage() {
             <span className={`text-xs font-semibold px-3 py-1 rounded-full ${isApprovedState ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300" : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300"}`}>
               {isApprovedState ? "✓ Approved" : "Pending Approval"}
             </span>
-            <span className="text-xs text-gray-600 dark:text-gray-300">
-              SRS approvals: {srsApproval.approved_members_count}/{srsApproval.total_members_count}
-              {srsApproval.all_members_approved ? " (all approved)" : " (waiting for members)"}
-            </span>
+            {!isProjectSource && (
+              <span className="text-xs text-gray-600 dark:text-gray-300">
+                SRS approvals: {srsApproval.approved_members_count}/{srsApproval.total_members_count}
+                {srsApproval.all_members_approved ? " (all approved)" : " (waiting for members)"}
+              </span>
+            )}
+            {isProjectSource && !approved && (
+              <span className="text-xs text-gray-600 dark:text-gray-300">
+                Pending approval by project manager
+              </span>
+            )}
           </div>
         )}
 
@@ -494,22 +774,19 @@ export default function SrsPage() {
                 </div>
                 <nav className="flex flex-col gap-0.5 text-sm">
                   {[
-                    { id: "s1", icon: "info",        label: "1. Introduction" },
-                    { id: "s2", icon: "table_rows",  label: "2. Overall Description" },
-                    { id: "s3", icon: "list",        label: "3. Functional Requirements" },
-                    { id: "s4", icon: "security",    label: "4. Non-Functional Req." },
-                  ].map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        const el = document.getElementById(item.id);
-                        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-                      }}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-primary/10 dark:hover:bg-primary/20 text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-indigo-300 transition text-left w-full"
+                    { id: "s1", icon: "info",             label: "1. Introduction" },
+                    { id: "s2", icon: "table_rows",       label: "2. Overall Description" },
+                    { id: "s3", icon: "check_circle",     label: "3. Functional Requirements" },
+                    { id: "s4", icon: "tune",             label: "4. Non-Functional Requirements" },
+                  ].map(({ id, icon, label }) => (
+                    <a
+                      key={id}
+                      href={`#${id}`}
+                      className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-primary dark:hover:text-indigo-300 transition-colors"
                     >
-                      <span className="material-symbols-outlined text-base">{item.icon}</span>
-                      <span>{item.label}</span>
-                    </button>
+                      <span className="material-symbols-outlined text-base">{icon}</span>
+                      {label}
+                    </a>
                   ))}
                 </nav>
               </div>
@@ -517,17 +794,6 @@ export default function SrsPage() {
 
             {/* DOCUMENT BODY */}
             <article className="lg:col-span-3 bg-white dark:bg-[#1a1730] rounded-xl shadow border border-gray-200 dark:border-gray-700 overflow-visible">
-
-              {/* Document header bar */}
-              <div className="bg-[#1E105F] dark:bg-[#0f0a2e] px-8 py-6 text-white">
-                <p className="text-xs font-semibold uppercase tracking-widest opacity-70 mb-1">IEEE Std 830</p>
-                <h1 className="text-2xl font-black">Software Requirements Specification</h1>
-                <p className="text-sm opacity-60 mt-1">
-                  Session #{sessionId} · {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
-                </p>
-              </div>
-
-      
               <div className={`px-8 py-2 text-xs font-semibold flex items-center gap-2 ${
                 isApprovedState
                   ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border-b border-green-200 dark:border-green-800"
@@ -563,7 +829,7 @@ export default function SrsPage() {
 
         ) : (
           <div className="bg-white dark:bg-[#1f1c2e] rounded-xl border p-10 min-h-[300px] flex items-center justify-center">
-            <p className="text-gray-400 text-center">No SRS document generated yet. Click "Generate SRS" to start.</p>
+            <p className="text-gray-400 text-center">No SRS document generated yet. Choose a format above and click "Generate SRS" to start.</p>
           </div>
         )}
 
@@ -580,7 +846,8 @@ export default function SrsPage() {
 
       </main>
 
-      {showApprovalModal && (
+      {/* MODAL — only for session-level approval flow */}
+      {!isProjectSource && showApprovalModal && (
         <SrsApprovalModal
           onClose={() => setShowApprovalModal(false)}
           onApprove={handleApprove}

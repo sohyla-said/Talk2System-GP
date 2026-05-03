@@ -559,15 +559,23 @@ const handleApprove = async () => {
     }
   };
 
-  const handleNavigation = (path, state = null) => {
-    navigate(path, state ? { state } : undefined);
-  };
+  // const handleNavigation = (path, state = null) => {
+  //   navigate(path, state ? { state } : undefined);
+  // };
 
 
   const handleGenerate = (type) => {
     if (!requirementsApproval.all_members_approved) return;
-    if (type == 'uml') handleNavigation(`/projects/${projectId}/artifacts/uml`);
-    if (type == 'srs') handleNavigation(`/projects/${projectId}/srs/generate`);
+    if (type === 'uml') {
+      navigate(`/projects/${projectId}/artifacts/uml`, { 
+        state: { source: "session", sessionId } 
+      });
+    }
+    if (type === 'srs') {
+      navigate(`/projects/${projectId}/srs/generate`, { 
+        state: { source: "session", sessionId }
+      });
+    }
   };
 
   // Get tag color classes

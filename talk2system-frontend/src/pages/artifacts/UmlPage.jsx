@@ -32,6 +32,8 @@ export default function UmlPage() {
   const [versions, setVersions] = useState([]);
   const [sessionId, setSessionId] = useState(null);
 
+  const [isProjectSource, setIsProjectSource] = useState(false);
+
   const navigate = useNavigate();
   const location = useLocation();
   const { id: projectId } = useParams();
@@ -47,33 +49,53 @@ export default function UmlPage() {
   // Priority: route state (came from a specific session) > latest session fallback
   // ===============================
   useEffect(() => {
-    const stateSessionId = location.state?.sessionId;
+    const source = location.state?.source;
 
-    if (stateSessionId) {
-      setSessionId(stateSessionId);
+    if (source === "project") {
+      // ✅ Came from Requirements_project_view — use project-level generation
+      setIsProjectSource(true);
+      // No session needed for project-level generation
     } else {
-      const fetchLatestSession = async () => {
-        try {
-          const res = await fetch(`${BASE_URL}/api/sessions/project/${projectId}`);
-          const data = await res.json();
-          if (data && data.length > 0) {
-            setSessionId(data[0].id);
+      // ✅ Session-level flow (existing behavior unchanged)
+      setIsProjectSource(false);
+      const stateSessionId = location.state?.sessionId;
+
+      if (stateSessionId) {
+        // Came from a specific session — use it directly, no fetch needed
+        setSessionId(stateSessionId);
+      } else {
+        // Accessed directly (e.g. from project Artifacts tab) — use latest session
+        const fetchLatestSession = async () => {
+          try {
+            const res = await fetch(`${BASE_URL}/api/sessions/project/${projectId}`);
+            const data = await res.json();
+            if (data && data.length > 0) {
+              setSessionId(data[0].id);
+            }
+          } catch (err) {
+            console.error("Failed to fetch sessions:", err);
           }
-        } catch (err) {
-          console.error("Failed to fetch sessions:", err);
-        }
-      };
-      fetchLatestSession();
+        };
+        fetchLatestSession();
+      }
     }
   }, [projectId, location.state]);
 
   const fetchVersions = async (resolvedSessionId = sessionId) => {
-    if (!resolvedSessionId) return;
-
     try {
-      const res = await fetch(
-        `${BASE_URL}/api/projects/${projectId}/sessions/${resolvedSessionId}/artifacts/${diagramType}/versions`
-      );
+      let res;
+
+      if (isProjectSource) {
+        // ✅ Project-level: fetch artifacts with no session (project-wide)
+        res = await fetch(
+          `${BASE_URL}/api/projects/${projectId}/artifacts/${diagramType}/versions`
+        );
+      } else {
+        if (!resolvedSessionId) return;
+        res = await fetch(
+          `${BASE_URL}/api/projects/${projectId}/sessions/${resolvedSessionId}/artifacts/${diagramType}/versions`
+        );
+      }
 
       if (!res.ok) {
         console.error(`Versions fetch failed: ${res.status}`);
@@ -85,7 +107,13 @@ export default function UmlPage() {
       }
 
       const data = await res.json();
-      const fetchedVersions = data.versions || [];
+      let fetchedVersions = data.versions || [];
+
+      // For project source, only show artifacts that have no session_id (project-level only)
+      if (isProjectSource) {
+        fetchedVersions = fetchedVersions.filter((v) => !v.session_id);
+      }
+
       setVersions(fetchedVersions);
 
       if (fetchedVersions.length > 0) {
@@ -127,6 +155,31 @@ export default function UmlPage() {
   };
 
   const handleGenerate = async () => {
+
+        if (isProjectSource) {
+      // ✅ PROJECT-LEVEL generation — new path, touches nothing in session logic
+      try {
+        setLoading(true);
+        const res = await fetch(
+          `${BASE_URL}/api/projects/${projectId}/generate-uml?diagram_type=${diagramType}`,
+          { method: "POST", headers: getAuthHeaders() }
+        );
+
+        if (!res.ok) throw new Error("Generation failed");
+        const data = await res.json();
+        setDiagramUrl(`${BASE_URL}/${data.file_path}`);
+        setArtifactId(data.artifact.id);
+        setApproved(false);
+        fetchVersions(); // project-level fetchVersions (no sessionId needed)
+      } catch (err) {
+        console.error(err);
+        alert("Failed to generate UML diagram.");
+      } finally {
+        setLoading(false);
+      }
+      return; // ✅ Early return — session logic below never runs for project source
+    }
+
     if (!sessionId) {
       alert("No session found for this project. Please start a meeting session first.");
       return;
@@ -166,14 +219,30 @@ export default function UmlPage() {
     }
   };
 
-  // Re-fetch when diagramType changes OR when sessionId is first resolved
+  // ===============================
+  // APPROVE (project-level — direct artifact approval, no session members)
+  // ===============================
+  const handleProjectApprove = async () => {
+    if (!artifactId) return;
+    try {
+      const res = await approveArtifact(artifactId); // calls POST /api/artifacts/{id}/approve
+      setApproved(res.data.status === "approved");
+      fetchVersions(); // refresh version dropdown to show updated status
+    } catch (err) {
+      console.error("Failed to approve project artifact:", err);
+    }
+  };
+
+  // Re-fetch when diagramType changes OR when sessionId/isProjectSource is first resolved
   useEffect(() => {
-    if (sessionId) {
+    if (isProjectSource) {
+      fetchVersions();
+      // No approval refresh needed for project-level artifacts
+    } else if (sessionId) {
       fetchVersions();
       refreshUmlApproval();
     }
-  }, [diagramType, sessionId]);
-
+  }, [diagramType, sessionId, isProjectSource]);
   // ===============================
   // SELECT VERSION
   // ===============================
@@ -248,14 +317,14 @@ export default function UmlPage() {
 
         {/* Breadcrumb */}
         <div className="flex flex-wrap gap-2 text-sm">
-          <button
+          <button 
             onClick={() => navigate("/projects")}
             className="text-primary-accent dark:text-secondary-accent font-medium"
           >
             Projects
           </button>
           <span>/</span>
-          <button
+          <button 
             onClick={() => navigate(`/projects/${projectId}`)}
             className="text-primary-accent dark:text-secondary-accent font-medium"
           >
@@ -263,14 +332,24 @@ export default function UmlPage() {
           </button>
           <span>/</span>
           <span>UML Diagrams</span>
+          {isProjectSource && (
+            <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
+              Project-Level
+            </span>
+          )}
         </div>
 
         {/* TITLE */}
         <div className="mb-6">
           <h1 className="text-4xl font-black">UML Diagrams</h1>
-          {sessionId && (
+          {!isProjectSource && sessionId && (
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Session #{sessionId}
+            </p>
+          )}
+          {isProjectSource && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Generated from all project sessions' aggregated requirements
             </p>
           )}
         </div>
@@ -308,7 +387,7 @@ export default function UmlPage() {
               {/* GENERATE */}
               <button
                 onClick={handleGenerate}
-                disabled={loading || !sessionId}
+                disabled={loading || (!isProjectSource && !sessionId)}
                 className="h-10 px-4 rounded-lg bg-primary text-white disabled:opacity-50"
               >
                 {loading ? "Generating..." : "Generate UML"}
@@ -342,9 +421,24 @@ export default function UmlPage() {
               </button>
 
               {/* APPROVE — ✅ uses isApprovedState so new versions re-enable it */}
-              <button
-                onClick={() => setShowApprovalModal(true)}
-                disabled={isApprovedState || !artifactId}
+
+              {isProjectSource ? (
+                // Project-level: direct artifact approval, no session members needed
+                <button
+                  onClick={handleProjectApprove}
+                  disabled={approved || !artifactId}
+                  className={`h-10 px-6 rounded-lg flex items-center gap-2 text-white
+                    ${approved ? "bg-green-600" : "bg-primary"}`}
+                >
+                  <span className="material-symbols-outlined">
+                    {approved ? "check_circle" : "approval"}
+                  </span>
+                  {approved ? "Approved" : "Approve"}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowApprovalModal(true)}
+                  disabled={isApprovedState || !artifactId}
                 className={`h-10 px-6 rounded-lg flex items-center gap-2 text-white
                   ${isApprovedState ? "bg-green-600" : "bg-primary"}`}
               >
@@ -353,15 +447,21 @@ export default function UmlPage() {
                 </span>
                 {isApprovedState ? "Approved" : "Approve"}
               </button>
+            )}
 
             </div>
           </div>
 
-          {artifactId && (
+          {!isProjectSource && artifactId && (
             <div className="px-4 pb-3 text-sm text-slate-500 dark:text-slate-400">
               UML approvals: {umlApproval.approved_members_count}/
               {umlApproval.total_members_count}
               {umlApproval.all_members_approved ? " (all approved)" : " (waiting for members)"}
+            </div>
+          )}
+          {isProjectSource && artifactId && (
+            <div className="px-4 pb-3 text-sm text-slate-500 dark:text-slate-400">
+              {approved ? "✓ Project artifact approved" : "Pending approval by project manager"}
             </div>
           )}
         </div>
@@ -392,7 +492,7 @@ export default function UmlPage() {
       </main>
 
       {/* MODAL */}
-      {showApprovalModal && (
+      {!isProjectSource && showApprovalModal && (
         <UMLApprovalModal
           onClose={() => setShowApprovalModal(false)}
           onApprove={handleApprove}

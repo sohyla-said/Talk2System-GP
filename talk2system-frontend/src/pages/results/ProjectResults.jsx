@@ -15,16 +15,18 @@ export default function ProjectResults() {
     const load = async () => {
       try {
         const umlData = await getProjectArtifacts(projectId);
-        setHasUML(umlData.length > 0);
+        // Only count project-level UML (no session_id)
+        setHasUML(umlData.filter(a => !a.session_id).length > 0);
+
         const srsData = await getProjectSRS(projectId);
-        setHasSRS(srsData.length > 0);
+        // Only count project-level SRS (no session_id)  
+        setHasSRS(srsData.filter(a => !a.session_id).length > 0);
       } catch (e) {
         console.error(e);
       } finally {
         setLoading(false);
       }
     };
-
     load();
   }, [projectId]);
 

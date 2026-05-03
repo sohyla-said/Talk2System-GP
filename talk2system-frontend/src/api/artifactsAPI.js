@@ -77,7 +77,7 @@ export async function getProjectSRS(projectId) {
     );
     if (!res.ok) return [];
     const data = await res.json();
-    return data.versions || [];
+    return (data.versions || []).filter(v => !v.session_id);
   } catch {
     return [];
   }
