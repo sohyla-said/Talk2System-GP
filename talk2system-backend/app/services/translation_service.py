@@ -15,7 +15,7 @@ from app.models.transcript import TranscriptSegment
 logger = logging.getLogger("translation_service")
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "llama3"          # change to whichever model you have pulled
+OLLAMA_MODEL = "qwen2.5:7b"          # change to whichever model you have pulled
 
 
 # ---------------------------------------------------------------------------
