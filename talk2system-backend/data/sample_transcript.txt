@@ -293,6 +293,7 @@ Omar: That’s the clearest requirement so far.
 
 
 
+<<<<<<< Updated upstream
 
 Project Manager: Good morning everyone. Today we need to finalize requirements for the new clinic management system.
 Client: Yes. We run three branches and need one centralized system for appointments, doctors, billing, and patient records.
@@ -349,3 +350,382 @@ Business Analyst: Anything else?
 System Admin: If login fails five times, the account should be temporarily locked for 15 minutes.
 Client: Also keep inactive sessions logged out after 10 minutes.
 Business Analyst: Great. We’ll convert these into functional and non-functional requirements.
+=======
+                              Simple Clinic Appointment System [Arabic Version]
+Mona: حسنًا، هل نقوم بالتسجيل؟ أعتقد نعم. صباح الخير جميعًا، اليوم سنجمع متطلبات نظام مواعيد العيادة.
+Sara: لحظة واحدة، ريموت التكييف مفقود مرة أخرى.
+Dr. Kareem: انسِ الريموت، لنبدأ من فضلك. المرضى اشتكوا بالفعل من التأخير هذا الأسبوع.
+Mona: حسنًا. ما أول مشكلة سنحلها؟
+Dr. Kareem: الفوضى. أساسًا الفوضى. المرضى يتصلون، يرسلون واتساب، يأتون بدون موعد، وأحيانًا كل ذلك معًا.
+Omar: إذًا إدارة الحجوزات؟
+Dr. Kareem: الحجز نعم، لكن ليس فقط الحجز. أيضًا عدم الحضور، والحجوزات المزدوجة، وأحتاج تقارير أيضًا.
+Nadia: تقارير للمالية أيضًا، ليس فقط للمواعيد.
+Sara: والتذكيرات. إذا نسي المرضى، يلومونني أنا.
+Mona: لنبدأ بالمستخدمين. من يستخدم النظام؟
+Sara: الاستقبال.
+Dr. Kareem: الأطباء.
+Nadia: المالية.
+Omar: المرضى مباشرة؟
+Dr. Kareem: ربما لاحقًا. لست متأكدًا. إذا حجز المرضى بأنفسهم، سيختارون أوقاتًا عشوائية.
+Sara: نعم، سيختارون وقت الغداء.
+Mona: إذًا ربما بوابة المرضى في المرحلة الثانية؟
+Dr. Kareem: أو المرحلة الأولى إذا كان الأمر سهلًا.
+Omar: "سهل" يعتمد على التعريف.
+Youssef: شاي أم قهوة أحد؟
+Nadia: قهوة من فضلك، بدون سكر.
+Mona: الميزة الأساسية: إنشاء المواعيد. كيف يجب أن يعمل ذلك؟
+Sara: البحث باسم المريض، اختيار الطبيب، اختيار الوقت، ثم حفظ.
+Mona: المرضى الحاليون فقط؟
+Sara: لا، أحيانًا مريض جديد أثناء الاتصال.
+Dr. Kareem: نحتاج تسجيل سريع. الاسم ورقم الهاتف كافيان مبدئيًا.
+Nadia: لكن لاحقًا للفواتير قد نحتاج الرقم القومي.
+Omar: هل هو إلزامي عند الحجز أم اختياري؟
+Everyone: ... يعتمد.
+Mona: يعتمد على ماذا؟
+Nadia: مرضى التأمين يحتاجون بيانات أكثر.
+Dr. Kareem: مرضى الدفع النقدي بيانات أقل.
+Sara: بعض المرضى يرفضون إعطاء الرقم القومي عبر الهاتف.
+Mona: تم تسجيل ذلك. ربما حقول شرطية.
+Omar: هل يمكن لطبيبين استخدام نفس الغرفة؟
+Dr. Kareem: أحيانًا نعم.
+Sara: أحيانًا لا.
+Omar: هذا مفيد جدًا.
+Mona: وضّح.
+Dr. Kareem: لدينا ثلاث غرف. عادة أستخدم الغرفة 1. طبيب الأسنان يأتي يوم الأربعاء ويستخدم الغرفة 2. أحيانًا إذا تعطل التكييف ننتقل.
+Youssef: بالمناسبة، تكييف الغرفة 2 ما زال يسرب.
+Dr. Kareem: يرجى الاتصال بالصيانة بعد الاجتماع.
+Mona: إذًا قد تحتاج المواعيد إلى تحديد غرفة؟
+Sara: ربما مخفية عن المرضى لكنها مرئية داخليًا.
+Mona: عملية الإلغاء؟
+Sara: نحتاج إلغاء بنقرة واحدة.
+Nadia: لكن يجب حفظ السبب.
+Omar: هل السبب إلزامي؟
+Sara: إذا كنت مشغولة، لا.
+Nadia: إذًا على الأقل اختياري.
+Mona: إعادة الجدولة؟
+Dr. Kareem: شائعة جدًا. يجب أن تكون سهلة.
+Sara: ربما سحب وإفلات في التقويم؟
+Omar: ممكن، لكن ويب أم تطبيق مكتبي؟
+Dr. Kareem: أي شيء يعمل على الآيباد الخاص بي.
+Mona: إذًا متصفح متجاوب.
+Nadia: أيضًا العربون.
+Mona: العربون؟
+Nadia: بعض الإجراءات تحتاج دفع مقدم.
+Dr. Kareem: فقط بعض الإجراءات.
+Omar: أي إجراءات؟
+Dr. Kareem: سنرسل القائمة لاحقًا.
+Mona: تذكيرات الإشعارات؟
+Sara: الرسائل النصية مفضلة.
+Nadia: الرسائل النصية تكلف مالًا.
+Youssef: واتساب قد يكون أرخص.
+Omar: واجهة واتساب لها قواعد.
+Dr. Kareem: استخدموا ما يرسل بشكل موثوق.
+Mona: توقيت التذكيرات؟
+Sara: قبل بيوم.
+Dr. Kareem: وأيضًا صباح نفس اليوم.
+Nadia: كثرة الرسائل تزعج الناس.
+Mona: إذًا تذكيرات قابلة للإعداد.
+Sara: آسفة، مريض يسأل إذا جلسة الليزر مؤلمة.
+Mona: يمكننا التوقف.
+Dr. Kareem: لا، استمروا.
+Omar: هل جداول الأطباء ثابتة أسبوعيًا أم مخصصة؟
+Dr. Kareem: غالبًا ثابتة، لكن أحيانًا مؤتمرات أو عمليات أو طوارئ.
+Sara: التغييرات اللحظية تحدث كثيرًا.
+Omar: إذًا نحتاج إجازات أو أوقات محجوزة.
+Mona: الحالات بدون موعد؟
+Sara: يوميًا.
+Dr. Kareem: يجب إدخالهم بين المواعيد إن أمكن.
+Omar: اقتراح تلقائي للفجوات؟
+Sara: سيكون رائعًا إذا كان النظام ذكيًا.
+Nadia: نحتاج طباعة فواتير.
+Omar: وحدة منفصلة؟
+Nadia: ربما بسيطة أولًا. فقط المبلغ المدفوع والمتبقي.
+Mona: تم تسجيل ربط الفواتير بالمواعيد.
+Youssef: الطابعة تتعطل أحيانًا مع النص العربي.
+Omar: ملاحظة مفيدة.
+Mona: دعم اللغة؟
+Sara: العربية أولًا.
+Dr. Kareem: التسميات الإنجليزية أيضًا جيدة.
+Nadia: الأرقام يجب أن تكون واضحة، النظام السابق كان يخلط الصيغ.
+Mona: الأمان وصلاحيات الوصول؟
+Dr. Kareem: الاستقبال لا يجب أن يرى كل شيء.
+Sara: مثل ماذا؟
+Dr. Kareem: التقارير المالية مثلًا.
+Nadia: بالتأكيد لا بيانات مالية.
+Omar: هل يمكن للاستقبال تعديل المواعيد؟
+Everyone: نعم.
+Mona: هل يمكن للأطباء تعديل المواعيد؟
+Dr. Kareem: ربما فقط جدولهم الخاص.
+Omar: هل نحتاج سجل تتبع؟ من غيّر ماذا؟
+Nadia: نعم.
+Sara: إلا إذا كان سيبطئني.
+Mona: توقعات الأداء؟
+Sara: إذا استغرق تحميل الصفحة أكثر من ثانيتين سأشتكي.
+Omar: متطلب صادق.
+Mona: النسخ الاحتياطي ومخاوف فقدان البيانات؟
+Dr. Kareem: نعم، جهاز قديم تعطل مرة. لن يحدث مرة أخرى.
+Nadia: هل يمكن للتقارير إظهار أكثر طبيب ازدحامًا شهريًا؟
+Dr. Kareem: ونسبة عدم الحضور.
+Sara: ومن يحجز أكثر من حملة إنستغرام ربما.
+Omar: تتبع مصدر التسويق أيضًا؟
+Dr. Kareem: ميزة إضافية جيدة.
+Mona: السؤال الأخير: الموعد النهائي؟
+Dr. Kareem: قبل الصيف.
+Omar: أي سنة؟
+Mona: حسنًا، سنلخص ونتابع النقاط غير الواضحة: قائمة العربون، حجز المرضى الذاتي، منطق الغرف، قناة الإشعارات، عمق الفوترة، التقارير، الصلاحيات.
+Sara: وأيضًا الوضع الليلي من فضلك.
+Omar: هذا أوضح متطلب حتى الآن.
+
+
+  Simple Clinic Appointment System [French Version]
+Mona : D’accord, est-ce qu’on enregistre ? Je pense que oui. Bonjour à tous, aujourd’hui nous allons recueillir les exigences du système de rendez-vous de la clinique.
+Sara : Une seconde, la télécommande de la climatisation a encore disparu.
+Dr. Kareem : Oublie la télécommande, commençons s’il te plaît. Les patients se sont déjà plaints des retards cette semaine.
+Mona : Très bien. Quel problème résolvons-nous en premier ?
+Dr. Kareem : Le chaos. Principalement le chaos. Les patients appellent, envoient des WhatsApp, viennent sans rendez-vous, parfois les trois.
+Omar : Donc gestion des réservations ?
+Dr. Kareem : Oui, mais pas seulement. Aussi les absences, les doubles réservations, et j’ai besoin de rapports.
+Nadia : Des rapports pour la finance aussi, pas seulement les rendez-vous.
+Sara : Et des rappels. Si les patients oublient, ils me blâment.
+Mona : Commençons par les utilisateurs. Qui utilise le système ?
+Sara : La réception.
+Dr. Kareem : Les médecins.
+Nadia : La finance.
+Omar : Les patients directement ?
+Dr. Kareem : Peut-être plus tard. Pas sûr. S’ils réservent eux-mêmes, ils choisiront des horaires aléatoires.
+Sara : Oui, ils choisiront la pause déjeuner.
+Mona : Donc portail patient en phase deux ?
+Dr. Kareem : Ou en phase un si c’est facile.
+Omar : « Facile » dépend de la définition.
+Youssef : Thé ou café quelqu’un ?
+Nadia : Café s’il te plaît, sans sucre.
+Mona : Fonction principale : créer des rendez-vous. Comment cela doit fonctionner ?
+Sara : Chercher le nom du patient, choisir le médecin, choisir l’heure, enregistrer.
+Mona : Patients existants seulement ?
+Sara : Non, parfois un nouveau patient pendant l’appel.
+Dr. Kareem : Il faut une inscription rapide. Nom et téléphone suffisent au début.
+Nadia : Mais plus tard pour la facturation, on aura peut-être besoin d’un identifiant national.
+Omar : Obligatoire à la réservation ou optionnel ?
+Tout le monde : …ça dépend.
+Mona : Ça dépend de quoi ?
+Nadia : Les patients assurés nécessitent plus de données.
+Dr. Kareem : Les patients payant en espèces, moins de données.
+Sara : Certains refusent de donner leur ID au téléphone.
+Mona : Noté. Peut-être des champs conditionnels.
+Omar : Deux médecins peuvent-ils partager la même salle ?
+Dr. Kareem : Parfois oui.
+Sara : Parfois non.
+Omar : Très utile.
+Mona : Explique.
+Dr. Kareem : Nous avons trois salles. J’utilise généralement la salle 1. Le dentiste vient le mercredi et utilise la salle 2. Parfois, si la climatisation est en panne, on change.
+Youssef : Au fait, la climatisation de la salle 2 fuit encore.
+Dr. Kareem : Appelez la maintenance après la réunion.
+Mona : Donc les rendez-vous peuvent nécessiter une salle ?
+Sara : Peut-être cachée aux patients mais visible en interne.
+Mona : Processus d’annulation ?
+Sara : Annulation en un clic.
+Nadia : Mais enregistrer la raison.
+Omar : Obligatoire ?
+Sara : Si je suis occupée, non.
+Nadia : Alors au moins optionnel.
+Mona : Reprogrammation ?
+Dr. Kareem : Très fréquente. Doit être facile.
+Sara : Glisser-déposer dans le calendrier ?
+Omar : Possible, mais web ou desktop ?
+Dr. Kareem : Tant que ça marche sur mon iPad.
+Mona : Donc application web responsive.
+Nadia : Aussi les acomptes.
+Mona : Les acomptes ?
+Nadia : Certaines procédures nécessitent un paiement à l’avance.
+Dr. Kareem : Seulement certaines.
+Omar : Lesquelles ?
+Dr. Kareem : On enverra la liste plus tard.
+Mona : Notifications de rappel ?
+Sara : SMS de préférence.
+Nadia : Les SMS coûtent de l’argent.
+Youssef : WhatsApp peut être moins cher.
+Omar : L’API WhatsApp a des règles.
+Dr. Kareem : Utilisez ce qui fonctionne de manière fiable.
+Mona : Timing des rappels ?
+Sara : La veille.
+Dr. Kareem : Et le matin même.
+Nadia : Trop de messages agacent.
+Mona : Donc rappels configurables.
+Sara : Désolée, un patient demande si la séance laser fait mal.
+Mona : On peut faire une pause.
+Dr. Kareem : Non, continuez.
+Omar : Planning des médecins fixe ou flexible ?
+Dr. Kareem : Majoritairement fixe, mais parfois conférences, opérations, urgences.
+Sara : Les changements de dernière minute arrivent souvent.
+Omar : Donc besoin de créneaux bloqués.
+Mona : Patients sans rendez-vous ?
+Sara : Quotidiennement.
+Dr. Kareem : Les insérer entre les rendez-vous si possible.
+Omar : Suggestion automatique des créneaux ?
+Sara : Bien si le système est intelligent.
+Nadia : Besoin d’imprimer des factures.
+Omar : Module séparé ?
+Nadia : Peut-être simple au début.
+Mona : Noté.
+Youssef : L’imprimante bloque avec l’arabe parfois.
+Omar : Utile.
+Mona : Support des langues ?
+Sara : Arabe d’abord.
+Dr. Kareem : Anglais aussi acceptable.
+Nadia : Les chiffres doivent être clairs.
+Mona : Sécurité ?
+Dr. Kareem : La réception ne doit pas tout voir.
+Sara : Comme quoi ?
+Dr. Kareem : Les rapports financiers.
+Nadia : Certainement pas les données financières.
+Omar : La réception peut modifier les rendez-vous ?
+Tout le monde : Oui.
+Mona : Les médecins ?
+Dr. Kareem : Seulement les leurs.
+Omar : Journal des modifications ?
+Nadia : Oui.
+Sara : Sauf si ça me ralentit.
+Mona : Performance ?
+Sara : Plus de 2 secondes, je me plains.
+Omar : Honnête.
+Mona : Sauvegardes ?
+Dr. Kareem : Oui.
+Nadia : Rapport mensuel médecin le plus occupé ?
+Dr. Kareem : Et taux d’absence.
+Sara : Et source marketing.
+Omar : Suivi marketing aussi ?
+Dr. Kareem : Optionnel.
+Mona : Deadline ?
+Dr. Kareem : Avant l’été.
+Omar : Quelle année ?
+Mona : On résume plus tard.
+Sara : Et mode sombre s’il vous plaît.
+Omar : Enfin une exigence claire
+
+
+
+Simple Clinic Appointment System [German Version]
+Mona: Okay, nehmen wir auf? Ich glaube ja. Guten Morgen zusammen, heute sammeln wir Anforderungen für das Terminverwaltungssystem der Klinik.
+Sara: Einen Moment, die Fernbedienung der Klimaanlage ist schon wieder verschwunden.
+Dr. Kareem: Vergiss die Fernbedienung, bitte anfangen. Patienten haben sich diese Woche schon über Verzögerungen beschwert.
+Mona: Alles klar. Welches Problem lösen wir zuerst?
+Dr. Kareem: Chaos. Hauptsächlich Chaos. Patienten rufen an, schreiben auf WhatsApp, kommen vorbei, manchmal alles drei.
+Omar: Also Terminverwaltung?
+Dr. Kareem: Termine, ja, aber nicht nur Termine. Auch Nichterscheinen. Auch Doppelbuchungen. Außerdem brauche ich Berichte.
+Nadia: Berichte auch für die Finanzen, nicht nur für Termine.
+Sara: Und Erinnerungen. Wenn Patienten es vergessen, geben sie mir die Schuld.
+Mona: Fangen wir mit den Nutzern an. Wer nutzt das System?
+Sara: Empfang.
+Dr. Kareem: Ärzte.
+Nadia: Finanzen.
+Omar: Patienten direkt?
+Dr. Kareem: Vielleicht später. Nicht sicher. Wenn Patienten selbst buchen, wählen sie zufällige Zeiten.
+Sara: Ja, sie wählen die Mittagspause.
+Mona: Also vielleicht Patientenportal in Phase zwei?
+Dr. Kareem: Oder Phase eins, wenn es einfach ist.
+Omar: „Einfach“ hängt von der Definition ab.
+Youssef: Möchte jemand Tee oder Kaffee?
+Nadia: Kaffee bitte, ohne Zucker.
+Mona: Kernfunktion: Termine erstellen. Wie soll das funktionieren?
+Sara: Patientennamen suchen, Arzt auswählen, Zeit wählen, speichern.
+Mona: Nur bestehende Patienten?
+Sara: Nein, manchmal ein neuer Patient während des Anrufs.
+Dr. Kareem: Schnelle Registrierung nötig. Name und Telefonnummer reichen zunächst.
+Nadia: Aber später für Rechnungen brauchen wir vielleicht die nationale ID.
+Omar: Pflicht bei der Buchung oder optional?
+Alle: …kommt darauf an.
+Mona: Kommt worauf an?
+Nadia: Versicherungspatienten brauchen mehr Daten.
+Dr. Kareem: Barzahler weniger Daten.
+Sara: Manche Patienten weigern sich, ihre ID am Telefon anzugeben.
+Mona: Notiert. Vielleicht bedingte Felder.
+Omar: Können zwei Ärzte denselben Raum nutzen?
+Dr. Kareem: Manchmal ja.
+Sara: Manchmal nein.
+Omar: Das hilft sehr.
+Mona: Erklären Sie.
+Dr. Kareem: Wir haben drei Räume. Normalerweise nutze ich Raum 1. Der Zahnarzt kommt mittwochs und nutzt Raum 2. Manchmal, wenn die Klimaanlage kaputt ist, wechseln wir.
+Youssef: Die Klimaanlage in Raum 2 leckt übrigens noch.
+Dr. Kareem: Bitte nach dem Meeting die Wartung anrufen.
+Mona: Also brauchen Termine eventuell eine Raumzuweisung?
+Sara: Vielleicht vor Patienten verborgen, aber intern sichtbar.
+Mona: Stornierungsprozess?
+Sara: Ein-Klick-Stornierung nötig.
+Nadia: Aber Grund speichern.
+Omar: Pflichtgrund?
+Sara: Wenn ich beschäftigt bin, nein.
+Nadia: Dann zumindest optional.
+Mona: Umbuchung?
+Dr. Kareem: Sehr häufig. Muss einfach sein.
+Sara: Vielleicht Drag-and-Drop-Kalender?
+Omar: Möglich, aber Web oder Desktop?
+Dr. Kareem: Was auch immer auf meinem iPad funktioniert.
+Mona: Also vielleicht ein responsiver Browser.
+Nadia: Auch Anzahlungen.
+Mona: Anzahlungen?
+Nadia: Einige Behandlungen erfordern Vorauszahlung.
+Dr. Kareem: Nur einige Behandlungen.
+Omar: Welche Behandlungen?
+Dr. Kareem: Wir schicken die Liste später.
+Mona: Erinnerungsbenachrichtigungen?
+Sara: SMS bevorzugt.
+Nadia: SMS kostet Geld.
+Youssef: WhatsApp vielleicht günstiger.
+Omar: Die WhatsApp-API hat Regeln.
+Dr. Kareem: Nutzt, was zuverlässig sendet.
+Mona: Zeitpunkt der Erinnerungen?
+Sara: Einen Tag vorher.
+Dr. Kareem: Auch am selben Tag morgens.
+Nadia: Zu viele Nachrichten nerven die Leute.
+Mona: Also konfigurierbare Erinnerungen.
+Sara: Entschuldigung, ein Patient fragt, ob die Lasersitzung weh tut.
+Mona: Wir können pausieren.
+Dr. Kareem: Nein, weitermachen.
+Omar: Müssen Arztpläne wöchentlich fest sein oder individuell?
+Dr. Kareem: Meist fest, aber manchmal Konferenzen, Operationen, Notfälle.
+Sara: Kurzfristige Änderungen passieren oft.
+Omar: Dann brauchen wir Abwesenheiten / blockierte Zeiten.
+Mona: Walk-ins?
+Sara: Täglich.
+Dr. Kareem: Walk-ins sollten wenn möglich zwischen Termine eingefügt werden.
+Omar: Automatische Vorschläge für Lücken?
+Sara: Schön, wenn das System intelligent genug ist.
+Nadia: Rechnungen müssen gedruckt werden.
+Omar: Eigenes Modul?
+Nadia: Vielleicht zuerst einfach. Nur bezahlter Betrag, Restbetrag.
+Mona: Pro Termin verknüpfte Abrechnung notiert.
+Youssef: Der Drucker klemmt manchmal bei arabischem Text.
+Omar: Tatsächlich eine nützliche Anmerkung.
+Mona: Sprachunterstützung?
+Sara: Zuerst Arabisch.
+Dr. Kareem: Englische Bezeichnungen sind auch okay.
+Nadia: Zahlen sollten klar sein, das letzte System hat Formate gemischt.
+Mona: Sicherheit/Zugriffsrechte?
+Dr. Kareem: Der Empfang sollte nicht alles sehen.
+Sara: Wie „alles“?
+Dr. Kareem: Finanzberichte vielleicht.
+Nadia: Auf keinen Fall Finanzdaten.
+Omar: Kann der Empfang Termine bearbeiten?
+Alle: Ja.
+Mona: Können Ärzte Termine bearbeiten?
+Dr. Kareem: Vielleicht nur ihren eigenen Plan.
+Omar: Brauchen wir Audit-Logs? Wer hat was geändert?
+Nadia: Ja.
+Sara: Solange es mich nicht verlangsamt.
+Mona: Leistungserwartungen?
+Sara: Wenn eine Seite länger als zwei Sekunden lädt, beschwere ich mich.
+Omar: Ehrliche Anforderung.
+Mona: Backups/Datenverlust-Bedenken?
+Dr. Kareem: Ja. Ein alter Laptop ist einmal kaputt gegangen. Nie wieder.
+Nadia: Können Berichte den meistbeschäftigten Arzt monatlich anzeigen?
+Dr. Kareem: Und die No-Show-Quote.
+Sara: Und wer am meisten über die Instagram-Kampagne bucht vielleicht.
+Omar: Also auch Marketingquellen-Tracking?
+Dr. Kareem: Schön zu haben.
+Mona: Letzte Frage: Deadline?
+Dr. Kareem: Vor dem Sommer.
+Omar: Welches Jahr?
+Mona: Okay, wir fassen zusammen und klären offene Punkte nach: Anzahlungenliste, Selbstbuchung von Patienten, Raumlogik, Benachrichtigungskanal, Abrechnungstiefe, Berichte, Berechtigungen.
+Sara: Bitte auch Dark Mode.
+Omar: Das ist bisher die klarste Anforderung.
+>>>>>>> Stashed changes
