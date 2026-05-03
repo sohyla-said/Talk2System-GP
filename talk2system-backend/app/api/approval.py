@@ -54,3 +54,18 @@ def approve_feature_for_all(
         return ApprovalService.get_approval_status(db, session_id, current_user.id)
     except ApprovalError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+    
+@router.delete("/sessions/{session_id}/features/{feature}/approvals")
+def reset_feature_approvals(
+    session_id: int,
+    feature: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        # Only session members should be able to reset
+        ApprovalService._ensure_session_membership(db, session_id, current_user.id)
+        ApprovalService.reset_feature_approvals(db, session_id, feature)
+        return ApprovalService.get_approval_status(db, session_id, current_user.id)
+    except ApprovalError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)

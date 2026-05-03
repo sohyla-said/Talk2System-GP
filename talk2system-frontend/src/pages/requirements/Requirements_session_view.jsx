@@ -529,6 +529,16 @@ const handleApprove = async () => {
       if (!res.ok) {
         throw new Error(data.detail || "Failed to update requirements");
       }
+      await fetch(
+      `http://localhost:8000/api/sessions/${sessionId}/features/requirements/approvals`,
+      { method: "DELETE", headers: getAuthHeaders() }
+     );
+
+   
+      await fetch(
+        `http://localhost:8000/api/sessions/${sessionId}/status?status=pending_approval`,
+        { method: "PUT", headers: getAuthHeaders() }
+      );
 
       // Update UI with NEW version
       setCurrentRequirementId(data.id);

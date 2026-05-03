@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import UMLApprovalModal from "../../components/modals/UMLApprovalModal";
-import { useNavigate, useParams, useLocation } from "react-router-dom"; // ✅ add useLocation
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { getToken } from "../../api/authApi";
 
 import {
@@ -16,6 +16,7 @@ const BASE_URL = "http://localhost:8000";
 export default function UmlPage() {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [approved, setApproved] = useState(false);
+  const [hasNewUnapproved, setHasNewUnapproved] = useState(false); // ✅ NEW
   const [umlApproval, setUmlApproval] = useState({
     approved_members_count: 0,
     total_members_count: 0,
@@ -32,7 +33,7 @@ export default function UmlPage() {
   const [sessionId, setSessionId] = useState(null);
 
   const navigate = useNavigate();
-  const location = useLocation(); // ✅ NEW
+  const location = useLocation();
   const { id: projectId } = useParams();
   const [loading, setLoading] = useState(false);
 
@@ -49,10 +50,8 @@ export default function UmlPage() {
     const stateSessionId = location.state?.sessionId;
 
     if (stateSessionId) {
-      // ✅ Came from a specific session — use it directly, no fetch needed
       setSessionId(stateSessionId);
     } else {
-      // ✅ Accessed directly (e.g. from project Artifacts tab) — use latest session
       const fetchLatestSession = async () => {
         try {
           const res = await fetch(`${BASE_URL}/api/sessions/project/${projectId}`);
@@ -127,13 +126,12 @@ export default function UmlPage() {
     }
   };
 
-  // In handleGenerate, pass sessionId explicitly:
   const handleGenerate = async () => {
     if (!sessionId) {
       alert("No session found for this project. Please start a meeting session first.");
       return;
     }
-    
+
     try {
       setLoading(true);
       const res = await generateUML(projectId, sessionId, diagramType);
@@ -142,8 +140,25 @@ export default function UmlPage() {
       setDiagramUrl(`${BASE_URL}/${filePath}`);
       setArtifactId(artifact.id);
       setApproved(false);
-      fetchVersions(sessionId); // ✅ pass explicitly, no stale closure risk
-      refreshUmlApproval(sessionId);
+      setHasNewUnapproved(true);
+
+      // ✅ Reset approval counts immediately in UI so it shows 0/N right away
+      setUmlApproval((prev) => ({
+        ...prev,
+        approved_members_count: 0,
+        current_user_approved: false,
+        all_members_approved: false,
+        status: "pending",
+      }));
+
+      // ✅ DELETE first, then refresh so the server reflects the reset before we re-fetch
+      await fetch(
+        `http://localhost:8000/api/sessions/${sessionId}/features/uml/approvals`,
+        { method: "DELETE", headers: getAuthHeaders() }
+      );
+
+      fetchVersions(sessionId);
+      await refreshUmlApproval(sessionId);
     } catch (err) {
       console.error(err);
     } finally {
@@ -157,7 +172,7 @@ export default function UmlPage() {
       fetchVersions();
       refreshUmlApproval();
     }
-  }, [diagramType, sessionId]); // ✅ sessionId in deps ensures fetch waits for resolution
+  }, [diagramType, sessionId]);
 
   // ===============================
   // SELECT VERSION
@@ -185,7 +200,6 @@ export default function UmlPage() {
           headers: getAuthHeaders(),
         }
       );
-      
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -194,16 +208,17 @@ export default function UmlPage() {
 
       setUmlApproval(data);
       setApproved(Boolean(data.current_user_approved));
+      setHasNewUnapproved(false); // ✅ NEW — clear flag after successful approval
       setShowApprovalModal(false);
-      const newStatus = data.all_members_approved? "processing": "pending approval";
 
-        await fetch(
+      const newStatus = data.all_members_approved ? "processing" : "pending approval";
+      await fetch(
         `http://localhost:8000/api/sessions/${sessionId}/status?status=${newStatus}`,
         {
           method: "PUT",
           headers: { Authorization: `Bearer ${getToken()}` },
         }
-        );
+      );
 
       if (data.all_members_approved && artifactId) {
         await approveArtifact(artifactId);
@@ -223,21 +238,24 @@ export default function UmlPage() {
     window.open(`${BASE_URL}/api/artifacts/${artifactId}/download`);
   };
 
+  // Derived: is the button currently in "approved" display state?
+  const isApprovedState = approved && !hasNewUnapproved; // ✅ NEW
+
   return (
     <div className="font-display bg-background-light dark:bg-background-dark min-h-screen text-[#100d1c] dark:text-white">
-      
+
       <main className="max-w-5xl mx-auto pt-8 px-4">
 
         {/* Breadcrumb */}
         <div className="flex flex-wrap gap-2 text-sm">
-          <button 
+          <button
             onClick={() => navigate("/projects")}
             className="text-primary-accent dark:text-secondary-accent font-medium"
           >
             Projects
           </button>
           <span>/</span>
-          <button 
+          <button
             onClick={() => navigate(`/projects/${projectId}`)}
             className="text-primary-accent dark:text-secondary-accent font-medium"
           >
@@ -323,21 +341,22 @@ export default function UmlPage() {
                 Export
               </button>
 
-              {/* APPROVE */}
+              {/* APPROVE — ✅ uses isApprovedState so new versions re-enable it */}
               <button
                 onClick={() => setShowApprovalModal(true)}
-                disabled={approved || !artifactId}
+                disabled={isApprovedState || !artifactId}
                 className={`h-10 px-6 rounded-lg flex items-center gap-2 text-white
-                  ${approved ? "bg-green-600" : "bg-primary"}`}
+                  ${isApprovedState ? "bg-green-600" : "bg-primary"}`}
               >
                 <span className="material-symbols-outlined">
-                  {approved ? "check_circle" : "approval"}
+                  {isApprovedState ? "check_circle" : "approval"}
                 </span>
-                {approved ? "Approved" : "Approve"}
+                {isApprovedState ? "Approved" : "Approve"}
               </button>
 
             </div>
           </div>
+
           {artifactId && (
             <div className="px-4 pb-3 text-sm text-slate-500 dark:text-slate-400">
               UML approvals: {umlApproval.approved_members_count}/

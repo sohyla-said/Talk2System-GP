@@ -7,7 +7,7 @@ import { getToken } from "../../api/authApi";
 
 export default function TranscriptPage() {
   const navigate = useNavigate();
-  const { sessionId } = useParams(); // only sessionId needed from URL
+  const { sessionId } = useParams();
 
   const [approved, setApproved] = useState(false);
   const [transcriptApproval, setTranscriptApproval] = useState({
@@ -24,34 +24,29 @@ export default function TranscriptPage() {
   const [loading, setLoading] = useState(true);
   const [transcriptData, setTranscriptData] = useState([]);
 
-  // projectId is resolved from the session record (project_id FK),
-  // so we never depend on it being in the URL
   const [projectId, setProjectId] = useState(null);
-
-  // Session title — populated from the backend response
   const [sessionTitle, setSessionTitle] = useState("");
-
-  // Extract Requirements loading state
   const [isSubmittingReq, setIsSubmittingReq] = useState(false);
 
-  // Engine choice modal
   const [showEngineModal, setShowEngineModal] = useState(false);
-  const [pendingEngineAction, setPendingEngineAction] = useState(null); // "req"
+  const [pendingEngineAction, setPendingEngineAction] = useState(null);
 
-  // Existing session requirement — if set, skip generation and redirect instead
   const [existingRequirementId, setExistingRequirementId] = useState(null);
   const [isCheckingReq, setIsCheckingReq] = useState(false);
 
-  // Summarize loading state
   const [isSummarizing, setIsSummarizing] = useState(false);
-  
 
-  // -----------------------------
-  // Multi-select & delete state
-  // -----------------------------
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const getAuthHeaders = (includeJson = false) => {
+    const token = getToken();
+    return {
+      ...(includeJson ? { "Content-Type": "application/json" } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  };
 
   // -----------------------------
   // Fetch transcript + resolve projectId from session
@@ -71,14 +66,8 @@ export default function TranscriptPage() {
 
         const data = await res.json();
 
-        // project_id and title are stored on the session model —
-        // backend returns them alongside the transcript
-        if (data.project_id) {
-          setProjectId(data.project_id);
-        }
-        if (data.title) {
-          setSessionTitle(data.title);
-        }
+        if (data.project_id) setProjectId(data.project_id);
+        if (data.title) setSessionTitle(data.title);
 
         if (!data.transcript || !data.transcript.length) {
           setTranscriptData([]);
@@ -113,7 +102,7 @@ export default function TranscriptPage() {
       try {
         const res = await fetch(
           `http://localhost:8000/api/sessions/${sessionId}/features/approval-status`,
-          { headers: { Authorization: `Bearer ${getToken()}` } }
+          { headers: getAuthHeaders() }
         );
         if (!res.ok) return;
         const data = await res.json();
@@ -131,10 +120,6 @@ export default function TranscriptPage() {
     fetchTranscriptApproval();
   }, [sessionId]);
 
-  // -----------------------------
-  // Check if a requirement already exists for this session
-  // Runs after projectId is resolved from the transcript fetch
-  // -----------------------------
   useEffect(() => {
     if (!projectId || !sessionId) return;
 
@@ -146,12 +131,8 @@ export default function TranscriptPage() {
         );
         if (res.ok) {
           const data = await res.json();
-          // Backend returns the latest requirement object; grab its id
-          if (data?.id) {
-            setExistingRequirementId(data.id);
-          }
+          if (data?.id) setExistingRequirementId(data.id);
         }
-        // 404 means no requirement yet — stay null, that's fine
       } catch (err) {
         console.error("Error checking existing requirement:", err);
       } finally {
@@ -163,8 +144,36 @@ export default function TranscriptPage() {
   }, [projectId, sessionId]);
 
   // -----------------------------
-  // the backend expects:  Speaker: "text"\nSpeaker: "text"\n...
+  // Reset approvals after any edit (transcript segment edit or bulk delete)
   // -----------------------------
+  const resetApprovalAfterEdit = async () => {
+    try {
+      // Clear approvals on the server
+      await fetch(
+        `http://localhost:8000/api/sessions/${sessionId}/features/transcript/approvals`,
+        { method: "DELETE", headers: getAuthHeaders() }
+      );
+
+      //  Set session status back to pending approval
+      await fetch(
+        `http://localhost:8000/api/sessions/${sessionId}/status?status=pending approval`,
+        { method: "PUT", headers: getAuthHeaders() }
+      );
+
+      //  Reset approval UI state immediately
+      setApproved(false);
+      setTranscriptApproval((prev) => ({
+        ...prev,
+        approved_members_count: 0,
+        current_user_approved: false,
+        all_members_approved: false,
+        status: "pending",
+      }));
+    } catch (err) {
+      console.error("Failed to reset approval after edit:", err);
+    }
+  };
+
   const formatTranscriptForBackend = (segments) => {
     return segments
       .filter((item) => item.name && item.text)
@@ -173,7 +182,7 @@ export default function TranscriptPage() {
   };
 
   // -----------------------------
-  // Extract Requirements — calls backend then navigates
+  // Extract Requirements
   // -----------------------------
   const handleExtractRequirements = async (engine = "both") => {
     if (!projectId) {
@@ -190,8 +199,8 @@ export default function TranscriptPage() {
         `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/extract-requirements`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
-          body: JSON.stringify({ transcript: transcriptText, engine: engine }),
+          headers: getAuthHeaders(true),
+          body: JSON.stringify({ transcript: transcriptText, engine }),
         }
       );
 
@@ -219,71 +228,58 @@ export default function TranscriptPage() {
           },
         });
       } else if (engine === "hybrid") {
-              try{
-                const response = await fetch(
-                `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/choose-requirements`,
-                {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                      Authorization: `Bearer ${getToken()}`
-                    },
-                    body: JSON.stringify({
-                      requirements_json: data.Hybrid_data,
-                      src_run_id: data.Hybrid_run_id
-                    })
-                  }
-                );
-                if (!response.ok) {
-                  throw new Error(data.detail || "Failed to save preferred requirements");
-                }
-      
-              }catch (error) {
-                console.error(error);
-                alert(error.message);
-              }
-              navigate(`/transcript/${sessionId}/requirements`, {
-                state: {
-                  projectId,
-                  requirementId: data.Hybrid_run_id,
-                  groupedData: data.Hybrid_data,
-                  preferredType: 'hybrid'
-                },
-              });
-            } else if (engine === "llm") {
-              try{
-                const response = await fetch(
-                `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/choose-requirements`,
-                {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                      Authorization: `Bearer ${getToken()}`
-                    },
-                    body: JSON.stringify({
-                      requirements_json: data.LLM_data,
-                      src_run_id: data.LLM_run_id
-                    })
-                  }
-                );
-                if (!response.ok) {
-                  throw new Error(data.detail || "Failed to save preferred requirements");
-                }
-      
-              }catch (error) {
-                console.error(error);
-                alert(error.message);
-              }
-      
-              navigate(`/transcript/${sessionId}/requirements`, {
-                state: {
-                  projectId,
-                  requirementId: data.LLM_run_id,
-                  groupedData: data.LLM_data,
-                  preferredType: 'llm'
-                },
-              });
+        try {
+          const r = await fetch(
+            `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/choose-requirements`,
+            {
+              method: "POST",
+              headers: getAuthHeaders(true),
+              body: JSON.stringify({
+                requirements_json: data.Hybrid_data,
+                src_run_id: data.Hybrid_run_id,
+              }),
             }
+          );
+          if (!r.ok) throw new Error(data.detail || "Failed to save preferred requirements");
+        } catch (error) {
+          console.error(error);
+          alert(error.message);
+        }
+        navigate(`/transcript/${sessionId}/requirements`, {
+          state: {
+            projectId,
+            requirementId: data.Hybrid_run_id,
+            groupedData: data.Hybrid_data,
+            preferredType: "hybrid",
+          },
+        });
+      } else if (engine === "llm") {
+        try {
+          const r = await fetch(
+            `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/choose-requirements`,
+            {
+              method: "POST",
+              headers: getAuthHeaders(true),
+              body: JSON.stringify({
+                requirements_json: data.LLM_data,
+                src_run_id: data.LLM_run_id,
+              }),
+            }
+          );
+          if (!r.ok) throw new Error(data.detail || "Failed to save preferred requirements");
+        } catch (error) {
+          console.error(error);
+          alert(error.message);
+        }
+        navigate(`/transcript/${sessionId}/requirements`, {
+          state: {
+            projectId,
+            requirementId: data.LLM_run_id,
+            groupedData: data.LLM_data,
+            preferredType: "llm",
+          },
+        });
+      }
     } catch (error) {
       console.error(error);
       alert(error.message);
@@ -293,19 +289,14 @@ export default function TranscriptPage() {
   };
 
   // -----------------------------
-  // Asset generation navigation
-  // executeNavigation is called only after approval is confirmed,
-  // avoiding the stale-state bug of re-checking approved inside handleGenerate
-  // -----------------------------
-  // -----------------------------
-  // Summarize — POSTs to backend then navigates to Summary page
+  // Summarize
   // -----------------------------
   const handleSummarize = async () => {
     setIsSummarizing(true);
     try {
       const res = await fetch(`http://localhost:8000/api/summarize/${sessionId}`, {
         method: "POST",
-        headers: {  Authorization: `Bearer ${getToken()}` },
+        headers: getAuthHeaders(),
       });
 
       if (!res.ok) {
@@ -313,7 +304,6 @@ export default function TranscriptPage() {
         throw new Error(err.detail ?? "Failed to generate summary");
       }
 
-      // Navigate to the Summary page — Summary.jsx fetches and displays it
       navigate(`/summary/${sessionId}`);
     } catch (error) {
       console.error(error);
@@ -332,9 +322,7 @@ export default function TranscriptPage() {
   };
 
   const handleEngineConfirm = (engine) => {
-    if (pendingEngineAction === "req") {
-      handleExtractRequirements(engine);
-    }
+    if (pendingEngineAction === "req") handleExtractRequirements(engine);
     setPendingEngineAction(null);
   };
 
@@ -353,48 +341,39 @@ export default function TranscriptPage() {
     executeNavigation(type);
   };
 
-  // approved is still false when this runs, so pass pending directly
-  // to executeNavigation instead of re-calling handleGenerate
+  // -----------------------------
+  // Approve transcript
+  // -----------------------------
   const handleApprove = () => {
     const approveTranscript = async () => {
       try {
         const res = await fetch(
           `http://localhost:8000/api/sessions/${sessionId}/features/transcript/approve`,
-          {
-            method: "POST",
-            headers: { Authorization: `Bearer ${getToken()}` },
-          }
+          { method: "POST", headers: getAuthHeaders() }
         );
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.detail || "Failed to approve transcript");
-        
 
         setTranscriptApproval(data);
         setApproved(Boolean(data.current_user_approved));
         setShowModal(false);
-        const newStatus = data.all_members_approved? "processing": "pending approval";
 
+        const newStatus = data.all_members_approved ? "processing" : "pending approval";
         await fetch(
-        `http://localhost:8000/api/sessions/${sessionId}/status?status=${newStatus}`,
-        {
-          method: "PUT",
-          headers: { Authorization: `Bearer ${getToken()}` },
-        }
+          `http://localhost:8000/api/sessions/${sessionId}/status?status=${newStatus}`,
+          { method: "PUT", headers: getAuthHeaders() }
         );
-        if (data.all_members_approved){
-          try{
-            const response = await fetch(
+
+        if (data.all_members_approved) {
+          try {
+            await fetch(
               `http://localhost:8000/api/sessions/${sessionId}/transcript/approve`,
-              {
-                method: "PATCH",
-                headers: { Authorization: `Bearer ${getToken()}` },
-              }
+              { method: "PATCH", headers: getAuthHeaders() }
             );
-          }catch (err) {
+          } catch (err) {
             console.error(err);
           }
         }
-        
 
         if (pendingNavigation === "req" && !data.all_members_approved) {
           alert(
@@ -425,10 +404,8 @@ export default function TranscriptPage() {
     setEditingSpeaker(speaker);
     setShowEditModal(true);
   };
-  
 
   const handleSaveEdit = async (updatedSpeaker) => {
-    // segment_index is 0-based; the frontend assigns id = index + 1
     const segmentIndex = updatedSpeaker.id - 1;
 
     try {
@@ -436,7 +413,7 @@ export default function TranscriptPage() {
         `http://localhost:8000/api/sessions/${sessionId}/transcript/segment`,
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+          headers: getAuthHeaders(true),
           body: JSON.stringify({
             segment_index: segmentIndex,
             speaker: updatedSpeaker.name,
@@ -450,12 +427,15 @@ export default function TranscriptPage() {
         throw new Error(err.detail ?? "Failed to save segment");
       }
 
-      // Update local state only after the backend confirms success
+      //  Update local transcript state
       setTranscriptData(
         transcriptData.map((sp) =>
           sp.id === updatedSpeaker.id ? updatedSpeaker : sp
         )
       );
+
+      // Reset approval state so members must re-approve the edited transcript
+      await resetApprovalAfterEdit();
     } catch (error) {
       console.error("Error saving transcript edit:", error);
       alert(error.message);
@@ -476,11 +456,8 @@ export default function TranscriptPage() {
   const toggleSegmentSelection = (id) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
@@ -496,7 +473,6 @@ export default function TranscriptPage() {
   const handleDeleteSelected = async () => {
     if (selectedIds.size === 0) return;
 
-    // segment_index is 0-based; frontend id = index + 1
     const indices = Array.from(selectedIds).map((id) => id - 1);
 
     setIsDeleting(true);
@@ -505,7 +481,7 @@ export default function TranscriptPage() {
         `http://localhost:8000/api/sessions/${sessionId}/transcript/segments`,
         {
           method: "DELETE",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+          headers: getAuthHeaders(true),
           body: JSON.stringify({ segment_indices: indices }),
         }
       );
@@ -515,7 +491,6 @@ export default function TranscriptPage() {
         throw new Error(err.detail ?? "Failed to delete segments");
       }
 
-      // Remove deleted segments from local state and re-assign sequential ids
       const remaining = transcriptData
         .filter((s) => !selectedIds.has(s.id))
         .map((s, i) => ({ ...s, id: i + 1 }));
@@ -523,6 +498,9 @@ export default function TranscriptPage() {
       setTranscriptData(remaining);
       setSelectedIds(new Set());
       setSelectionMode(false);
+
+      // Reset approval state so members must re-approve after deletion
+      await resetApprovalAfterEdit();
     } catch (error) {
       console.error("Error deleting segments:", error);
       alert(error.message);
@@ -539,12 +517,7 @@ export default function TranscriptPage() {
       <div className="relative flex h-auto min-h-screen w-full flex-col bg-background-light dark:bg-background-dark font-display text-text-dark dark:text-text-light overflow-x-hidden">
         <main className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex items-center justify-center py-20 gap-3 text-primary">
-            <svg
-              className="animate-spin h-6 w-6"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
+            <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
@@ -560,9 +533,7 @@ export default function TranscriptPage() {
       <div className="relative flex h-auto min-h-screen w-full flex-col bg-background-light dark:bg-background-dark font-display text-text-dark dark:text-text-light overflow-x-hidden">
         <main className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-            <span className="material-symbols-outlined text-5xl text-gray-300 dark:text-gray-600">
-              transcribe
-            </span>
+            <span className="material-symbols-outlined text-5xl text-gray-300 dark:text-gray-600">transcribe</span>
             <p className="text-lg font-medium text-text-dark/60 dark:text-text-light/60">
               No transcription available for this session.
             </p>
@@ -593,9 +564,7 @@ export default function TranscriptPage() {
                 Project #{projectId}
               </button>
               <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
-              <span className="text-text-dark dark:text-text-light font-medium leading-normal">
-                Transcript
-              </span>
+              <span className="text-text-dark dark:text-text-light font-medium leading-normal">Transcript</span>
             </div>
 
             {/* Title and Actions */}
@@ -604,7 +573,6 @@ export default function TranscriptPage() {
                 {sessionTitle || `Session Transcript #${sessionId}`}
               </h1>
               <div className="flex items-center gap-3">
-                {/* Selection mode toggle */}
                 <button
                   onClick={toggleSelectionMode}
                   className={`flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold shadow-soft transition-colors
@@ -687,7 +655,6 @@ export default function TranscriptPage() {
                     `}
                     onClick={selectionMode ? () => toggleSegmentSelection(speaker.id) : undefined}
                   >
-                    {/* Checkbox shown only in selection mode */}
                     {selectionMode && (
                       <div className="flex items-start pt-1 flex-shrink-0">
                         <input
@@ -767,12 +734,9 @@ export default function TranscriptPage() {
                   </button>
 
                   {existingRequirementId ? (
-                    // Requirement already exists — offer navigation instead of re-generation
                     <div className="flex flex-col gap-2">
                       <button
-                        onClick={() =>
-                          navigate(`/transcript/${sessionId}/requirements`)
-                        }
+                        onClick={() => navigate(`/transcript/${sessionId}/requirements`)}
                         className="flex w-full items-center justify-center gap-3 rounded-lg bg-green-600 hover:bg-green-700 px-4 py-3 text-base font-bold text-white shadow-soft transition-colors"
                       >
                         <span className="material-symbols-outlined text-xl">task_alt</span>
@@ -804,7 +768,6 @@ export default function TranscriptPage() {
                       </button>
                     </div>
                   ) : (
-                    // No requirement yet — show the primary generate button
                     <button
                       onClick={() => handleGenerate("req")}
                       disabled={
@@ -830,8 +793,6 @@ export default function TranscriptPage() {
                       )}
                     </button>
                   )}
-
-
                 </div>
 
                 <hr className="border-border-light dark:border-white/10" />

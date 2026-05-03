@@ -184,3 +184,16 @@ class ApprovalService:
                 ))
 
         db.commit()
+    # In approval_service.py
+
+    @staticmethod
+    def reset_feature_approvals(db: Session, session_id: int, feature: str) -> None:
+        feature = feature.lower().strip()
+        if feature not in FEATURES:
+            raise ApprovalError(400, "Invalid feature")
+        
+        db.query(Approval).filter(
+            Approval.session_id == session_id,
+            Approval.feature == feature,
+        ).delete()
+        db.commit()
