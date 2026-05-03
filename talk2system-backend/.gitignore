@@ -3,14 +3,9 @@ __pycache__/
 
 ML/dataset/
 
-data/preprocessing_output.json
-data/testData.csv
-data/rule_engine_output.json
-data/hybrid_inference_results.csv
-data/test_transcript_ml_inference.csv
-data/binary_classifier_dataset.xlsx
-data/NFR_categories_dataset.xlsx
-data/llm_extraction_log.csv
+# Ignore all data files except sample_transcript.txt
+data/*
+!data/sample_transcript.txt
 
 ML/evaluation/test_predictions_nfr.csv
 ML/evaluation/test_predictions.csv

@@ -25,7 +25,7 @@ logging.basicConfig(
 llm = None
 
 def _get_llm():
-    logger.info("Initializing Ollama LLM...")
+    logger.info("Initializing Ollama LLM for requirement extraction...")
     return OllamaLLM(
         model="qwen2.5:7b",
         streaming=False,    # not needed for invoke() as it always waits for the complete response,  Streaming is for token-by-token UI display — it adds overhead here with zero benefit.      
@@ -69,95 +69,113 @@ def chunk_text(text: str, max_words: int = 300, overlap_sentences: int = 3):
 # PROMPT BUILDER
 # =========================
 def build_prompt(transcript: str) -> str:
-        
     return f"""
-    You are a senior software requirements analyst.
+You are a senior requirements engineering expert.
 
-    Your task is to extract ALL valid functional and non-functional requirements from the meeting transcript with HIGH PRECISION and ZERO HALLUCINATION.
+Your task is to extract ALL valid functional and non-functional requirements from the meeting transcript below with HIGH PRECISION and ZERO HALLUCINATION.
 
+=== WHAT TO EXTRACT ===
 
-    === WHAT TO EXTRACT ===
+Extract both EXPLICIT and IMPLICIT requirements:
 
-    1. EXPLICIT requirements — directly stated needs:
-    - "The system must allow users to login"
-    - "It should support 5,000 concurrent users"
+1. EXPLICIT — directly stated needs:
+   - "The system must allow users to login"
+   - "It should support 5,000 concurrent users"
 
-    2. HIDDEN/IMPLICIT requirements — inferred from context:
-    - If someone says "users will upload documents", imply: the system must validate file types and size
-    - If "admins manage users" is mentioned, imply: the system must provide an admin dashboard
+   2. IMPLICIT — inferred from action verbs when the system behavior is obvious and necessary:
+   - "users will upload documents" → the system must support file upload
+   - "admins manage users" → the system must provide user management for admins
+   - "payments will be processed" → the system must handle payment processing
 
-    - Look for these signals: verbs like manage, handle, support, allow, track, validate, generate, notify
+Treat the following as requirements when present:
+- Functional capabilities, permissions, workflows, integrations, actions
+- Security/privacy constraints, reliability constraints, performance constraints
+- Scalability/capacity constraints, logging/audit requirements, validation requirements, access-control requirements
 
-    3- NEVER invent: numbers, limits, actors, timings, constraints, technologies, features not mentioned
+Requirements may use modal verbs or equivalents such as: must, should, can, may, needs to, has to, be able to, support, prevent, allow, ensure, handle, track, validate, generate, respond within, not crash.
 
-    === WHAT TO IGNORE ===
+=== WHAT TO IGNORE ===
 
-    Completely ignore and extract NOTHING from:
-    - Greetings, farewells, small talk
-    - Scheduling and timeline talk 
-    - Off-topic discussions unrelated to the system being built
-    - Opinions, feedback, or questions that do not describe a system behavior
-    - Repeated statements that are semantically identical to already-stated requirements
+Completely ignore:
+- Greetings, farewells, small talk
+- Scheduling and timeline talk (e.g., "ready in four weeks", "launch in three months")
+- Off-topic discussions unrelated to the system being built
+- Opinions, feedback, or questions that do not describe a system behavior
 
-    === HOW TO EXTRACT ===
+=== HOW TO EXTRACT ===
 
-    1. Decompose compound sentences into atomic requirements (one action per requirement)
+0. Exhaustiveness is mandatory: capture EVERY requirement sentence or clause. Do not omit any valid requirement.
+
+1. Decompose compound sentences into atomic requirements (one action per requirement):
    Example: "Users can browse, filter, and purchase products"
    → "The user must be able to browse products"
    → "The user must be able to filter products"
    → "The user must be able to purchase products"
-    2. Resolve pronouns — replace "it", "they", "them" with the actual entity from context
 
-    3. Normalize modal verbs:
-    - Mandatory → "must"
-    - Preferred  → "should"
+2. When a requirement applies to multiple actors, split it into separate requirements for each actor:
+   Example: "students and admins should login and manage profiles"
+   → "students should login"
+   → "students should manage their profiles"
+   → "admins should login"
+   → "admins should manage their profiles"
 
-    4. Classify each requirement:
-    - "FR" (Functional Requirement) — describes a system behavior or capability, features, workflows, permissions, integrations, actions
-    - "NFR" (Non-Functional Requirement) — describes a quality constraint
-    - NFR categories: ["performance", "security", "usability", "reliability", "scalability", "maintainability"]
+3. Resolve pronouns — replace "it", "they", "them" with the actual entity from context:
+   Example: "Customers should browse products and add them to a cart"
+   → "customers should browse products"
+   → "customers should add products to a cart"
 
-    5. Extract:
-    - actor: who performs the action (user, admin, system, customer, ...)
-    - feature: the core capability (login, upload file, manage users)
+4. Normalize modal verbs:
+   - Mandatory → "must"
+   - Preferred  → "should"
+   - If a requirement appears multiple times with different modals, keep only the strongest (must > should > can)
 
-    6. Never copy values or sentences from prompt examples
-    7. Do NOT repeat same meaning in different wording.
+5. Deduplicate: remove exact duplicates or semantically identical requirements.
 
-    === OUTPUT FORMAT ===
+6. Classify each requirement:
+   - "FR" — describes a system behavior or capability
+   - "NFR" — describes a quality constraint
+   - NFR categories: ["performance", "security", "usability", "reliability", "scalability", "maintainability"]
 
-    Return ONLY valid JSON. No explanation, no markdown, no extra text.
+7. Extract:
+   - actor: who performs the action (user, admin, system, customer, ...)
+   - feature: the core capability (login, upload file, manage users)
 
+=== EXAMPLES ===
+
+Input: "users must be able to sign in and register"
+Output: [{{"text": "users must be able to sign in", "type": "FR", "category": null, "actor": "user", "feature": "sign in"}}, {{"text": "users must be able to register", "type": "FR", "category": null, "actor": "user", "feature": "register"}}]
+
+Input: "The system should not crash if the database goes down. It should support up to 10,000 concurrent users."
+Output: [{{"text": "the system should not crash if the database goes down", "type": "NFR", "category": "reliability", "actor": "system", "feature": "fault tolerance"}}, {{"text": "the system should support up to 10,000 concurrent users", "type": "NFR", "category": "scalability", "actor": "system", "feature": "concurrent users"}}]
+
+=== OUTPUT FORMAT ===
+
+Return ONLY valid JSON. No explanation, no markdown, no extra text.
+
+{{
+  "requirements": [
     {{
-    "requirements": [
-        {{
-        "text": "The user must be able to reset their password",
-        "type": "FR",
-        "category": null,
-        "actor": "user",
-        "feature": "password reset"
-        }},
-        {{
-        "text": "The system must respond within 2 seconds",
-        "type": "NFR",
-        "category": "performance",
-        "actor": "system",
-        "feature": "response time"
-        }}
-    ]
+      "text": "The user must be able to reset their password",
+      "type": "FR",
+      "category": null,
+      "actor": "user",
+      "feature": "password reset"
     }}
-    Before producing output, silently verify:
+  ]
+}}
 
-    1. Did I invent any number? If yes put the wright one.
-    2. Did I copy values from examples? If yes fix it.
-    3. Did I merge multiple actions together? If yes split them.
-    4. Did I classify FR/NFR correctly?
-    5. Did I duplicate meaning?
-    6. Did I preserve transcript facts exactly?
+Before producing output, silently verify:
+1. Did I miss any requirement clause from the transcript? If yes, add it.
+2. Did I invent specific values (numbers, limits, technologies) not in the transcript?
+   If yes, remove them. Implicit requirements may name a capability but never a constraint value.
+3. Did I leave compound sentences unsplit? If yes, split them.
+4. Did I leave multi-actor requirements unsplit? If yes, split them.
+5. Did I classify FR/NFR correctly?
+6. Did I duplicate any requirement? If yes, keep only the strongest modal version.
 
-    TRANSCRIPT:
-    {transcript}
-    """
+TRANSCRIPT:
+{transcript}
+"""
 
 
 # =========================
@@ -318,7 +336,7 @@ def write_requirements_to_file(requirements: list) -> str:
 
 
 def write_extraction_metrics_to_csv(transcript_length: int, chunk_count: int, execution_time: float) -> str:
-    output_path = Path(__file__).resolve().parents[2] / "data" / "llm_extraction_log.csv"
+    output_path = Path(__file__).resolve().parents[2] / "data" / "llm_req_extraction_log.csv"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     file_exists = output_path.exists()
@@ -355,7 +373,7 @@ def extract_requirements(transcript: str):
     unique_requirements = exact_requirement_text_deduplicate(all_requirements)
     final_requirements = deduplicate_requirements_semantically(unique_requirements)
 
-    # write_requirements_to_file(final_requirements)
+    write_requirements_to_file(final_requirements)
     execution_time = time.time() - start_time
     write_extraction_metrics_to_csv(total_words, chunk_count, execution_time)
 
