@@ -47,13 +47,9 @@ export default function TranscriptPage() {
   const [isCheckingReq, setIsCheckingReq] = useState(false);
 
   // ── Translation state ────────────────────────────────────────────────────
-  // detectedLanguage comes from session.detected_language returned by the
-  // transcript endpoint — populated by the backend after any translate call.
   const [detectedLanguage, setDetectedLanguage] = useState(null);
-  const [isTranslating, setIsTranslating] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);  // background translation in progress
   const [translationData, setTranslationData] = useState(null);
-  const [showTranslated, setShowTranslated] = useState(false);
-  const [translationError, setTranslationError] = useState(null);
 
   // ── Multi-select & delete ────────────────────────────────────────────────
   const [selectionMode, setSelectionMode] = useState(false);
@@ -63,27 +59,12 @@ export default function TranscriptPage() {
   // ── Derived: which segments are currently shown ──────────────────────────
   const hasTranslation = !!(translationData && !translationData.is_english);
 
-  // needsTranslation is true when we know the transcript is non-English
-  // (either from a previous translate call stored on the session, or from
-  // a translate call made in this session) AND no usable translation exists
-  // yet. This correctly blocks extraction from the very first page load
-  // for already-detected non-English sessions, not just after clicking Translate.
-  const isKnownNonEnglish =
+  // Condition used to auto-trigger background translation
+  const shouldAutoTranslate =
     (detectedLanguage !== null && detectedLanguage !== "english") ||
     (translationData !== null && translationData.is_english === false);
 
-  const translationReady =
-    translationData !== null &&
-    translationData.is_english === false &&
-    translationData.translated_segments?.length > 0;
-
-  // Block extraction if language is known non-English but no translation ready
-  const needsTranslation = isKnownNonEnglish && !translationReady;
-
-  const activeSegments =
-    showTranslated && hasTranslation && translationData.translated_segments?.length
-      ? translationData.translated_segments.map((s, i) => ({ ...s, id: i + 1 }))
-      : transcriptData;
+  const activeSegments = transcriptData;
 
   // ── Requirement extraction text ──────────────────────────────────────────
   const formatSegmentsForBackend = (segments) =>
@@ -97,22 +78,20 @@ export default function TranscriptPage() {
       .join("\n");
 
   const getTranscriptTextForExtraction = () => {
-    if (hasTranslation && translationData) {
-      // Prefer the pre-built full translated_transcript string stored on the
-      // session — it's the most reliable source and avoids any segment-level
-      // field mismatch issues.
-      if (translationData.translated_transcript?.trim()) {
-        console.log("[extraction] using translated_transcript string");
-        return translationData.translated_transcript;
-      }
-      // Fall back to rebuilding from translated_segments if the string is absent
-      if (translationData.translated_segments?.length) {
-        console.log("[extraction] using translated_segments array");
-        return formatSegmentsForBackend(translationData.translated_segments);
-      }
+    if (hasTranslation && translationData?.translated_segments?.length) {
+      // Rebuild from segments with quoted format "Speaker A: \"text\""
+      // which is what the LLM prompt and hybrid pipeline expect.
+      return translationData.translated_segments
+        .filter((s) => s.text?.trim())
+        .map((s) => {
+          const spk = (s.speaker || s.name || "").trim();
+          return spk
+            ? `${spk}: "${s.text.trim()}"`
+            : `"${s.text.trim()}"`;
+        })
+        .join("\n");
     }
-    // No translation — use original segments
-    console.log("[extraction] using original transcriptData");
+    // English transcript — use original segments (already in correct format)
     return formatSegmentsForBackend(transcriptData);
   };
 
@@ -206,7 +185,6 @@ export default function TranscriptPage() {
           const data = await res.json();
           setTranslationData(data);
           if (data && !data.is_english) {
-            setShowTranslated(true);
             setDetectedLanguage(data.detected_language);
           }
         }
@@ -217,10 +195,24 @@ export default function TranscriptPage() {
     fetchCached();
   }, [sessionId]);
 
-  // ── Translate ────────────────────────────────────────────────────────────
-  const handleTranslate = async () => {
+  // ── Auto-trigger background translation when language is non-English ──────
+  // Runs after both detectedLanguage and transcriptData are available.
+  // Only fires if no translation exists yet (translationData is null).
+  useEffect(() => {
+    if (
+      shouldAutoTranslate &&
+      translationData === null &&
+      !isTranslating &&
+      transcriptData.length > 0
+    ) {
+      runBackgroundTranslation();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detectedLanguage, transcriptData.length]);
+
+  // ── Background translation (automatic, invisible to user) ───────────────
+  const runBackgroundTranslation = async () => {
     setIsTranslating(true);
-    setTranslationError(null);
     try {
       const token = getToken();
       const res = await fetch(
@@ -231,12 +223,12 @@ export default function TranscriptPage() {
       if (!res.ok) throw new Error(data.detail || "Translation failed");
       setTranslationData(data);
       if (!data.is_english) {
-        setShowTranslated(true);
         setDetectedLanguage(data.detected_language);
+        // Don't auto-switch view — user is reading original, let them toggle if they want
       }
     } catch (err) {
-      console.error(err);
-      setTranslationError(err.message);
+      console.error("[background translation failed]", err);
+      // Silent failure — do not show error to user
     } finally {
       setIsTranslating(false);
     }
@@ -250,58 +242,29 @@ export default function TranscriptPage() {
 
   const handleSaveEdit = async (updatedSpeaker) => {
     const segmentIndex = updatedSpeaker.id - 1;
-    const isEditingTranslation = showTranslated && hasTranslation;
-
     try {
-      if (isEditingTranslation) {
-        const res = await fetch(
-          `http://localhost:8000/api/sessions/${sessionId}/transcript/segment/translation`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${getToken()}`,
-            },
-            body: JSON.stringify({
-              segment_index: segmentIndex,
-              translated_text: updatedSpeaker.text,
-            }),
-          }
-        );
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.detail ?? "Failed to save translated segment");
+      const res = await fetch(
+        `http://localhost:8000/api/sessions/${sessionId}/transcript/segment`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${getToken()}`,
+          },
+          body: JSON.stringify({
+            segment_index: segmentIndex,
+            speaker: updatedSpeaker.name,
+            text: updatedSpeaker.text,
+          }),
         }
-        setTranslationData((prev) => ({
-          ...prev,
-          translated_segments: prev.translated_segments.map((s, i) =>
-            i === segmentIndex ? { ...s, text: updatedSpeaker.text } : s
-          ),
-        }));
-      } else {
-        const res = await fetch(
-          `http://localhost:8000/api/sessions/${sessionId}/transcript/segment`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${getToken()}`,
-            },
-            body: JSON.stringify({
-              segment_index: segmentIndex,
-              speaker: updatedSpeaker.name,
-              text: updatedSpeaker.text,
-            }),
-          }
-        );
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.detail ?? "Failed to save segment");
-        }
-        setTranscriptData((prev) =>
-          prev.map((sp) => (sp.id === updatedSpeaker.id ? updatedSpeaker : sp))
-        );
+      );
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail ?? "Failed to save segment");
       }
+      setTranscriptData((prev) =>
+        prev.map((sp) => (sp.id === updatedSpeaker.id ? updatedSpeaker : sp))
+      );
     } catch (error) {
       console.error("Error saving transcript edit:", error);
       alert(error.message);
@@ -376,14 +339,7 @@ export default function TranscriptPage() {
 
   const handleGenerate = (type) => {
     if (type === "req") {
-      // Gate 1: translation required before anything else
-      if (needsTranslation) {
-        alert(
-          "The transcript is not in English. Please translate it first so the requirements pipeline can process it correctly."
-        );
-        return;
-      }
-      // Gate 2: all members must approve
+      // Gate 1: all members must approve
       if (!transcriptApproval.all_members_approved) {
         alert(
           `All session members must approve the transcript first (${transcriptApproval.approved_members_count}/${transcriptApproval.total_members_count}).`
@@ -416,6 +372,14 @@ export default function TranscriptPage() {
 
   const extractRequirements = async (engine) => {
     if (!projectId) { alert("Project ID could not be resolved."); return; }
+
+    // If background translation is still running for a non-English transcript,
+    // wait for it to finish before sending the extraction request.
+    if (isTranslating) {
+      alert("The transcript is being translated in the background. Please wait a moment and try again.");
+      return;
+    }
+
     setIsSubmittingReq(true);
     try {
       const transcriptText = getTranscriptTextForExtraction();
@@ -523,60 +487,20 @@ export default function TranscriptPage() {
     try {
       const token = getToken();
 
-      if (showTranslated && hasTranslation) {
-        // ── Deleting from the translated view ──
-        // We delete the underlying original segments (backend owns the data),
-        // then strip them from both translationData and transcriptData locally.
-        const res = await fetch(
-          `http://localhost:8000/api/sessions/${sessionId}/transcript/segments`,
-          {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ segment_indices: indices }),
-          }
-        );
-        if (!res.ok) throw new Error("Failed to delete segments");
-
-        // Remove from original data
-        const remainingOriginal = transcriptData
-          .filter((_, i) => !indices.includes(i))
-          .map((s, i) => ({ ...s, id: i + 1 }));
-        setTranscriptData(remainingOriginal);
-
-        // Remove from translated_segments
-        setTranslationData((prev) => ({
-          ...prev,
-          translated_segments: (prev.translated_segments || [])
-            .filter((_, i) => !indices.includes(i))
-            .map((s, i) => ({ ...s, id: i + 1 })),
-        }));
-      } else {
-        // ── Deleting from the original view ──
-        const res = await fetch(
-          `http://localhost:8000/api/sessions/${sessionId}/transcript/segments`,
-          {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ segment_indices: indices }),
-          }
-        );
-        if (!res.ok) throw new Error("Failed to delete segments");
-
-        const remaining = transcriptData
-          .filter((s) => !selectedIds.has(s.id))
-          .map((s, i) => ({ ...s, id: i + 1 }));
-        setTranscriptData(remaining);
-
-        // Also keep translated_segments in sync if a translation exists
-        if (hasTranslation) {
-          setTranslationData((prev) => ({
-            ...prev,
-            translated_segments: (prev.translated_segments || [])
-              .filter((_, i) => !indices.includes(i))
-              .map((s, i) => ({ ...s, id: i + 1 })),
-          }));
+      const res = await fetch(
+        `http://localhost:8000/api/sessions/${sessionId}/transcript/segments`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ segment_indices: indices }),
         }
-      }
+      );
+      if (!res.ok) throw new Error("Failed to delete segments");
+
+      const remaining = transcriptData
+        .filter((s) => !selectedIds.has(s.id))
+        .map((s, i) => ({ ...s, id: i + 1 }));
+      setTranscriptData(remaining);
 
       setSelectedIds(new Set());
       setSelectionMode(false);
@@ -630,14 +554,7 @@ export default function TranscriptPage() {
             <h1 className="text-2xl font-black">{sessionTitle || "Session Transcript"}</h1>
             <p className="text-sm text-text-dark/50 dark:text-text-light/50 mt-1">
               {activeSegments.length} segment{activeSegments.length !== 1 ? "s" : ""}
-              {hasTranslation && (
-                <span className="ml-2 inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium">
-                  <span className="material-symbols-outlined text-sm">translate</span>
-                  {showTranslated
-                    ? "Showing English translation"
-                    : `Original · ${translationData.detected_language}`}
-                </span>
-              )}
+
             </p>
           </div>
 
@@ -750,11 +667,7 @@ export default function TranscriptPage() {
                           {speaker.start_time}{speaker.end_time ? ` – ${speaker.end_time}` : ""}
                         </span>
                       )}
-                      {showTranslated && hasTranslation && (
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded">
-                          EN
-                        </span>
-                      )}
+
                     </div>
                     {!selectionMode && (
                       <button
@@ -792,7 +705,7 @@ export default function TranscriptPage() {
                   <div className="flex flex-col gap-2">
                     <button
                       onClick={() => handleGenerate("req")}
-                      disabled={needsTranslation || !transcriptApproval.all_members_approved}
+                      disabled={isTranslating || !transcriptApproval.all_members_approved}
                       className="flex w-full items-center justify-center gap-3 rounded-lg bg-green-600 hover:bg-green-700 px-4 py-3 text-base font-bold text-white shadow-soft transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <span className="material-symbols-outlined text-xl">task_alt</span>
@@ -800,7 +713,7 @@ export default function TranscriptPage() {
                     </button>
                     <button
                       onClick={() => handleGenerate("req")}
-                      disabled={isSubmittingReq || isCheckingReq || needsTranslation || !transcriptApproval.all_members_approved}
+                      disabled={isSubmittingReq || isCheckingReq || isTranslating || !transcriptApproval.all_members_approved}
                       className="flex w-full items-center justify-center gap-3 rounded-lg border border-primary-accent/50 bg-transparent px-4 py-2.5 text-sm font-semibold text-primary-accent hover:bg-primary-accent/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isSubmittingReq ? (
@@ -822,7 +735,7 @@ export default function TranscriptPage() {
                 ) : (
                   <button
                     onClick={() => handleGenerate("req")}
-                    disabled={isSubmittingReq || isCheckingReq || needsTranslation || !transcriptApproval.all_members_approved}
+                    disabled={isSubmittingReq || isCheckingReq || isTranslating || !transcriptApproval.all_members_approved}
                     className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-primary-accent/90 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {isSubmittingReq || isCheckingReq ? (
@@ -837,9 +750,7 @@ export default function TranscriptPage() {
                       <>
                         <span className="material-symbols-outlined text-xl">checklist</span>
                         Extract Requirements
-                        {hasTranslation && (
-                          <span className="text-[10px] font-bold bg-black/10 rounded px-1 py-0.5">EN</span>
-                        )}
+
                       </>
                     )}
                   </button>
@@ -858,22 +769,13 @@ export default function TranscriptPage() {
                     Transcript approved — ready to generate
                   </p>
                 )}
+
                 <p className="text-xs text-text-dark/60 dark:text-text-light/60 text-center">
                   Session approvals: {transcriptApproval.approved_members_count}/
                   {transcriptApproval.total_members_count}
                   {transcriptApproval.all_members_approved ? " (all approved)" : " (waiting for members)"}
                 </p>
-                {needsTranslation && (
-                  <p className="text-xs text-red-500 dark:text-red-400 text-center flex items-center justify-center gap-1">
-                    <span className="material-symbols-outlined text-sm">warning</span>
-                    Translate the transcript to English first
-                  </p>
-                )}
-                {hasTranslation && !needsTranslation && !existingRequirementId && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 text-center">
-                    Will use <strong>English translation</strong> for extraction
-                  </p>
-                )}
+
                 {existingRequirementId && (
                   <p className="text-xs text-blue-600 dark:text-blue-400 text-center flex items-center justify-center gap-1">
                     <span className="material-symbols-outlined text-sm">info</span>
@@ -883,74 +785,7 @@ export default function TranscriptPage() {
               </div>
             </div>
 
-            {/* Translation Card */}
-            <div className="flex flex-col gap-4 bg-white dark:bg-background-dark/50 rounded-xl p-6 shadow-soft border border-border-light dark:border-white/10">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-amber-500 text-xl">translate</span>
-                <h3 className="text-base font-bold">Translation</h3>
-              </div>
 
-              {translationData?.is_english ? (
-                <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-medium">
-                  <span className="material-symbols-outlined text-lg">check_circle</span>
-                  Transcript is already in English
-                </div>
-              ) : hasTranslation ? (
-                <div className="flex flex-col gap-3">
-                  <p className="text-sm text-text-dark/70 dark:text-text-light/60">
-                    <span className="font-semibold capitalize text-amber-600 dark:text-amber-400">
-                      {translationData.detected_language}
-                    </span>
-                    {" "}→ English translation ready
-                  </p>
-                  <button
-                    onClick={() => setShowTranslated((v) => !v)}
-                    className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-bold transition-colors
-                      ${showTranslated
-                        ? "bg-gray-50 dark:bg-white/5 border-border-light dark:border-white/10"
-                        : "bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-600 text-amber-800 dark:text-amber-300"
-                      }`}
-                  >
-                    <span className="material-symbols-outlined text-lg">
-                      {showTranslated ? "article" : "translate"}
-                    </span>
-                    {showTranslated ? "Show Original" : "Show Translation"}
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  <p className="text-xs text-text-dark/50 dark:text-text-light/40 leading-relaxed">
-                    If the transcript is non-English, translate it to English so the requirements
-                    pipeline can process it correctly.
-                  </p>
-                  {translationError && (
-                    <p className="text-xs text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">
-                      {translationError}
-                    </p>
-                  )}
-                  <button
-                    onClick={handleTranslate}
-                    disabled={isTranslating}
-                    className="flex items-center justify-center gap-2 rounded-lg bg-amber-500 hover:bg-amber-600 disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-bold text-white shadow-soft transition-colors"
-                  >
-                    {isTranslating ? (
-                      <>
-                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                        </svg>
-                        Translating…
-                      </>
-                    ) : (
-                      <>
-                        <span className="material-symbols-outlined text-lg">translate</span>
-                        Detect &amp; Translate
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
-            </div>
 
             {/* AssemblyAI Model Info Card */}
             <div className="flex flex-col gap-4 bg-gradient-to-br from-[#f0eeff] to-[#e9f0ff] dark:from-[#1a1830] dark:to-[#151c30] rounded-xl p-6 shadow-soft border border-[#ddd9f0] dark:border-[#2e2a4a]">

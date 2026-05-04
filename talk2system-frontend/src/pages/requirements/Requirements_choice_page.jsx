@@ -83,29 +83,62 @@ export default function RequirementsChoicePage() {
   };
 
 	const formatTranscriptForBackend = (segments) => {
-		return segments
-			.filter((item) => item.name && item.text)
-			.map((item) => `${item.name.trim()}: "${item.text.trim()}"`)
-			.join("\n");
+	return segments
+		.filter((item) => (item.name || item.speaker) && item.text)
+		.map((item) => {
+		const spk = (item.name || item.speaker || "").trim();
+		return `${spk}: "${item.text.trim()}"`;
+		})
+		.join("\n");
 	};
 
 	const fetchTranscriptText = async () => {
-		if (transcriptText && transcriptText.trim()) {
-			return transcriptText;
+	// 1. If the transcript text was passed in via navigation state, use it —
+	//    it was already the translated version when TranscriptPage sent it.
+	if (transcriptText && transcriptText.trim()) {
+		return transcriptText;
+	}
+
+	// 2. Check whether a translation exists for this session.
+	try {
+		const translationRes = await fetch(
+		`http://127.0.0.1:8000/api/sessions/${sessionId}/translation`,
+		{ headers: { Authorization: `Bearer ${getToken()}` } }
+		);
+		if (translationRes.ok) {
+		const translationData = await translationRes.json();
+		if (
+			translationData &&
+			!translationData.is_english &&
+			Array.isArray(translationData.translated_segments) &&
+			translationData.translated_segments.length > 0
+		) {
+			// Use the translated segments — same format as the original extraction
+			return translationData.translated_segments
+			.filter((s) => s.text?.trim())
+			.map((s) => {
+				const spk = (s.speaker || s.name || "").trim();
+				return spk ? `${spk}: "${s.text.trim()}"` : `"${s.text.trim()}"`;
+			})
+			.join("\n");
 		}
-
-		const response = await fetch(`http://127.0.0.1:8000/api/sessions/${sessionId}/transcript`, {
-			headers: { Authorization: `Bearer ${getToken()}` }
-		});
-
-		const data = await response.json();
-		if (!response.ok) {
-			throw new Error(data.detail || "Failed to load transcript");
 		}
+	} catch {
+		// Translation fetch failed — fall through to original transcript below
+	}
 
-		const segments = Array.isArray(data.transcript) ? data.transcript : [];
-		return formatTranscriptForBackend(segments);
-	};
+	// 3. Fall back to original transcript (English sessions or translation unavailable)
+	const response = await fetch(
+		`http://127.0.0.1:8000/api/sessions/${sessionId}/transcript`,
+		{ headers: { Authorization: `Bearer ${getToken()}` } }
+	);
+	const data = await response.json();
+	if (!response.ok) {
+		throw new Error(data.detail || "Failed to load transcript");
+	}
+	const segments = Array.isArray(data.transcript) ? data.transcript : [];
+	return formatTranscriptForBackend(segments);
+	}
 
 	const mergeExtractionResponse = (engine, responseData) => {
 		setExtractionState((prev) => {
