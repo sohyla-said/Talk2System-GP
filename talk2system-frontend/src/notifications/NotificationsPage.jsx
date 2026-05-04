@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchNotifications, markNotificationRead, markAllNotificationsRead } from "../api/notificationApi";
+import { handleNotificationNav } from "../utils/notificationNavigation";
+import { getToken } from "../api/authApi";
 
 const ICON_MAP = {
   join_accepted: { icon: "check_circle", color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-200 dark:border-emerald-800" },
@@ -13,6 +15,9 @@ const ICON_MAP = {
   admin_replaced_pm: { icon: "swap_horiz", color: "text-amber-500", bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800" },
   admin_deleted_project: { icon: "delete_forever", color: "text-red-600", bg: "bg-red-50 dark:bg-red-900/20", border: "border-red-200 dark:border-red-800" },
   join_requested: { icon: "group_add", color: "text-teal-500", bg: "bg-teal-50 dark:bg-teal-900/20", border: "border-teal-200 dark:border-teal-800" },
+  requirements_extracted:         { icon: "task_alt",  color: "text-violet-500", bg: "bg-violet-50 dark:bg-violet-900/20", border: "border-violet-200 dark:border-violet-800" },
+requirements_extracted_both:    { icon: "compare",   color: "text-violet-500", bg: "bg-violet-50 dark:bg-violet-900/20", border: "border-violet-200 dark:border-violet-800" },
+requirements_extraction_failed: { icon: "error",     color: "text-red-500",    bg: "bg-red-50 dark:bg-red-900/20",       border: "border-red-200 dark:border-red-800" },
 
 };
 
@@ -44,13 +49,22 @@ export default function NotificationsPage() {
     catch (err) { console.error(err); }
   };
 
+  // const handleGoToProject = async (notif) => {
+  //   if (!notif.is_read) { 
+  //     await markNotificationRead(notif.id); 
+  //     setNotifications((prev) => prev.map((n) => (n.id === notif.id ? { ...n, is_read: true } : n))); 
+  //   }
+  //   if (notif.project_id) navigate(`/projects/${notif.project_id}`);
+  // };
   const handleGoToProject = async (notif) => {
-    if (!notif.is_read) { 
-      await markNotificationRead(notif.id); 
-      setNotifications((prev) => prev.map((n) => (n.id === notif.id ? { ...n, is_read: true } : n))); 
-    }
-    if (notif.project_id) navigate(`/projects/${notif.project_id}`);
-  };
+  if (!notif.is_read) {
+    await markNotificationRead(notif.id);
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notif.id ? { ...n, is_read: true } : n))
+    );
+  }
+  await handleNotificationNav(notif, navigate, getToken);
+};
 
   // Filter by status (all/unread/read)
   const statusFiltered = notifications.filter((n) => {

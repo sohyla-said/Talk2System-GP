@@ -7,6 +7,7 @@ from scipy.special import softmax
 from typing import List
 import sys, os
 import time
+import logging
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 # from app.nlp.preprocessing import RequirementPreprocessingPipeline
@@ -35,6 +36,7 @@ nfr_classifier = joblib.load("ML/models/nfr_category_classifier.pkl")
 ############################    Initialize Preprocessing and Rule Engine  ############################
 # preprocessor = RequirementPreprocessingPipeline()
 rule_engine = RuleBasedRequirementEngine()
+logger = logging.getLogger(__name__)
 
 ############################    ML helpers  ############################
 stop_words = set(stopwords.words("english"))
@@ -97,7 +99,15 @@ def predict_nfr_category(sentence: str):
 def hybrid_inference(transcript: str) -> List[dict]:
     # Step 1: Preprocess transcript
     # preprocessed_sentences = preprocessor.process(transcript)
-    preprocessed_sentences = extract_sentences(transcript)
+    try:
+        preprocessed_sentences = extract_sentences(transcript)
+    except Exception as exc:
+        logger.exception("Hybrid preprocessing failed while extracting sentences with Ollama")
+        raise ValueError(f"Hybrid preprocessing LLM extraction failed: {exc}") from exc
+
+    if not preprocessed_sentences:
+        raise ValueError("Hybrid preprocessing produced no sentences")
+
     results = []
     # Step 2: for each sentence, predict its type using both ML models and Rule-based engine
     # for sentence_obj in preprocessed_sentences:

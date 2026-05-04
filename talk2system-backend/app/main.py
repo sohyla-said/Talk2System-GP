@@ -21,6 +21,7 @@ from app.api.admin_routes import router as admin_router
 from app.models import notification  
 from app.api.notification_routes import router as notification_router 
 from app.api.translation_router import router as translation_router
+from app.models.background_task import BackgroundTask
 
 app = FastAPI()
 

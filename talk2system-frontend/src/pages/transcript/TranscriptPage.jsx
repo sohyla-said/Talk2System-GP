@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useContext } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import TranscriptApprovalModal from "../../components/modals/TranscriptApprovalModal";
 import TranscriptEditModal from "../../components/modals/TranscriptEditModal";
 import EngineChoiceModal from "../../components/modals/EngineChoiceModal";
 import { getToken } from "../../api/authApi";
+import { ExtractionContext } from "../../App";
 
 // ─── AssemblyAI Universal-2 benchmark data ────────────────────────────────────
 const MODEL_INFO = {
@@ -23,6 +24,7 @@ const MODEL_INFO = {
 export default function TranscriptPage() {
   const navigate = useNavigate();
   const { sessionId } = useParams();
+  const { startExtraction } = useContext(ExtractionContext);
 
   const [approved, setApproved] = useState(false);
   const [transcriptApproval, setTranscriptApproval] = useState({
@@ -439,89 +441,18 @@ export default function TranscriptPage() {
       return;
     }
 
-    setIsSubmittingReq(true);
+    // setIsSubmittingReq(true);
     try {
-      const response = await fetch(
-        `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/extract-requirements`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
-          body: JSON.stringify({ transcript: transcriptText, engine }),
-        }
-      );
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
-      }
-
-      if (engine === "both") {
-        navigate(`/transcript/${sessionId}/requirements/choice`, {
-          state: {
-            projectId,
-            transcriptText,
-            commonData:     data.common_data,
-            hybridRunId:    data.Hybrid_run_id,
-            hybridData:     data.Hybrid_data,
-            hybridOnlyData: data.Hybrid_only_data,
-            llmRunId:       data.LLM_run_id,
-            llmData:        data.LLM_data,
-            llmOnlyData:    data.LLM_only_data,
-          },
-        });
-      } else if (engine === "hybrid") {
-        try {
-          await fetch(
-            `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/choose-requirements`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
-              body: JSON.stringify({
-                requirements_json: data.Hybrid_data,
-                src_run_id: data.Hybrid_run_id,
-              }),
-            }
-          );
-        } catch (err) {
-          console.error("choose-requirements failed:", err);
-        }
-        navigate(`/transcript/${sessionId}/requirements`, {
-          state: {
-            projectId,
-            requirementId: data.Hybrid_run_id,
-            groupedData: data.Hybrid_data,
-            preferredType: "hybrid",
-          },
-        });
-      } else if (engine === "llm") {
-        try {
-          await fetch(
-            `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/choose-requirements`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
-              body: JSON.stringify({
-                requirements_json: data.LLM_data,
-                src_run_id: data.LLM_run_id,
-              }),
-            }
-          );
-        } catch (err) {
-          console.error("choose-requirements failed:", err);
-        }
-        navigate(`/transcript/${sessionId}/requirements`, {
-          state: {
-            projectId,
-            requirementId: data.LLM_run_id,
-            groupedData: data.LLM_data,
-            preferredType: "llm",
-          },
-        });
-      }
-    } catch (err) {
-      alert(err.message);
+      await startExtraction(sessionId, projectId, transcriptText, engine);
+      // Keep user on the current page so background progress UI remains visible.
+      setShowEngineModal(false);
+    } catch (error) {
+      console.error(error);
+      alert(error.message || "Failed to start requirement extraction");
     } finally {
       setIsSubmittingReq(false);
     }
+
   };
 
   // ── Select / delete segments ─────────────────────────────────────────────

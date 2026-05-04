@@ -92,3 +92,9 @@ class Session(Base):
         back_populates="session",
         cascade="all, delete-orphan",
     )
+
+    background_tasks = relationship(
+        "BackgroundTask",
+        back_populates="session",
+        cascade="all, delete-orphan",
+    )

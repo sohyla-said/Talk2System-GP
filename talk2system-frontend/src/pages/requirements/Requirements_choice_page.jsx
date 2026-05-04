@@ -313,28 +313,28 @@ export default function RequirementsChoicePage() {
 		}
 	};
 
-	if (!projectId || !sessionId || (!llmData && !hybridData)) {
-		return (
-			<div className="px-4 pb-4">
-				<div className="rounded-xl border border-[#d3cee8]/50 dark:border-white/10 bg-white dark:bg-background-dark p-8 text-center">
-					<div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-						<span className="material-symbols-outlined">info</span>
-					</div>
-					<h3 className="text-slate-900 dark:text-white text-xl font-bold mb-2">No requirements extracted yet</h3>
-					<p className="text-slate-500 dark:text-slate-400 mb-6">
-						This session does not have extracted requirements yet. Go to the transcript page to extract and review requirements first.
-					</p>
-					<button
-						onClick={() => navigate(`/transcript/${sessionId}`)}
-						className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 font-bold text-white transition-colors hover:bg-primary/90"
-					>
-						<span className="material-symbols-outlined text-lg">description</span>
-						Go To Transcript
-					</button>
-				</div>
-			</div>
-		);
-	}
+	// if (!projectId || !sessionId || (!llmData && !hybridData)) {
+	// 	return (
+	// 		<div className="px-4 pb-4">
+	// 			<div className="rounded-xl border border-[#d3cee8]/50 dark:border-white/10 bg-white dark:bg-background-dark p-8 text-center">
+	// 				<div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+	// 					<span className="material-symbols-outlined">info</span>
+	// 				</div>
+	// 				<h3 className="text-slate-900 dark:text-white text-xl font-bold mb-2">No requirements extracted yet</h3>
+	// 				<p className="text-slate-500 dark:text-slate-400 mb-6">
+	// 					This session does not have extracted requirements yet. Go to the transcript page to extract and review requirements first.
+	// 				</p>
+	// 				<button
+	// 					onClick={() => navigate(`/transcript/${sessionId}`)}
+	// 					className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 font-bold text-white transition-colors hover:bg-primary/90"
+	// 				>
+	// 					<span className="material-symbols-outlined text-lg">description</span>
+	// 					Go To Transcript
+	// 				</button>
+	// 			</div>
+	// 		</div>
+	// 	);
+	// }
 
 	return (
 		<div className="w-full max-w-7xl mx-auto p-4 space-y-4">

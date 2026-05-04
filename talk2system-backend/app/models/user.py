@@ -49,5 +49,11 @@ class User(Base):
     )
     approvals = relationship("Approval", back_populates="user")
 
+    background_tasks = relationship(
+        "BackgroundTask",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
     def __repr__(self):
         return f"<User id={self.id} email={self.email!r} role={self.role!r} status={self.status!r}>"

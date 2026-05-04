@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useContext } from 'react';
 import { useNavigate, useParams,useLocation } from "react-router-dom";
 import { getToken } from "../../api/authApi";
 import EngineChoiceModal from "../../components/modals/EngineChoiceModal";
+import { ExtractionContext } from "../../App";
 
 const TranscriptInputPage = () => {
   const [transcript, setTranscript] = useState('');
@@ -16,6 +17,7 @@ const TranscriptInputPage = () => {
   const textareaRef = useRef(null);
   const navigate = useNavigate();
   const { id: projectId } = useParams();
+const { startExtraction } = useContext(ExtractionContext);
 
   // const today = new Date().toLocaleDateString('en-US', {
   //   year: 'numeric', month: 'long', day: 'numeric'
@@ -116,112 +118,23 @@ const TranscriptInputPage = () => {
       const sessionId = transcriptData.session_id;
 
       // ---------------------------------------------------------------
-      // STEP 2 — Extract requirements (same call as before)
+      // STEP 2 — async requirement extraction — fire and forget
+      // startExtraction posts to /extract-requirements-async, stores task_id
+      // in the hook, and shows the toast. No navigation happens here.
       // ---------------------------------------------------------------
-            const requirementsResponse = await fetch(
-        `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/extract-requirements`,
-        {
-          method: 'POST',
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            transcript: transcript,
-            engine: engine,
-          }),
-        }
-      );
 
-      const requirementsData = await requirementsResponse.json();
+      await startExtraction(sessionId, projectId, transcript, engine);
 
-      if (!requirementsResponse.ok) {
-        throw new Error(requirementsData.detail || "Something went wrong");
-      }
+      // Approve the transcript immediately — this is instant and unrelated
+      // to extraction, so it still runs right after the session is created.
+      handleApprove(sessionId);
 
       setSubmitted(true);
 
-      // Navigate based on chosen engine
-      if (engine === "both") {
-        navigate(`/transcript/${sessionId}/requirements/choice`, {
-          state: {
-            projectId,
-            commonData: requirementsData.common_data,
-            hybridRunId: requirementsData.Hybrid_run_id,
-            hybridData: requirementsData.Hybrid_data,
-            hybridOnlyData: requirementsData.Hybrid_only_data,
-            llmRunId: requirementsData.LLM_run_id,
-            llmData: requirementsData.LLM_data,
-            llmOnlyData: requirementsData.LLM_only_data,
-          },
-        });
-      } else if (engine === "hybrid") {
-        try{
-          const response = await fetch(
-          `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/choose-requirements`,
-          {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${getToken()}`
-              },
-              body: JSON.stringify({
-                requirements_json: requirementsData.Hybrid_data,
-                src_run_id: requirementsData.Hybrid_run_id
-              })
-            }
-          );
-          if (!response.ok) {
-            throw new Error(data.detail || "Failed to save preferred requirements");
-          }
-
-        }catch (error) {
-          console.error(error);
-          alert(error.message);
-        }
-        navigate(`/transcript/${sessionId}/requirements`, {
-          state: {
-            projectId,
-            requirementId: requirementsData.Hybrid_run_id,
-            groupedData: requirementsData.Hybrid_data,
-            preferredType: 'hybrid'
-          },
-        });
-      } else if (engine === "llm") {
-        try{
-          const response = await fetch(
-          `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/choose-requirements`,
-          {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${getToken()}`
-              },
-              body: JSON.stringify({
-                requirements_json: requirementsData.LLM_data,
-                src_run_id: requirementsData.LLM_run_id
-              })
-            }
-          );
-          if (!response.ok) {
-            throw new Error(data.detail || "Failed to save preferred requirements");
-          }
-
-        }catch (error) {
-          console.error(error);
-          alert(error.message);
-        }
-
-        navigate(`/transcript/${sessionId}/requirements`, {
-          state: {
-            projectId,
-            requirementId: requirementsData.LLM_run_id,
-            groupedData: requirementsData.LLM_data,
-            preferredType: 'llm'
-          },
-        });
-      }
-      handleApprove(sessionId)
+      // Navigate to the project page so the user isn't stranded on this form.
+      // The toast floats above every page and will deliver them to the right
+      // place (requirements view or choice page) when extraction finishes.
+      navigate(`/projects/${projectId}/sessions/${sessionId}/sessiondetails`);
 
     } catch (error) {
       console.error(error);

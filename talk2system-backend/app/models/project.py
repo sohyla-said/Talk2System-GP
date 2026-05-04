@@ -25,6 +25,12 @@ class Project(Base):
         cascade="all, delete-orphan"
     )
 
+    background_tasks = relationship(
+        "BackgroundTask",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
     project_requirements = relationship("ProjectRequirement", back_populates="project",cascade="all, delete-orphan")
     memberships = relationship("ProjectMembership", back_populates="project")
     invitations = relationship("Invitation", back_populates="project")

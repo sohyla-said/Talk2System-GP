@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchUnreadCount, fetchNotifications, markNotificationRead, markAllNotificationsRead } from "../../api/notificationApi";
+import { handleNotificationNav } from "../../utils/notificationNavigation";
+import { getToken } from "../../api/authApi";
 
 const ICON_MAP = {
   join_accepted: { icon: "check_circle", color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20" },
@@ -13,6 +15,9 @@ const ICON_MAP = {
   admin_replaced_pm: { icon: "swap_horiz", color: "text-amber-500", bg: "bg-amber-50 dark:bg-amber-900/20" },
   admin_deleted_project: { icon: "delete_forever", color: "text-red-600", bg: "bg-red-50 dark:bg-red-900/20" },
   join_requested: { icon: "group_add", color: "text-teal-500", bg: "bg-teal-50 dark:bg-teal-900/20" },
+  requirements_extracted:       { icon: "task_alt",   color: "text-violet-500", bg: "bg-violet-50 dark:bg-violet-900/20" },
+  requirements_extracted_both:  { icon: "compare",    color: "text-violet-500", bg: "bg-violet-50 dark:bg-violet-900/20" },
+  requirements_extraction_failed: { icon: "error",    color: "text-red-500",    bg: "bg-red-50 dark:bg-red-900/20" },
 };
 
 export default function NotificationBell() {
@@ -111,7 +116,11 @@ export default function NotificationBell() {
               notifications.map((notif) => {
                 const style = ICON_MAP[notif.notification_type] || ICON_MAP.added_to_project;
                 return (
-                  <div key={notif.id} onClick={() => { if (!notif.is_read) handleMarkRead(notif.id); setIsOpen(false); if (notif.project_id) navigate(`/projects/${notif.project_id}`); }}
+                  <div key={notif.id} onClick={async () => {
+                                        if (!notif.is_read) handleMarkRead(notif.id);
+                                        setIsOpen(false);
+                                        await handleNotificationNav(notif, navigate, getToken);
+                                      }}
                     className={`flex items-start gap-3 px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 transition-colors border-b border-gray-100 dark:border-gray-800 last:border-0 ${!notif.is_read ? style.bg : ""}`}>
                     <span className={`material-symbols-outlined mt-0.5 ${style.color}`}>{style.icon}</span>
                     <div className="flex-1 min-w-0">

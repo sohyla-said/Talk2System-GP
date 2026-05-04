@@ -4,6 +4,7 @@ from app.models.session_requirement import SessionRequirement
 from app.models.project_requirments import ProjectRequirement
 from app.models.requirement_raw import RequirementRaw
 from app.models.requirement_runs import RequirementRun
+from app.models.background_task import BackgroundTask
 from app.models.project import Project
 from app.models.session import Session
 from app.nlp.hybrid_engine import hybrid_inference
@@ -11,6 +12,10 @@ from app.services.llm_service import extract_requirements
 import copy
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from app.db.session import SessionLocal   # needed by the background worker
+from app.models.session_membership import SessionMembership
+from app.models.project import Project
+from app.services import notification_service
 
 
 logger = logging.getLogger(__name__)
@@ -47,10 +52,12 @@ class RequirementService:
                 llm_raw = extract_requirements(transcript)
                 llm_results = adapt_llm_output(llm_raw)
             except Exception as exc:
-                # In "both" mode we keep hybrid results even if Ollama fails.
-                if engine == 'llm':
-                    raise ValueError(f"LLM extraction failed: {exc}")
-                logger.exception("LLM extraction failed in both mode; continuing with hybrid output")
+                # Surface LLM runner failures so callers / background worker
+                # can mark the task as failed and log the cause. Do not
+                # silently continue in both-mode — raise so the error is
+                # visible and handled by the caller.
+                logger.exception("LLM extraction failed")
+                raise ValueError(f"LLM extraction failed: {exc}")
 
         # Step 2: Group/Transform resuts
         grouped_hybrid = group_requirements(hybrid_results) if hybrid_results else None
@@ -474,6 +481,132 @@ class RequirementService:
             "approval_status": req.approval_status
         }
     
+
+    ################################################# Background worker ################################################
+# called by FastAPI BackgroundTasks after response is sent.
+# Opens its own DB session because the request session is already closed by
+# the time this runs.
+
+def run_async_extraction_task(task_id: int, project_id: int, session_id: int, transcript: str, engine: str, user_id: int):
+    db = SessionLocal()
+    task = None
+    try:
+        # mark task as in-progress
+        task = db.query(BackgroundTask).filter(BackgroundTask.id == task_id).first()
+        task.status = "in-progress"
+        db.commit()
+
+        # run the full extraction pipeline
+        result = RequirementService.extract_and_store_requirements(db=db, project_id=project_id, session_id=session_id, transcript=transcript, engine=engine)
+
+        if engine in ("hybrid", "llm"):
+            # Single-engine: auto-save preferred and record the session_req_id
+            preferred_run_id = result.get("hybrid_run_id") if engine == "hybrid" else result.get("llm_run_id")
+            grouped = result.get("hybrid") if engine == "hybrid" else result.get("llm")
+            saved = RequirementService.save_preferred_requirements(
+                db=db,
+                project_id=project_id,
+                session_id=session_id,
+                req_json=grouped,
+                src_run_id=preferred_run_id,
+            )
+            task.task_output = {
+                "engine":         engine,
+                "session_req_id": saved.get("session_req_id"),
+                "data": grouped,
+                "preferred_type": engine,
+            }
+
+        elif engine == "both":
+            # Both: store all run IDs and grouped data so the choice page can
+            # render without needing a second API call.
+            task.task_output = {
+                "engine":           "both",
+                "Hybrid_run_id":    result.get("hybrid_run_id"),
+                "LLM_run_id":       result.get("llm_run_id"),
+                "common_data":      result.get("common_requirements"),
+                "Hybrid_data":      result.get("hybrid"),
+                "hybrid_only_data": result.get("diff_hybrid"),
+                "LLM_data":         result.get("llm"),
+                "LLM_only_data":    result.get("diff_llm"),
+            }
+
+        task.status = "done"
+        db.commit()
+
+        # ── Notify all session members — extraction succeeded ─────────────────
+        _notify_session_members(
+            db=db,
+            session_id=session_id,
+            project_id=project_id,
+            notification_type="requirements_extracted_both" if engine == "both" else "requirements_extracted",
+            title="Requirements Extracted",
+            message=(
+                "Both extraction engines finished. Compare the results to choose your preferred output."
+                if engine == "both"
+                else "Requirement extraction completed successfully. You can now review the results."
+            ),
+        )
+
+        logger.info(f"Background extraction task {task_id} completed successfully")
+    
+    except Exception as exc:
+        logger.info(f"Background extraction task {task_id} failed")
+        try:
+            task.status = 'failed'
+            task.error_message = str(exc)
+            db.commit()
+        except Exception:
+            db.rollback()
+    
+    # ── Notify all session members — extraction failed ────────────────────
+        try:
+            _notify_session_members(
+                db=db,
+                session_id=session_id,
+                project_id=project_id,
+                notification_type="requirements_extraction_failed",
+                title="Requirements Extraction Failed",
+                message=f"Requirement extraction encountered an error and could not complete. [session_id:{session_id}]",
+            )
+        except Exception:
+            logger.exception("Failed to send failure notifications for task %s", task_id)
+ 
+    finally:
+        db.close()
+
+def _notify_session_members(
+    db,
+    session_id: int,
+    project_id: int,
+    notification_type: str,
+    title: str,
+    message: str,
+):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    project_name = project.name if project else None
+
+    memberships = (
+        db.query(SessionMembership)
+        .filter(SessionMembership.session_id == session_id)
+        .all()
+    )
+
+    for membership in memberships:
+        notification_service.create_notification(
+            db,
+            user_id=membership.user_id,
+            notification_type=notification_type,
+            title=title,
+            # Append session_id as a parseable suffix — no schema change needed
+            message=f"{message} [session_id:{session_id}]",
+            actor_name="System",
+            actor_email=None,
+            project_id=project_id,
+            project_name=project_name,
+        )
+
+    db.commit()
 
 
     ################################################# Helper functions ################################################

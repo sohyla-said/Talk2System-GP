@@ -186,7 +186,7 @@ Original task:
             llm_output = llm.invoke(repair_prompt)
 
     logger.error(f"Final failure after retries: {last_error}")
-    return []
+    raise ValueError(f"Sentence extraction JSON parsing failed after retries: {last_error}")
 
 
 # =========================
@@ -202,7 +202,7 @@ def process_chunk(idx: int, chunk: str) -> list:
         return results
     except Exception as e:
         logger.error(f"Chunk {idx+1} failed: {str(e)}")
-        raise
+        raise RuntimeError(f"Ollama sentence extraction failed on chunk {idx + 1}: {e}") from e
 
 
 def write_sentences_to_file(sentences: list) -> str:
