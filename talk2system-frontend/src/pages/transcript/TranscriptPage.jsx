@@ -88,17 +88,31 @@ export default function TranscriptPage() {
   // ── Requirement extraction text ──────────────────────────────────────────
   const formatSegmentsForBackend = (segments) =>
     segments
-      .filter((item) => (item.speaker || item.name) && item.text)
+      .filter((item) => item.text && item.text.trim())
       .map((item) => {
         const spk = (item.speaker || item.name || "").trim();
-        return `${spk}: "${item.text.trim()}"`;
+        // Include speaker label only when present
+        return spk ? `${spk}: "${item.text.trim()}"` : item.text.trim();
       })
       .join("\n");
 
   const getTranscriptTextForExtraction = () => {
-    if (hasTranslation && translationData.translated_segments?.length) {
-      return formatSegmentsForBackend(translationData.translated_segments);
+    if (hasTranslation && translationData) {
+      // Prefer the pre-built full translated_transcript string stored on the
+      // session — it's the most reliable source and avoids any segment-level
+      // field mismatch issues.
+      if (translationData.translated_transcript?.trim()) {
+        console.log("[extraction] using translated_transcript string");
+        return translationData.translated_transcript;
+      }
+      // Fall back to rebuilding from translated_segments if the string is absent
+      if (translationData.translated_segments?.length) {
+        console.log("[extraction] using translated_segments array");
+        return formatSegmentsForBackend(translationData.translated_segments);
+      }
     }
+    // No translation — use original segments
+    console.log("[extraction] using original transcriptData");
     return formatSegmentsForBackend(transcriptData);
   };
 
@@ -194,25 +208,6 @@ export default function TranscriptPage() {
           if (data && !data.is_english) {
             setShowTranslated(true);
             setDetectedLanguage(data.detected_language);
-          }
-        } else {
-          // No cached translation yet — ask the backend to detect the language
-          // so needsTranslation is accurate even before the user clicks Translate.
-          // This is a lightweight call: it never performs translation, only detection.
-          try {
-            const langRes = await fetch(
-              `http://localhost:8000/api/sessions/${sessionId}/detected-language`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-            if (langRes.ok) {
-              const langData = await langRes.json();
-              if (langData.detected_language) {
-                setDetectedLanguage(langData.detected_language);
-              }
-            }
-          } catch {
-            // best-effort — if detection fails, the user will see the translate
-            // button and can trigger it manually
           }
         }
       } catch {
@@ -380,22 +375,35 @@ export default function TranscriptPage() {
   };
 
   const handleGenerate = (type) => {
-    if (type === "req" && needsTranslation) {
-      return;
+    if (type === "req") {
+      // Gate 1: translation required before anything else
+      if (needsTranslation) {
+        alert(
+          "The transcript is not in English. Please translate it first so the requirements pipeline can process it correctly."
+        );
+        return;
+      }
+      // Gate 2: all members must approve
+      if (!transcriptApproval.all_members_approved) {
+        alert(
+          `All session members must approve the transcript first (${transcriptApproval.approved_members_count}/${transcriptApproval.total_members_count}).`
+        );
+        return;
+      }
+      // Gate 3: current user must approve (opens modal, resumes after)
+      if (!approved) {
+        setPendingNavigation(type);
+        setShowModal(true);
+        return;
+      }
+      // All gates passed — view existing or extract new
+      if (existingRequirementId) {
+        navigate(`/projects/${projectId}/session/${sessionId}/requirements/${existingRequirementId}`);
+        return;
+      }
     }
-    if (type === "req" && existingRequirementId) {
-      navigate(`/projects/${projectId}/session/${sessionId}/requirements/${existingRequirementId}`);
-      return;
-    }
-    if (type === "req" && !transcriptApproval.all_members_approved) {
-      alert(
-        `All session members must approve the transcript first (${transcriptApproval.approved_members_count}/${transcriptApproval.total_members_count}).`
-      );
-      return;
-    }
-    if (!approved) {
-      setPendingNavigation(type);
-      setShowModal(true);
+    if (type === "sum") {
+      navigate(`/summary/${sessionId}`);
       return;
     }
     executeNavigation(type);
@@ -423,20 +431,72 @@ export default function TranscriptPage() {
       if (!response.ok) {
         throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
       }
-      navigate(`/projects/${projectId}/session/${sessionId}/requirements-choice`, {
-        state: {
-          projectId,
-          sessionId,
-          common_data:      data.common_data,
-          LLM_run_id:       data.LLM_run_id,
-          LLM_data:         data.LLM_data,
-          LLM_only_data:    data.LLM_only_data,
-          Hybrid_run_id:    data.Hybrid_run_id,
-          Hybrid_data:      data.Hybrid_data,
-          Hybrid_only_data: data.Hybrid_only_data,
-          transcript_text:  transcriptText,
-        },
-      });
+
+      if (engine === "both") {
+        // Navigate to choice page — state keys must match what RequirementsChoicePage reads
+        navigate(`/transcript/${sessionId}/requirements/choice`, {
+          state: {
+            projectId,
+            transcriptText,
+            commonData:     data.common_data,
+            hybridRunId:    data.Hybrid_run_id,
+            hybridData:     data.Hybrid_data,
+            hybridOnlyData: data.Hybrid_only_data,
+            llmRunId:       data.LLM_run_id,
+            llmData:        data.LLM_data,
+            llmOnlyData:    data.LLM_only_data,
+          },
+        });
+      } else if (engine === "hybrid") {
+        // Save preferred immediately then navigate to requirements view
+        try {
+          await fetch(
+            `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/choose-requirements`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+              body: JSON.stringify({
+                requirements_json: data.Hybrid_data,
+                src_run_id: data.Hybrid_run_id,
+              }),
+            }
+          );
+        } catch (err) {
+          console.error("choose-requirements failed:", err);
+        }
+        navigate(`/transcript/${sessionId}/requirements`, {
+          state: {
+            projectId,
+            requirementId: data.Hybrid_run_id,
+            groupedData: data.Hybrid_data,
+            preferredType: "hybrid",
+          },
+        });
+      } else if (engine === "llm") {
+        try {
+          await fetch(
+            `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/choose-requirements`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+              body: JSON.stringify({
+                requirements_json: data.LLM_data,
+                src_run_id: data.LLM_run_id,
+              }),
+            }
+          );
+        } catch (err) {
+          console.error("choose-requirements failed:", err);
+        }
+        navigate(`/transcript/${sessionId}/requirements`, {
+          state: {
+            projectId,
+            requirementId: data.LLM_run_id,
+            groupedData: data.LLM_data,
+            preferredType: "llm",
+          },
+        });
+      }
     } catch (err) {
       alert(err.message);
     } finally {
@@ -733,7 +793,7 @@ export default function TranscriptPage() {
                     <button
                       onClick={() => handleGenerate("req")}
                       disabled={needsTranslation || !transcriptApproval.all_members_approved}
-                      className="flex w-full items-center justify-center gap-3 rounded-lg bg-green-600 hover:bg-green-700 px-4 py-3 text-base font-bold text-white shadow-soft transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="flex w-full items-center justify-center gap-3 rounded-lg bg-green-600 hover:bg-green-700 px-4 py-3 text-base font-bold text-white shadow-soft transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <span className="material-symbols-outlined text-xl">task_alt</span>
                       View Requirements
@@ -804,16 +864,10 @@ export default function TranscriptPage() {
                   {transcriptApproval.all_members_approved ? " (all approved)" : " (waiting for members)"}
                 </p>
                 {needsTranslation && (
-                  <div className="flex flex-col gap-1.5 rounded-lg border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 px-3 py-2.5">
-                    <p className="text-xs font-semibold text-red-600 dark:text-red-400 flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-sm">warning</span>
-                      Translation required
-                    </p>
-                    <p className="text-xs text-red-500 dark:text-red-400 leading-relaxed">
-                      This transcript is non-English. Please use the{" "}
-                      <strong>Translation card below</strong> to translate it to English before extracting requirements.
-                    </p>
-                  </div>
+                  <p className="text-xs text-red-500 dark:text-red-400 text-center flex items-center justify-center gap-1">
+                    <span className="material-symbols-outlined text-sm">warning</span>
+                    Translate the transcript to English first
+                  </p>
                 )}
                 {hasTranslation && !needsTranslation && !existingRequirementId && (
                   <p className="text-xs text-amber-600 dark:text-amber-400 text-center">
@@ -830,11 +884,7 @@ export default function TranscriptPage() {
             </div>
 
             {/* Translation Card */}
-            <div className={`flex flex-col gap-4 bg-white dark:bg-background-dark/50 rounded-xl p-6 shadow-soft border transition-all duration-300
-              ${needsTranslation
-                ? "border-red-400 dark:border-red-600 ring-2 ring-red-300 dark:ring-red-700"
-                : "border-border-light dark:border-white/10"
-              }`}>
+            <div className="flex flex-col gap-4 bg-white dark:bg-background-dark/50 rounded-xl p-6 shadow-soft border border-border-light dark:border-white/10">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-amber-500 text-xl">translate</span>
                 <h3 className="text-base font-bold">Translation</h3>
