@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.session import Session as SessionModel
+from app.models.session_membership import SessionMembership
+from app.services import notification_service
 from app.services.translation_service import translate_session, get_translation
 
 router = APIRouter()
@@ -38,6 +40,21 @@ def translate(
 
     try:
         result = translate_session(db, session_id)
+        # ── Notify all session members ──────────────────────────────────────────
+        if not result.get("is_english"):   # no point notifying if nothing was translated
+            memberships = db.query(SessionMembership).filter(
+                SessionMembership.session_id == session_id
+            ).all()
+            for membership in memberships:
+                notification_service.create_notification(
+                    db,
+                    user_id=membership.user_id,
+                    notification_type="translation_done",
+                    title="Translation Ready",
+                    message=f'The translation for session "{session.title}" is ready for your review.',
+                    project_id=session.project_id,
+                )
+            db.commit() 
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except RuntimeError as re:

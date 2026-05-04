@@ -8,6 +8,9 @@ import uuid
 from app.db.session import get_db
 from app.models.session import Session as SessionModel
 from app.models.transcript import TranscriptSegment
+from app.models.session_membership import SessionMembership
+from app.services.notification_service import create_notification
+
 from app.services.transcription_service import (
     transcribe_audio,
     save_transcription,
@@ -18,6 +21,7 @@ from app.services.transcription_service import (
 )
 from app.models.project import Project
 from app.models.session_membership import SessionMembership
+from app.services import notification_service
 from app.models.user import User
 from app.dependencies.auth import get_current_user
 from app.services.audit_service import log_action
@@ -105,7 +109,23 @@ async def transcribe(
         # Persist the language detected by AssemblyAI immediately
         if detected_language:
             session.detected_language = detected_language
+        
 
+        db.commit()
+
+        # ── Notify all session members ──────────────────────────────────────────
+        memberships = db.query(SessionMembership).filter(
+            SessionMembership.session_id == session.id
+        ).all()
+        for membership in memberships:
+            notification_service.create_notification(
+                db,
+                user_id=membership.user_id,
+                notification_type="transcription_done",
+                title="Transcription Ready",
+                message=f'The transcription for session "{session.title}" is ready for your review.',
+                project_id=session.project_id,
+            )
         db.commit()
 
     except Exception as e:
@@ -185,6 +205,21 @@ def upload_transcript_text(
         except Exception as lang_err:
             print(f"Language detection failed (non-fatal): {lang_err}")
 
+        db.commit()
+
+        # ── Notify all session members ──────────────────────────────────────────
+        memberships = db.query(SessionMembership).filter(
+            SessionMembership.session_id == session.id
+        ).all()
+        for membership in memberships:
+            notification_service.create_notification(
+                db,
+                user_id=membership.user_id,
+                notification_type="transcription_done",
+                title="Transcription Ready",
+                message=f'The transcription for session "{session.title}" is ready for your review.',
+                project_id=session.project_id,
+            )
         db.commit()
 
     except ValueError as ve:
