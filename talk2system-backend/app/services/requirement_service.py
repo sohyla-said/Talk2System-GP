@@ -9,6 +9,8 @@ from app.models.session import Session
 from app.nlp.hybrid_engine import hybrid_inference
 from app.services.llm_service import extract_requirements
 import copy
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 
 logger = logging.getLogger(__name__)
@@ -106,10 +108,19 @@ class RequirementService:
         common_reqs = None
         diff_hybrid = None
         diff_llm = None
+
+        # Both engines produced results: compute common and differences
         if grouped_hybrid and grouped_llm:
             common_reqs = get_common_requirments(grouped_hybrid, grouped_llm)
             diff_hybrid = get_reqs_not_in_common(grouped_hybrid, common_reqs)
             diff_llm = get_reqs_not_in_common(grouped_llm, common_reqs)
+        # Only LLM produced results: surface them in the LLM-only bucket so the
+        # frontend can render functional/nonfunctional lists under "LLM Differences".
+        elif grouped_llm and not grouped_hybrid:
+            diff_llm = grouped_llm
+        # Only Hybrid produced results: surface them in the hybrid-only bucket.
+        elif grouped_hybrid and not grouped_llm:
+            diff_hybrid = grouped_hybrid
 
         return {
             "project_id": project_id,
@@ -562,21 +573,116 @@ def get_common_requirments(hybrid_req, llm_req):
             "nonfunctional_requirements": []
         }
 
+    # get common requirements by text
+    common_reqs_text = req_similarity_by_text(hybrid_req, llm_req)
+    # get common requirements semantically
+    common_reqs_semantic = req_similarity_semantically(hybrid_req, llm_req)
+
+    final_common = {
+            "functional_requirements": [],
+            "nonfunctional_requirements": []
+        }
+    # merge both text and semantic
+    for fr in common_reqs_text['functional_requirements']:
+        final_common['functional_requirements'].append(fr)
+
+    for fr in common_reqs_semantic['functional_requirements']:
+        final_common['functional_requirements'].append(fr)
+
+    for nfr in common_reqs_text['nonfunctional_requirements']:
+        final_common['nonfunctional_requirements'].append(nfr)
+
+    for nfr in common_reqs_semantic['nonfunctional_requirements']:
+        final_common['nonfunctional_requirements'].append(nfr)
+
+    return final_common
+
+# get similar requirements by text
+def req_similarity_by_text(req1, req2):
+    if not req1 or not req2:
+        return {
+            "functional_requirements": [],
+            "nonfunctional_requirements": []
+        }
+
     common_reqs = {
         "functional_requirements": [],
         "nonfunctional_requirements": []
     }
-    hybrid_frs = [fr['text'].strip().lower() for fr in hybrid_req.get('functional_requirements', [])]
-    for fr in llm_req.get('functional_requirements', []):
-        if fr['text'].strip().lower() in hybrid_frs:
+    req1_frs = [fr['text'].strip().lower() for fr in req1.get('functional_requirements', [])]
+    for fr in req2.get('functional_requirements', []):
+        if fr['text'].strip().lower() in req1_frs:
             common_reqs['functional_requirements'].append(fr)
 
-    hybrid_nfrs = [nfr['text'].strip().lower() for nfr in hybrid_req.get('nonfunctional_requirements', [])]
-    for nfr in llm_req.get('nonfunctional_requirements', []):
-        if nfr['text'].strip().lower() in hybrid_nfrs:
+    req1_nfrs = [nfr['text'].strip().lower() for nfr in req1.get('nonfunctional_requirements', [])]
+    for nfr in req2.get('nonfunctional_requirements', []):
+        if nfr['text'].strip().lower() in req1_nfrs:
             common_reqs['nonfunctional_requirements'].append(nfr)
 
     return common_reqs
+
+# get similary requirements semantically
+def req_similarity_semantically(req1, req2):
+    if not req1 or not req2:
+        return {
+            "functional_requirements": [],
+            "nonfunctional_requirements": []
+        }
+    
+    common_reqs = {
+        "functional_requirements": [],
+        "nonfunctional_requirements": []
+    }
+
+    common_reqs["functional_requirements"] = get_semantic_common(
+        req1.get("functional_requirements", []),
+        req2.get("functional_requirements", [])
+    )
+    common_reqs["nonfunctional_requirements"] = get_semantic_common(
+        req1.get("nonfunctional_requirements", []),
+        req2.get("nonfunctional_requirements", [])
+    )
+
+    return common_reqs
+    
+def get_semantic_common(base_items, candidate_items, threshold= 0.85):
+        if not base_items or not candidate_items:
+            return []
+
+        base_texts = [item.get("text", "").strip().lower() for item in base_items]
+        candidate_texts = [item.get("text", "").strip().lower() for item in candidate_items]
+
+        # If all texts are empty/blank, TF-IDF cannot be built.
+        if not any(base_texts) or not any(candidate_texts):
+            return []
+
+        all_texts = base_texts + candidate_texts
+
+        try:
+            vectors = TfidfVectorizer().fit_transform(all_texts)
+        except ValueError:
+            return []
+
+        # store how many requirements came from the first list (base set).
+        split_idx = len(base_items)
+
+        # compute cosine similarity only between the two groups:
+        # rows: base requirements
+        # columns: candidate requirements
+        sim_cross = cosine_similarity(vectors[:split_idx], vectors[split_idx:])
+
+        matches = []
+        seen_texts = set()
+        for candidate_idx, candidate in enumerate(candidate_items):
+            candidate_text = candidate.get("text", "").strip().lower()
+            if not candidate_text or candidate_text in seen_texts:
+                continue
+                # keep this sentence if any similarity is found in the base that is more than the threshold
+            if sim_cross[:, candidate_idx].max() >= threshold:
+                matches.append(candidate)
+                seen_texts.add(candidate_text)
+
+        return matches 
 
 def get_reqs_not_in_common(all_reqs, common_reqs):
     if not all_reqs:
@@ -638,6 +744,7 @@ def normalize_actor(actor, requirement_type=None):
 
 # Merge requirements from multiple sessions while preserving source session lineage.
 # When duplicate requirements are found, tracks all source sessions.
+# combine two grouped requirement payloads.
 def merge_requirements(old, new):
     merged = {
         "actors": list(set(old.get("actors", []) + new.get("actors", []))),
@@ -646,53 +753,6 @@ def merge_requirements(old, new):
         "features": list(set(old.get("features", []) + new.get("features", [])))
     }
     
-    # Merge items while preserving source session info and detecting duplicates
-    def merge_items_with_source(old_items, new_items):
-        seen = {}
-        result = []
-        
-        for item in old_items + new_items:
-            text_key = item["text"].strip().lower()
-            
-            if text_key not in seen:
-                # First occurrence: create entry with single source
-                item_copy = item.copy()
-                seen[text_key] = item_copy
-                result.append(item_copy)
-            else:
-                # Duplicate found: merge source session tracking
-                current_src = item.get("src_session_id")
-                current_title = item.get("src_session_title")
-                existing_item = seen[text_key]
-                
-                if current_src is not None:
-                    # Initialize src_session_ids list if not present
-                    if "src_session_ids" not in existing_item:
-                        existing_src = existing_item.get("src_session_id")
-                        if existing_src is not None:
-                            existing_item["src_session_ids"] = [existing_src]
-                        else:
-                            existing_item["src_session_ids"] = []
-                    
-                    # Add new source if not already tracked
-                    if current_src not in existing_item["src_session_ids"]:
-                        existing_item["src_session_ids"].append(current_src)
-
-                if current_title:
-                    # Initialize src_session_titles list if not present
-                    if "src_session_titles" not in existing_item:
-                        existing_title = existing_item.get("src_session_title")
-                        if existing_title:
-                            existing_item["src_session_titles"] = [existing_title]
-                        else:
-                            existing_item["src_session_titles"] = []
-
-                    # Add new title if not already tracked
-                    if current_title not in existing_item["src_session_titles"]:
-                        existing_item["src_session_titles"].append(current_title)
-        
-        return result
-
     # Merge FRs with source tracking
     merged["functional_requirements"] = merge_items_with_source(
         old.get("functional_requirements", []),
@@ -706,3 +766,75 @@ def merge_requirements(old, new):
     )
 
     return merged
+
+# helper to merge two item lists with semantic duplicate handling and source tracking.
+def merge_items_with_source(old_items, new_items, semantic_threshold = 0.85):
+        seen = {}   # dict for fast exact-text lookup.
+        result = [] # list that will store final merged items.
+
+        # copy source-session metadata from incoming item into existing merged item.
+        def append_source_tracking(existing_item, incoming_item):
+            current_src = incoming_item.get("src_session_id")
+            current_title = incoming_item.get("src_session_title")
+
+            if current_src is not None:
+                # Initialize src_session_ids list if not present
+                if "src_session_ids" not in existing_item:
+                    existing_src = existing_item.get("src_session_id")
+                    if existing_src is not None:
+                        existing_item["src_session_ids"] = [existing_src]
+                    else:
+                        existing_item["src_session_ids"] = []
+
+                # Add new source if not already tracked
+                if current_src not in existing_item["src_session_ids"]:
+                    existing_item["src_session_ids"].append(current_src)
+
+            if current_title:
+                # Initialize src_session_titles list if not present
+                if "src_session_titles" not in existing_item:
+                    existing_title = existing_item.get("src_session_title")
+                    if existing_title:
+                        existing_item["src_session_titles"] = [existing_title]
+                    else:
+                        existing_item["src_session_titles"] = []
+
+                # Add new title if not already tracked
+                if current_title not in existing_item["src_session_titles"]:
+                    existing_item["src_session_titles"].append(current_title)
+
+
+        def find_existing_match(item):
+            text_key = item.get("text", "").strip().lower()
+            if not text_key:
+                return None, text_key
+
+            # Fast path: exact text match
+            if text_key in seen:
+                return seen[text_key], text_key
+
+            # Semantic path: if any existing merged item is similar enough, reuse it.
+            for existing_item in result:
+                if get_semantic_common([existing_item], [item], threshold=semantic_threshold):
+                    return existing_item, text_key
+
+            return None, text_key
+        
+        for item in old_items + new_items:
+            matched_item, text_key = find_existing_match(item)
+
+            if matched_item is None:
+                # First occurrence: create entry with single source
+                item_copy = item.copy()
+                result.append(item_copy)
+                if text_key:
+                    seen[text_key] = item_copy
+            else:
+                # Duplicate found: merge source session tracking
+                append_source_tracking(matched_item, item)
+
+                # Cache exact text of this incoming variant for faster future matches.
+                if text_key:
+                    seen[text_key] = matched_item
+        
+        return result

@@ -607,7 +607,7 @@ const handleApprove = async () => {
               </button>
               <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
               <button 
-                onClick={() => navigate(`/transcript/${sessionId}`)}
+                onClick={() => navigate(`/projects/${projectId}/sessions/${sessionId}/sessiondetails`)}
                 className="text-primary-accent dark:text-secondary-accent font-medium leading-normal"
               >
                 {sessionName}
@@ -691,18 +691,6 @@ const handleApprove = async () => {
             Requirements
           </button>
           
-          <button 
-            onClick={() => navigate(`/transcript/${sessionId}`)}
-            className="text-slate-500 dark:text-slate-400 pb-3 text-sm font-medium leading-normal hover:text-slate-800 dark:hover:text-slate-200 transition-colors whitespace-nowrap"
-          >
-            Transcript
-          </button>
-          <button 
-            onClick={() => navigate(`/projects/${projectId}/sessions/${sessionId}/artifacts`)}
-            className="text-slate-500 dark:text-slate-400 pb-3 text-sm font-medium leading-normal hover:text-slate-800 dark:hover:text-slate-200 transition-colors whitespace-nowrap"
-          >
-            Artifacts
-          </button>
         </div>
         {hasExtractedRequirements ? (
           <>
