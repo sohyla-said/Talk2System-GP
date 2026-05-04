@@ -216,21 +216,35 @@ def upload_transcript_text(
 # GET TRANSCRIPT  (existing — unchanged)
 # ---------------------------------------------------------------------------
 
+
 @router.get("/sessions/{session_id}/transcript")
 def get_transcript(session_id: int, db: Session = Depends(get_db)):
-    print("Requested session:", session_id)
-
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    
-    transcript_obj = db.query(TranscriptSegment).filter(TranscriptSegment.session_id == session_id).first()
+
+    transcript_obj = db.query(TranscriptSegment).filter(
+        TranscriptSegment.session_id == session_id
+    ).first()
     if not transcript_obj:
         raise HTTPException(status_code=404, detail="Transcript not found")
 
     transcript = get_transcript_by_session(db, session_id)
 
-    print("Found segments:", len(transcript))
+    # ── Detect language on first fetch if not yet stored ────────────────────
+    # This ensures needsTranslation works on the frontend even before the user
+    # clicks Translate, because session.detected_language would otherwise be
+    # null for brand-new sessions and the block condition would never trigger.
+    if session.detected_language is None and transcript:
+        try:
+            from app.services.translation_service import detect_language_only
+            detected = detect_language_only(transcript)
+            if detected:
+                session.detected_language = detected
+                db.commit()
+        except Exception:
+            pass  # detection is best-effort; never block the transcript fetch
+    # ────────────────────────────────────────────────────────────────────────
 
     if not transcript:
         return {
@@ -239,6 +253,7 @@ def get_transcript(session_id: int, db: Session = Depends(get_db)):
             "title": session.title,
             "transcript": [],
             "approval_status": transcript_obj.approval_status or "pending",
+            "detected_language": session.detected_language,
         }
 
     return {
@@ -247,6 +262,7 @@ def get_transcript(session_id: int, db: Session = Depends(get_db)):
         "title": session.title,
         "transcript": transcript,
         "approval_status": transcript_obj.approval_status or "pending",
+        "detected_language": session.detected_language,
     }
 
 

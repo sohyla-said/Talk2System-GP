@@ -15,7 +15,7 @@ def generate_summary(transcript: str) -> str:
     1. Short Summary (3-4 sentences)
     2. Key Points (bullet points) Max 6
     
-    Return plain text only. Do not use markdown, hashtags, or any special formatting symbols.
+    Return plain text only in English. Do not use markdown, hashtags, or any special formatting symbols.
 
     Transcript:
     {transcript}
