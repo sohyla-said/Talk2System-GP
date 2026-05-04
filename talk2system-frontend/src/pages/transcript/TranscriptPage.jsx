@@ -605,9 +605,28 @@ export default function TranscriptPage() {
   return (
     <div className="relative flex min-h-screen w-full flex-col bg-background-light dark:bg-background-dark font-display text-text-dark dark:text-text-light overflow-x-hidden">
       <main className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
+                    {/* Breadcrumb */}
+            <div className="flex flex-wrap gap-3 text-sm">
+              <button
+                onClick={() => navigate("/projects")}
+                className="text-primary-accent dark:text-secondary-accent font-medium leading-normal"
+              >
+                Projects
+              </button>
+              <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
+              <button
+                onClick={() => navigate(`/projects/${projectId}`)}
+                className="text-primary-accent dark:text-secondary-accent font-medium leading-normal"
+              >
+                Project #{projectId}
+              </button>
+              <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
+              <span className="text-text-dark dark:text-text-light font-medium leading-normal">
+                Transcript
+              </span>
+            </div>
         {/* ── Page header ── */}
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+        <div className="flex flex-wrap items-center justify-between gap-6 mb-8">
           <div>
             <h1 className="text-2xl font-black">{sessionTitle || "Session Transcript"}</h1>
             <p className="text-sm text-text-dark/50 dark:text-text-light/50 mt-1">
@@ -630,6 +649,7 @@ export default function TranscriptPage() {
               )}
             </p>
           </div>
+          
 
           <div className="flex flex-wrap items-center gap-3">
             <button
