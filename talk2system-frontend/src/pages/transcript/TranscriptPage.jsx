@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import TranscriptApprovalModal from "../../components/modals/TranscriptApprovalModal";
 import TranscriptEditModal from "../../components/modals/TranscriptEditModal";
@@ -48,18 +48,29 @@ export default function TranscriptPage() {
 
   // ── Translation state ────────────────────────────────────────────────────
   const [detectedLanguage, setDetectedLanguage] = useState(null);
-  const [isTranslating, setIsTranslating] = useState(false);  // background translation in progress
+  const [isTranslating, setIsTranslating] = useState(false);
   const [translationData, setTranslationData] = useState(null);
+
+  // ── Ref guard: prevents auto-translate from firing more than once ────────
+  // Set to true when either a valid cached translation is loaded OR a fresh
+  // background translation is kicked off — whichever happens first.
+  const translationTriggeredRef = useRef(false);
 
   // ── Multi-select & delete ────────────────────────────────────────────────
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // ── Derived: which segments are currently shown ──────────────────────────
-  const hasTranslation = !!(translationData && !translationData.is_english);
+  // ── Derived ──────────────────────────────────────────────────────────────
+  // A translation is "ready" when we have segments and the transcript is not English.
+  const hasTranslation = !!(
+    translationData &&
+    !translationData.is_english &&
+    Array.isArray(translationData.translated_segments) &&
+    translationData.translated_segments.length > 0
+  );
 
-  // Condition used to auto-trigger background translation
+  // True when we know the session is non-English (from any source).
   const shouldAutoTranslate =
     (detectedLanguage !== null && detectedLanguage !== "english") ||
     (translationData !== null && translationData.is_english === false);
@@ -72,26 +83,32 @@ export default function TranscriptPage() {
       .filter((item) => item.text && item.text.trim())
       .map((item) => {
         const spk = (item.speaker || item.name || "").trim();
-        // Include speaker label only when present
         return spk ? `${spk}: "${item.text.trim()}"` : item.text.trim();
       })
       .join("\n");
 
+  /**
+   * Returns the transcript text to send to the extraction endpoint.
+   * - Non-English + translation ready  → translated segments (English)
+   * - Non-English + translation NOT ready → returns null (caller must block)
+   * - English → original segments
+   */
   const getTranscriptTextForExtraction = () => {
-    if (hasTranslation && translationData?.translated_segments?.length) {
-      // Rebuild from segments with quoted format "Speaker A: \"text\""
-      // which is what the LLM prompt and hybrid pipeline expect.
-      return translationData.translated_segments
-        .filter((s) => s.text?.trim())
-        .map((s) => {
-          const spk = (s.speaker || s.name || "").trim();
-          return spk
-            ? `${spk}: "${s.text.trim()}"`
-            : `"${s.text.trim()}"`;
-        })
-        .join("\n");
+    if (shouldAutoTranslate) {
+      // We know the session is non-English — only proceed if translation is ready
+      if (hasTranslation) {
+        return translationData.translated_segments
+          .filter((s) => s.text?.trim())
+          .map((s) => {
+            const spk = (s.speaker || s.name || "").trim();
+            return spk ? `${spk}: "${s.text.trim()}"` : `"${s.text.trim()}"`;
+          })
+          .join("\n");
+      }
+      // Translation not ready yet — signal to caller to block
+      return null;
     }
-    // English transcript — use original segments (already in correct format)
+    // English transcript — use original segments
     return formatSegmentsForBackend(transcriptData);
   };
 
@@ -111,7 +128,7 @@ export default function TranscriptPage() {
           (data.transcript || []).map((seg, i) => ({
             ...seg,
             id: i + 1,
-            name: seg.speaker || "",   // edit modal reads .name
+            name: seg.speaker || "",
           }))
         );
         setProjectId(data.project_id);
@@ -127,7 +144,7 @@ export default function TranscriptPage() {
     fetchTranscript();
   }, [sessionId]);
 
-  // ── Fetch transcript approval ───────────────────────────────────────────────
+  // ── Fetch transcript approval ─────────────────────────────────────────────
   useEffect(() => {
     const fetchTranscriptApproval = async () => {
       try {
@@ -173,6 +190,8 @@ export default function TranscriptPage() {
   }, [projectId, sessionId]);
 
   // ── Load cached translation ──────────────────────────────────────────────
+  // Runs once on mount. If a valid cached translation is found, lock the ref
+  // immediately so the auto-trigger effect never fires a redundant POST.
   useEffect(() => {
     const fetchCached = async () => {
       try {
@@ -187,30 +206,49 @@ export default function TranscriptPage() {
           if (data && !data.is_english) {
             setDetectedLanguage(data.detected_language);
           }
+          // If we got valid translated segments, mark as done so the
+          // auto-trigger below never fires an unnecessary POST.
+          if (
+            data &&
+            !data.is_english &&
+            Array.isArray(data.translated_segments) &&
+            data.translated_segments.length > 0
+          ) {
+            translationTriggeredRef.current = true;
+          }
         }
       } catch {
-        // no cached translation — fine
+        // No cached translation — leave ref false so auto-trigger can fire.
       }
     };
     fetchCached();
   }, [sessionId]);
 
-  // ── Auto-trigger background translation when language is non-English ──────
-  // Runs after both detectedLanguage and transcriptData are available.
-  // Only fires if no translation exists yet (translationData is null).
+  // ── Auto-trigger background translation ──────────────────────────────────
+  // Fires when:
+  //   1. The session is non-English (detectedLanguage or translationData says so)
+  //   2. No translation is loaded yet (translationData === null)
+  //   3. A translation isn't already running
+  //   4. We have transcript segments to translate
+  //   5. We haven't already triggered (or loaded from cache) a translation
+  //
+  // translationData is included in the dep array so that if the cached-fetch
+  // effect resolves after this one, a re-evaluation happens correctly.
   useEffect(() => {
     if (
       shouldAutoTranslate &&
       translationData === null &&
       !isTranslating &&
-      transcriptData.length > 0
+      transcriptData.length > 0 &&
+      !translationTriggeredRef.current
     ) {
+      translationTriggeredRef.current = true;
       runBackgroundTranslation();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detectedLanguage, transcriptData.length]);
+  }, [detectedLanguage, transcriptData.length, translationData]);
 
-  // ── Background translation (automatic, invisible to user) ───────────────
+  // ── Background translation ───────────────────────────────────────────────
   const runBackgroundTranslation = async () => {
     setIsTranslating(true);
     try {
@@ -221,14 +259,18 @@ export default function TranscriptPage() {
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Translation failed");
+
+      // Store result — this is what getTranscriptTextForExtraction() reads.
       setTranslationData(data);
       if (!data.is_english) {
         setDetectedLanguage(data.detected_language);
-        // Don't auto-switch view — user is reading original, let them toggle if they want
       }
+    // AFTER:
     } catch (err) {
       console.error("[background translation failed]", err);
-      // Silent failure — do not show error to user
+      // Surface the failure so the user knows extraction won't work
+      // (don't alert() here as it's background, but set a flag so the UI can warn)
+      setTranslationData(null); // ensure hasTranslation stays false
     } finally {
       setIsTranslating(false);
     }
@@ -337,23 +379,20 @@ export default function TranscriptPage() {
     }
   };
 
-  const handleGenerate = (type) => {
+  const handleGenerate = (type , forceReExtract = false) => {
     if (type === "req") {
-      // Gate 1: all members must approve
       if (!transcriptApproval.all_members_approved) {
         alert(
           `All session members must approve the transcript first (${transcriptApproval.approved_members_count}/${transcriptApproval.total_members_count}).`
         );
         return;
       }
-      // Gate 3: current user must approve (opens modal, resumes after)
       if (!approved) {
         setPendingNavigation(type);
         setShowModal(true);
         return;
       }
-      // All gates passed — view existing or extract new
-      if (existingRequirementId) {
+      if (existingRequirementId && !forceReExtract) {
         navigate(`/projects/${projectId}/session/${sessionId}/requirements/${existingRequirementId}`);
         return;
       }
@@ -373,16 +412,35 @@ export default function TranscriptPage() {
   const extractRequirements = async (engine) => {
     if (!projectId) { alert("Project ID could not be resolved."); return; }
 
-    // If background translation is still running for a non-English transcript,
-    // wait for it to finish before sending the extraction request.
+    // Block if translation is still running in the background.
+    // AFTER:
     if (isTranslating) {
       alert("The transcript is being translated in the background. Please wait a moment and try again.");
       return;
     }
 
+    // If this is a non-English session but translation hasn't been fetched/cached yet,
+    // trigger it now and block extraction until it finishes.
+    if (shouldAutoTranslate && !translationData) {
+      alert("Translation is not ready yet. Retrying translation — please wait a moment and try again.");
+      runBackgroundTranslation(); // re-trigger in case it silently failed
+      return;
+    }
+
+    // Block if the session is non-English but translation hasn't completed yet.
+    // This guards against the window where isTranslating is false but
+    // translationData is still null (e.g. translation failed silently).
+    const transcriptText = getTranscriptTextForExtraction();
+    if (transcriptText === null) {
+      alert(
+        "Translation is not ready yet. Please wait a moment and try again. " +
+        "If this persists, refresh the page."
+      );
+      return;
+    }
+
     setIsSubmittingReq(true);
     try {
-      const transcriptText = getTranscriptTextForExtraction();
       const response = await fetch(
         `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/extract-requirements`,
         {
@@ -397,7 +455,6 @@ export default function TranscriptPage() {
       }
 
       if (engine === "both") {
-        // Navigate to choice page — state keys must match what RequirementsChoicePage reads
         navigate(`/transcript/${sessionId}/requirements/choice`, {
           state: {
             projectId,
@@ -412,7 +469,6 @@ export default function TranscriptPage() {
           },
         });
       } else if (engine === "hybrid") {
-        // Save preferred immediately then navigate to requirements view
         try {
           await fetch(
             `http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/choose-requirements`,
@@ -481,12 +537,10 @@ export default function TranscriptPage() {
     if (!selectedIds.size) return;
     setIsDeleting(true);
 
-    // Convert frontend ids (1-based) to 0-based segment indices
     const indices = [...selectedIds].map((id) => id - 1).sort((a, b) => a - b);
 
     try {
       const token = getToken();
-
       const res = await fetch(
         `http://localhost:8000/api/sessions/${sessionId}/transcript/segments`,
         {
@@ -543,6 +597,10 @@ export default function TranscriptPage() {
     );
   }
 
+  // ── Derived button-disable logic ─────────────────────────────────────────
+  // For non-English sessions: block extraction until translation is ready.
+  const translationPending = shouldAutoTranslate && !hasTranslation;
+
   // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="relative flex min-h-screen w-full flex-col bg-background-light dark:bg-background-dark font-display text-text-dark dark:text-text-light overflow-x-hidden">
@@ -554,7 +612,22 @@ export default function TranscriptPage() {
             <h1 className="text-2xl font-black">{sessionTitle || "Session Transcript"}</h1>
             <p className="text-sm text-text-dark/50 dark:text-text-light/50 mt-1">
               {activeSegments.length} segment{activeSegments.length !== 1 ? "s" : ""}
-
+              {/* Show a subtle inline badge while background translation is running */}
+              {isTranslating && (
+                <span className="ml-3 inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 font-medium">
+                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  Translating…
+                </span>
+              )}
+              {hasTranslation && !isTranslating && (
+                <span className="ml-3 inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium">
+                  <span className="material-symbols-outlined text-sm">translate</span>
+                  Translation ready
+                </span>
+              )}
             </p>
           </div>
 
@@ -667,7 +740,6 @@ export default function TranscriptPage() {
                           {speaker.start_time}{speaker.end_time ? ` – ${speaker.end_time}` : ""}
                         </span>
                       )}
-
                     </div>
                     {!selectionMode && (
                       <button
@@ -704,25 +776,32 @@ export default function TranscriptPage() {
                 {existingRequirementId ? (
                   <div className="flex flex-col gap-2">
                     <button
-                      onClick={() => handleGenerate("req")}
-                      disabled={isTranslating || !transcriptApproval.all_members_approved}
-                      className="flex w-full items-center justify-center gap-3 rounded-lg bg-green-600 hover:bg-green-700 px-4 py-3 text-base font-bold text-white shadow-soft transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => navigate(`/transcript/${sessionId}/requirements`)}
+                      className="flex w-full items-center justify-center gap-3 rounded-lg bg-green-600 hover:bg-green-700 px-4 py-3 text-base font-bold text-white shadow-soft transition-colors"
                     >
                       <span className="material-symbols-outlined text-xl">task_alt</span>
                       View Requirements
                     </button>
                     <button
-                      onClick={() => handleGenerate("req")}
-                      disabled={isSubmittingReq || isCheckingReq || isTranslating || !transcriptApproval.all_members_approved}
+                      onClick={() => handleGenerate("req", true)}
+                      disabled={isSubmittingReq || isCheckingReq || isTranslating || (shouldAutoTranslate && !translationData)}
                       className="flex w-full items-center justify-center gap-3 rounded-lg border border-primary-accent/50 bg-transparent px-4 py-2.5 text-sm font-semibold text-primary-accent hover:bg-primary-accent/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {isSubmittingReq ? (
+                      {isSubmittingReq || isCheckingReq ? (
                         <>
                           <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                           </svg>
-                          Processing…
+                          {isCheckingReq ? "Checking…" : "Processing…"}
+                        </>
+                      ) : translationPending ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                          </svg>
+                          Translating…
                         </>
                       ) : (
                         <>
@@ -735,7 +814,7 @@ export default function TranscriptPage() {
                 ) : (
                   <button
                     onClick={() => handleGenerate("req")}
-                    disabled={isSubmittingReq || isCheckingReq || isTranslating || !transcriptApproval.all_members_approved}
+                    disabled={isSubmittingReq || isTranslating || (shouldAutoTranslate && !translationData)}
                     className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-primary-accent/90 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {isSubmittingReq || isCheckingReq ? (
@@ -746,11 +825,18 @@ export default function TranscriptPage() {
                         </svg>
                         {isCheckingReq ? "Checking…" : "Processing…"}
                       </>
+                    ) : translationPending ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                        </svg>
+                        Translating…
+                      </>
                     ) : (
                       <>
                         <span className="material-symbols-outlined text-xl">checklist</span>
                         Extract Requirements
-
                       </>
                     )}
                   </button>
@@ -776,6 +862,22 @@ export default function TranscriptPage() {
                   {transcriptApproval.all_members_approved ? " (all approved)" : " (waiting for members)"}
                 </p>
 
+                {/* Translation status hint for non-English sessions */}
+                {shouldAutoTranslate && (
+                  <p className={`text-xs text-center flex items-center justify-center gap-1 ${
+                    hasTranslation
+                      ? "text-green-600 dark:text-green-400"
+                      : "text-amber-600 dark:text-amber-400"
+                  }`}>
+                    <span className="material-symbols-outlined text-sm">
+                      {hasTranslation ? "translate" : "hourglass_top"}
+                    </span>
+                    {hasTranslation
+                      ? `Translated from ${detectedLanguage} — extraction ready`
+                      : `Translating from ${detectedLanguage || "detected language"}…`}
+                  </p>
+                )}
+
                 {existingRequirementId && (
                   <p className="text-xs text-blue-600 dark:text-blue-400 text-center flex items-center justify-center gap-1">
                     <span className="material-symbols-outlined text-sm">info</span>
@@ -784,8 +886,6 @@ export default function TranscriptPage() {
                 )}
               </div>
             </div>
-
-
 
             {/* AssemblyAI Model Info Card */}
             <div className="flex flex-col gap-4 bg-gradient-to-br from-[#f0eeff] to-[#e9f0ff] dark:from-[#1a1830] dark:to-[#151c30] rounded-xl p-6 shadow-soft border border-[#ddd9f0] dark:border-[#2e2a4a]">
@@ -880,9 +980,6 @@ export default function TranscriptPage() {
         />
       )}
 
-      {/* key={editingSpeaker?.id} remounts the modal fresh for each segment,
-          which lets TranscriptEditModal initialise state directly from props
-          without needing a useEffect — avoids the setState-in-effect warning. */}
       {showEditModal && editingSpeaker && (
         <TranscriptEditModal
           key={editingSpeaker.id}
