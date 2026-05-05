@@ -8,7 +8,8 @@ from app.models.background_task import BackgroundTask
 from app.models.project import Project
 from app.models.session import Session
 from app.nlp.hybrid_engine import hybrid_inference
-from app.services.llm_service import extract_requirements
+from app.services import llm_service
+from app.services import gemini_service
 import copy
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -42,6 +43,7 @@ class RequirementService:
 
         hybrid_results = None
         llm_results = None
+        gemini_results = None
 
         if engine in ['hybrid', 'both']:
         # Step 1: Run NLP pipeline
@@ -49,7 +51,7 @@ class RequirementService:
 
         if engine in ['llm', 'both']:
             try:
-                llm_raw = extract_requirements(transcript)
+                llm_raw = llm_service.extract_requirements(transcript)
                 llm_results = adapt_llm_output(llm_raw)
             except Exception as exc:
                 # Surface LLM runner failures so callers / background worker
@@ -58,20 +60,31 @@ class RequirementService:
                 # visible and handled by the caller.
                 logger.exception("LLM extraction failed")
                 raise ValueError(f"LLM extraction failed: {exc}")
+            
+        if engine == 'gemini':
+            try:
+                gemini_raw = gemini_service.extract_requirements(transcript)
+                gemini_results = adapt_llm_output(gemini_raw)
+            except Exception as exc:
+                logger.exception("Gemini extraction failed")
+                raise ValueError(f"Gemini extraction failed: {exc}")
 
         # Step 2: Group/Transform resuts
         grouped_hybrid = group_requirements(hybrid_results) if hybrid_results else None
         grouped_llm = group_requirements(llm_results) if llm_results else None
+        grouped_gemini = group_requirements(gemini_results) if gemini_results else None
 
         # Keep grouped data deterministic and easier to review in UI/DB.
         grouped_hybrid = sort_grouped_requirements(grouped_hybrid) if grouped_hybrid else None
         grouped_llm = sort_grouped_requirements(grouped_llm) if grouped_llm else None
+        grouped_gemini = sort_grouped_requirements(grouped_gemini) if grouped_gemini else None
 
-        if not grouped_hybrid and not grouped_llm:
+        if not grouped_hybrid and not grouped_llm and not grouped_gemini:
             raise ValueError("No requirements could be extracted from the selected engine")
 
         db_run_llm = None
         db_run_hybrid = None
+        db_run_gemini = None
 
         try:
             if grouped_llm:
@@ -92,6 +105,15 @@ class RequirementService:
                 )
                 db.add(db_run_hybrid)
 
+            if grouped_gemini:
+                db_run_gemini = RequirementRun(
+                    project_id=project_id,
+                    session_id = session_id,
+                    run_type="gemini",
+                    grouped_json=grouped_gemini
+                )
+                db.add(db_run_gemini)
+
             db.flush()  # REQUIRED for IDs
 
             if db_run_llm and llm_results:
@@ -106,6 +128,12 @@ class RequirementService:
                     raw_json=hybrid_results
                 ))
 
+            if db_run_gemini and gemini_results:
+                db.add(RequirementRaw(
+                    run_id=db_run_gemini.id,
+                    raw_json=gemini_results
+                ))
+
             db.commit()
 
         except Exception:
@@ -116,6 +144,7 @@ class RequirementService:
             "project_id": project_id,
             "hybrid_run_id": db_run_hybrid.id if db_run_hybrid else None,
             "llm_run_id": db_run_llm.id if db_run_llm else None,
+            "gemini_run_id": db_run_gemini.id if db_run_gemini else None
             
         }
     
@@ -528,10 +557,17 @@ def run_async_extraction_task(task_id: int, project_id: int, session_id: int, tr
         # run the full extraction pipeline
         result = RequirementService.extract_and_store_requirements(db=db, project_id=project_id, session_id=session_id, transcript=transcript, engine=engine)
 
-        if engine in ("hybrid", "llm"):
+        if engine in ("hybrid", "llm", 'gemini'):
             # Single-engine: auto-save preferred and record the session_req_id
-            preferred_run_id = result.get("hybrid_run_id") if engine == "hybrid" else result.get("llm_run_id")
-            grouped = result.get("hybrid") if engine == "hybrid" else result.get("llm")
+            preferred_run_id = None
+            if engine == 'hybrid':
+                preferred_run_id = result.get('hybrid_run_id')
+            elif engine == 'llm':
+                preferred_run_id = result.get("llm_run_id")
+            else:
+                preferred_run_id = result.get("gemini_run_id")
+            run = RequirementService.get_req_run_by_id(db, preferred_run_id)
+            grouped = run.grouped_json
             saved = RequirementService.save_preferred_requirements(
                 db=db,
                 project_id=project_id,

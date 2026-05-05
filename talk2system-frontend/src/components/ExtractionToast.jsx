@@ -15,7 +15,7 @@ export default function ExtractionToast({
     "Something went wrong. You can retry or dismiss.";
 
   // ─── Derive intent from task output ──────────────────────────────────────
-  const engine       = taskOutput?.engine;          // "hybrid" | "llm" | "both"
+  const engine       = taskOutput?.engine;          // "hybrid" | "llm" | "both" | "gemini"
   const isBoth       = engine === "both";
 
   // ─── Navigation handlers ─────────────────────────────────────────────────

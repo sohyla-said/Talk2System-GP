@@ -5,12 +5,20 @@ import { useState, useEffect } from "react";
  *
  * Props:
  *   open        – boolean, controls visibility
- *   onClose     – () => void
+      desc: "Uses the language model directly for flexible, context-aware requirement extraction.",
+      metrics: [
+        { label: "Params", value: "7B" },
+        { label: "Latency", value: "~120ms (inference)" },
+        { label: "MMLU", value: "72%" },
+        { label: "Throughput", value: "~30 req/s" },
+      ],
+      learnMoreUrl: "https://example.com/qwen-2.5-benchmarks",
  *   onConfirm   – (engine: "both" | "hybrid" | "llm") => void
  *   isLoading   – boolean, shows spinner on confirm button while API is running
  */
 export default function EngineChoiceModal({ open, onClose, onConfirm, isLoading = false }) {
   const [selected, setSelected] = useState("both");
+  const [expandedMetrics, setExpandedMetrics] = useState(null);
 
   // Reset selection every time the modal opens
   useEffect(() => {
@@ -37,6 +45,12 @@ export default function EngineChoiceModal({ open, onClose, onConfirm, isLoading 
       label: "Hybrid Engine",
       sublabel: "Rule-based + ML fusion",
       desc: "Combines structured rule extraction with AI reasoning for precise, traceable requirements.",
+      metrics: [
+        { label: "Over all Accuracy", value: "~96%" },
+        { label: "FR Accuracy", value: "~97%" },
+        { label: "NFR Accuracy", value: "~95%" },
+        { label: "Error Rate", value: "~4%" },
+      ],
       accent: "from-[#0ea5e9] to-[#38bdf8]",
       ring: "ring-[#0ea5e9]",
       bg: "bg-[#e0f2fe] dark:bg-[#0c2a3a]",
@@ -46,8 +60,35 @@ export default function EngineChoiceModal({ open, onClose, onConfirm, isLoading 
       id: "llm",
       icon: "psychology",
       label: "LLM Engine",
-      sublabel: "Pure language model",
+      sublabel: "Qwen 2.5:7B",
       desc: "Uses the language model directly for flexible, context-aware requirement extraction.",
+      metrics: [
+        { label: "General understanding (MMLU)", value: "~74%" },
+        { label: "Reasoning  (BBH)", value: "~70%" },
+        { label: "Requirement Extraction Accuracy", value: "~85%" },
+        { label: "Error Rate", value: "~10%" },
+        { label: "Consistency", value: "~85%" },
+      ],
+      learnMoreUrl: "https://qwen.ai/blog?id=qwen2.5",
+      accent: "from-[#10b981] to-[#34d399]",
+      ring: "ring-[#10b981]",
+      bg: "bg-[#d1fae5] dark:bg-[#052e1c]",
+      iconColor: "text-[#10b981]",
+    },
+    {
+      id: "gemini",
+      icon: "auto_graph",
+      label: "Gemini API",
+      sublabel: "Gemini 2.5 pro",
+      desc: "Uses the Gemini model directly for advanced reasoning layer and enhanced requirement extraction.",
+      metrics: [
+        { label: "General understanding (MMLU)", value: "~90–92%" },
+        { label: "Reasoning (BBH)", value: "~88–92%" },
+        { label: "Requirement Extraction Accuracy", value: "~90–95%" },
+        { label: "Error Rate", value: "~5–10%" },
+        { label: "Consistency", value: "~90–95%" }
+      ],
+      learnMoreUrl: "https://blog.google/innovation-and-ai/models-and-research/google-deepmind/gemini-model-thinking-updates-march-2025/#gemini-2-5-pro",
       accent: "from-[#10b981] to-[#34d399]",
       ring: "ring-[#10b981]",
       bg: "bg-[#d1fae5] dark:bg-[#052e1c]",
@@ -99,7 +140,7 @@ export default function EngineChoiceModal({ open, onClose, onConfirm, isLoading 
           </div>
 
           {/* Options */}
-          <div className="px-6 py-5 flex flex-col gap-3">
+          <div className="px-6 py-5 flex flex-col gap-3 max-h-[calc(100vh-280px)] overflow-y-auto">
             {options.map((opt) => {
               const isSelected = selected === opt.id;
               return (
@@ -141,6 +182,35 @@ export default function EngineChoiceModal({ open, onClose, onConfirm, isLoading 
                     <p className="text-[#57499c] dark:text-[#9b92c8] text-xs mt-1 leading-relaxed">
                       {opt.desc}
                     </p>
+                    <div className="mt-2 flex gap-2">
+                      {opt.metrics && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedMetrics(expandedMetrics === opt.id ? null : opt.id);
+                          }}
+                          className="text-xs font-semibold text-[#6c5fc7] dark:text-[#a99df5] hover:underline"
+                        >
+                          {expandedMetrics === opt.id ? "Hide Metrics" : "View Metrics"}
+                        </button>
+                      )}
+                      {opt.learnMoreUrl && (
+                        <a href={opt.learnMoreUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold text-[#6c5fc7] dark:text-[#a99df5] hover:underline inline-flex items-center gap-1">
+                          Learn more
+                          <span className="material-symbols-outlined text-[12px]">open_in_new</span>
+                        </a>
+                      )}
+                    </div>
+                    {opt.metrics && expandedMetrics === opt.id && (
+                      <div className="mt-3 flex flex-wrap gap-2 pt-3 border-t border-[#e9e7f4] dark:border-[#2e2a4a]">
+                        {opt.metrics.map((m) => (
+                          <span key={m.label} className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#f3f4f6] dark:bg-[#131224] text-[#374151] dark:text-[#d1d5db]">
+                            <strong className="mr-1">{m.label}:</strong>
+                            {m.value}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Radio dot */}

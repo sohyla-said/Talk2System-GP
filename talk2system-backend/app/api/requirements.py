@@ -54,6 +54,7 @@ def extract_requirements(
             "message": "Requirements extracted and stored successfully",
             "LLM_run_id": result['llm_run_id'],
             "Hybrid_run_id": result['hybrid_run_id'],
+            "Gemini_run_id": result['gemini_run_id']
 
         }
     except ValueError as e:
