@@ -1,6 +1,6 @@
 from sqlalchemy import Column, String, DateTime ,Integer
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from app.db.base import Base
 
 
@@ -11,7 +11,7 @@ class Project(Base):
     name = Column(String(50), nullable=False)
     description = Column(String)
     domain = Column(String(50))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     project_status = Column(String, default="Active")
 
     # relationships
@@ -32,5 +32,5 @@ class Project(Base):
     )
 
     project_requirements = relationship("ProjectRequirement", back_populates="project",cascade="all, delete-orphan")
-    memberships = relationship("ProjectMembership", back_populates="project")
-    invitations = relationship("Invitation", back_populates="project")
+    memberships = relationship("ProjectMembership", back_populates="project",cascade="all, delete-orphan")
+    invitations = relationship("Invitation", back_populates="project",cascade="all, delete-orphan")

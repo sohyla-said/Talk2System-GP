@@ -79,15 +79,32 @@ class ProjectService:
 
     # DELETE 
     @staticmethod
-    def delete_project(db: Session, project_id: int) -> bool:
+    def delete_project(db: Session, project_id: int) -> dict | None:
         project = db.query(Project).filter(Project.id == project_id).first()
         if not project:
-            return False
+            return None
+        
+        project_name = project.name
+        project_id = project.id
+        
+        active_members = db.query(ProjectMembership).filter(
+            ProjectMembership.project_id == project_id,
+            ProjectMembership.left_at.is_(None)
+        ).all()
+        member_user_ids = [m.user_id for m in active_members]
+        
+        db.query(AuditLog).filter(AuditLog.project_id == project_id).delete(synchronize_session=False)
+        db.query(Invitation).filter(Invitation.project_id == project_id).delete(synchronize_session=False)
+        db.query(ProjectMembership).filter(ProjectMembership.project_id == project_id).delete(synchronize_session=False)
         db.delete(project)
-        db.commit()
-        return True
+        
+        return {
+            "project_name": project_name,
+            "member_user_ids": member_user_ids,
+            "project_id": project_id
+        }
 
-    # MEMBERSHIP HELPERS 
+    # MEMBERSHIP 
     @staticmethod
     def get_membership(db: Session, project_id: int, user_id: int):
         return (
@@ -95,12 +112,11 @@ class ProjectService:
             .filter_by(project_id=project_id, user_id=user_id)
             .first()
         )
-
     @staticmethod
     def get_project_members(db: Session, project_id: int):
         return (
             db.query(ProjectMembership)
-            .filter_by(project_id=project_id)
+            .filter_by(project_id=project_id, left_at=None) 
             .all()
         )
 
@@ -111,12 +127,15 @@ class ProjectService:
         if not project:
             raise HTTPException(404, "Project not found")
 
-        # already a member?
         existing_membership = ProjectService.get_membership(db, project_id, user.id)
-        if existing_membership:
+        
+        if existing_membership and existing_membership.left_at is None:
             raise HTTPException(409, "You are already a member of this project")
 
-        # already has a pending request?
+        # If they were removed, block them from rejoining
+        if existing_membership and existing_membership.left_at is not None:
+            raise HTTPException(403, "You were previously removed from this project. You cannot rejoin unless explicitly added back by a manager or admin.")
+        # Check if they already sent a pending request
         pending = (
             db.query(Invitation)
             .filter_by(project_id=project_id, invitee_user_id=user.id, status="pending")
@@ -124,7 +143,6 @@ class ProjectService:
         )
         if pending:
             raise HTTPException(409, "You already have a pending join request for this project")
-
         # find the project manager to notify
         pm_membership = (
             db.query(ProjectMembership)

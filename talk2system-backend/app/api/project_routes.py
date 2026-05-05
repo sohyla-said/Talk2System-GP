@@ -111,10 +111,37 @@ def delete_project(
     if current_user.role != "admin":
         membership = ProjectService.get_membership(db, project_id, current_user.id)
         if not membership or membership.role != "project_manager":
-            raise HTTPException(403, "Only a project manager or admin can delete this project")
-    if not ProjectService.delete_project(db, project_id):
+            raise HTTPException(403, "Only a project manager or admin can delete this project")      
+    project = ProjectService.get_project(db, project_id)
+    if not project:
         raise HTTPException(404, "Project not found")
 
+    project_name = project.name
+    active_members = db.query(ProjectMembership).filter(
+        ProjectMembership.project_id == project_id, 
+        ProjectMembership.left_at.is_(None)
+    ).all()
+    member_user_ids = [m.user_id for m in active_members]
+    
+    db.query(AuditLog).filter(AuditLog.project_id == project_id).delete(synchronize_session=False)
+    db.query(Invitation).filter(Invitation.project_id == project_id).delete(synchronize_session=False)
+    db.query(ProjectMembership).filter(ProjectMembership.project_id == project_id).delete(synchronize_session=False)
+    db.delete(project)
+    
+    for user_id in member_user_ids:
+        notification_service.create_notification(
+            db,
+            user_id=user_id,
+            notification_type="project_deleted",
+            title="Project Deleted",
+            message=f"The project '{project_name}' has been deleted.",
+            actor_name=current_user.full_name if current_user.role != "admin" else "System Admin",
+            actor_email=current_user.email,
+            project_id=project_id,
+            project_name=project_name,
+        )    
+    db.commit()
+    return
 
 @router.get("/my-projects", response_model=list[ProjectResponse])
 def my_projects(
@@ -123,7 +150,10 @@ def my_projects(
 ):
     memberships = (
         db.query(ProjectMembership)
-        .filter_by(user_id=current_user.id)
+        .filter(
+            ProjectMembership.user_id == current_user.id,
+            ProjectMembership.left_at.is_(None)  
+        )
         .all()
     )
     project_ids = [m.project_id for m in memberships]
@@ -357,8 +387,16 @@ def add_participant_directly(
     if target_user.status != "active":
         raise HTTPException(400, f"Cannot add '{target_email}' - user status is '{target_user.status}'")
 
-    existing_membership = ProjectService.get_membership(db, project_id, target_user.id)
-    if existing_membership:
+    existing_active = (
+        db.query(ProjectMembership)
+        .filter(
+            ProjectMembership.project_id == project_id,
+            ProjectMembership.user_id == target_user.id,
+            ProjectMembership.left_at.is_(None)
+        )
+        .first()
+    )
+    if existing_active:
         raise HTTPException(409, f"'{target_user.email}' is already a member of this project")
 
     removed_membership = (
@@ -448,6 +486,21 @@ def remove_participant(
         raise HTTPException(400, "Cannot remove the project manager. Use 'Change PM' instead.")
 
     target_membership.left_at = datetime.now(timezone.utc)
+    
+    project = ProjectService.get_project(db, project_id)
+    actor_name = "System Admin" if current_user.role == "admin" else current_user.full_name
+    
+    notification_service.create_notification(
+        db,
+        user_id=user_id,
+        notification_type="admin_removed_participant",
+        title="Removed from Project",
+        message=f"You have been removed from '{project.name if project else 'Project'}' by {actor_name}.",
+        actor_name=actor_name,
+        actor_email=current_user.email,
+        project_id=project_id,
+        project_name=project.name if project else None,
+    )
     
     log_action(db, current_user.id, "removed_participant", "user", project_id=project_id, entity_id=user_id)
     

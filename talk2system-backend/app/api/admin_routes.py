@@ -111,7 +111,6 @@ def get_all_system_projects(
     projects = db.query(Project).all()
     result = []
     for p in projects:
-        # FIND THE PM OF THIS PROJECT AND GET THEIR STATUS
         pm_membership = db.query(ProjectMembership).filter_by(project_id=p.id, role="project_manager").first()
         pm_status = None
         if pm_membership and pm_membership.user:
@@ -128,48 +127,6 @@ def get_all_system_projects(
         })
     return result
 
-
-@router.delete("/system-projects/{project_id}", status_code=204)
-def delete_any_project(
-    project_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin"))
-):
-    """Admin can delete ANY project in the system."""
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(404, "Project not found")
-
-    project_name = project.name
-    
-    active_members = db.query(ProjectMembership).filter(
-        ProjectMembership.project_id == project_id, 
-        ProjectMembership.left_at.is_(None)
-    ).all()
-    
-    member_user_ids = [m.user_id for m in active_members]
-    db.query(AuditLog).filter(AuditLog.project_id == project_id).delete(synchronize_session=False)
-    db.query(Invitation).filter(Invitation.project_id == project_id).delete(synchronize_session=False)
-    db.query(ProjectMembership).filter(ProjectMembership.project_id == project_id).delete(synchronize_session=False)
-    db.delete(project)
-    
-    for user_id in member_user_ids:
-        notification_service.create_notification(
-            db, 
-            user_id=user_id, 
-            notification_type="admin_deleted_project",
-            title="Project Deleted", 
-            message=f"The project '{project_name}' has been deleted by an admin.",
-            actor_name="System Admin", 
-            actor_email=current_user.email, 
-            project_id=project_id, 
-            project_name=project_name
-        )
-    
-    db.commit()
-    return
-
-
 @router.get("/system-projects/{project_id}/members")
 def get_project_members_admin(
     project_id: int,
@@ -181,7 +138,11 @@ def get_project_members_admin(
     if not project:
         raise HTTPException(404, "Project not found")
         
-    memberships = db.query(ProjectMembership).filter_by(project_id=project_id).all()
+    memberships = db.query(ProjectMembership).filter(
+        ProjectMembership.project_id == project_id,
+        ProjectMembership.left_at.is_(None)
+    ).all()
+    
     return [
         {
             "id": m.id,                
@@ -193,24 +154,6 @@ def get_project_members_admin(
         }
         for m in memberships
     ]
-
-
-@router.delete("/system-projects/{project_id}/members/{membership_id}", status_code=204)
-def remove_participant(
-    project_id: int,
-    membership_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin"))
-):
-    """Admin removes a participant from a project."""
-    membership = db.query(ProjectMembership).filter_by(id=membership_id, project_id=project_id).first()
-    if not membership:
-        raise HTTPException(404, "Membership not found")
-    if membership.role == "project_manager":
-        raise HTTPException(400, "Cannot remove Project Manager this way. Use the 'Change PM' endpoint.")
-    db.delete(membership)
-    db.commit()
-    return
 
 
 @router.patch("/system-projects/{project_id}/change-pm")
@@ -246,6 +189,7 @@ def change_project_manager(
     new_membership = db.query(ProjectMembership).filter_by(project_id=project_id, user_id=new_pm_user.id).first()
     if new_membership:
         new_membership.role = "project_manager"
+        new_membership.left_at = None
     else:
         new_membership = ProjectMembership(project_id=project_id, user_id=new_pm_user.id, role="project_manager")
         db.add(new_membership)

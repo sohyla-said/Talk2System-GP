@@ -15,8 +15,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "2880
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 
-VALID_STATUSES = {"pending", "active", "suspended", "terminated", "archived"}
-
 
 def hash_password(password: str) -> str:
     digest = base64.b64encode(hashlib.sha256(password.encode()).digest()).decode()
