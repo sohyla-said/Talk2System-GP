@@ -17,22 +17,16 @@ from app.services.translation_service import translate_session, get_translation
 
 router = APIRouter()
 
-
 @router.post("/sessions/{session_id}/translate")
 def translate(
     session_id: int,
     db: Session = Depends(get_db),
 ):
-    """
-    Detect language, translate all transcript segments to English,
-    and persist both originals and translations.
-    Returns the translation result (or a no-op message if already English).
-    """
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # If a cached translation already exists, return it
+    # If a cached translation already exists, return it without notifying
     cached = get_translation(db, session_id)
     if cached:
         cached["cached"] = True
@@ -40,8 +34,12 @@ def translate(
 
     try:
         result = translate_session(db, session_id)
-        # ── Notify all session members ──────────────────────────────────────────
-        if not result.get("is_english"):   # no point notifying if nothing was translated
+
+        # ── Notify only once, ever, using a DB flag as the guard ──────────
+        if not result.get("is_english") and not session.translation_notified:
+            session.translation_notified = True   # set flag FIRST to prevent races
+            db.commit()
+
             memberships = db.query(SessionMembership).filter(
                 SessionMembership.session_id == session_id
             ).all()
@@ -53,16 +51,16 @@ def translate(
                     title="Translation Ready",
                     message=f'The translation for session "{session.title}" is ready for your review.',
                     project_id=session.project_id,
-                    session_id=session.id,
+                    session_id=session_id,
                 )
-            db.commit() 
+            db.commit()
+
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except RuntimeError as re:
         raise HTTPException(status_code=503, detail=str(re))
 
     return result
-
 
 @router.get("/sessions/{session_id}/translation")
 def get_existing_translation(

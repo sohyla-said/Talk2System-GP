@@ -44,7 +44,7 @@
 
 
 
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text, JSON, Integer
+from sqlalchemy import Boolean, Column, String, DateTime, ForeignKey, Text, JSON, Integer
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.db.base import Base
@@ -59,6 +59,7 @@ class Session(Base):
     status = Column(String, default="processing")
     audio_file_path = Column(String, nullable=True)
     transcript_text = Column(Text, nullable=True)
+    translation_notified = Column(Boolean, default=False, nullable=False, server_default="false")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # ── Translation fields (added for multilingual support) ──────────────
