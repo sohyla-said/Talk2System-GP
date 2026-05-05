@@ -8,6 +8,7 @@ from app.models.project_membership import ProjectMembership
 from app.models.invitation import Invitation  
 from app.services import notification_service
 from app.models.audit_log import AuditLog 
+from app.services.audit_service import log_action
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
@@ -217,6 +218,18 @@ def change_project_manager(
         actor_email=current_user.email, 
         project_id=project_id, 
         project_name=project.name
+    )
+
+    log_action(
+        db, 
+        current_user.id, 
+        "changed_project_manager", 
+        "project", 
+        project_id=project_id, 
+        entity_id=new_pm_user.id,
+        details={
+            "label": f"to be{new_pm_user.full_name or new_pm_user.email} for Project: {project.name}"
+        }
     )
 
     db.commit()

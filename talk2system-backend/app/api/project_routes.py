@@ -422,8 +422,17 @@ def add_participant_directly(
         )
         db.add(new_membership)
 
-    log_action(db, current_user.id, "added_participant", "user", project_id=project_id, entity_id=target_user.id)
-
+    log_action(
+        db, 
+        current_user.id, 
+        "added_participant", 
+        "user", 
+        project_id=project_id, 
+        entity_id=target_user.id,
+        details={
+            "label": target_user.full_name or target_user.email 
+        }
+    )
     if is_admin:
         actor_name = "System Admin"
         actor_email = current_user.email
@@ -484,6 +493,8 @@ def remove_participant(
 
     if target_membership.role == "project_manager":
         raise HTTPException(400, "Cannot remove the project manager. Use 'Change PM' instead.")
+    target_user = db.query(User).filter(User.id == user_id).first()
+    user_label = target_user.full_name or target_user.email if target_user else f"User #{user_id}"
 
     target_membership.left_at = datetime.now(timezone.utc)
     
@@ -502,7 +513,17 @@ def remove_participant(
         project_name=project.name if project else None,
     )
     
-    log_action(db, current_user.id, "removed_participant", "user", project_id=project_id, entity_id=user_id)
+    log_action(
+        db,
+        current_user.id,
+        "removed_participant",
+        "user",             
+        project_id=project_id, 
+        entity_id=user_id,
+        details={
+            "label": user_label  
+        }
+    )
     
     db.commit()
 
@@ -534,6 +555,7 @@ def get_project_audit_logs(
             "id": log.id,
             "user_name": getattr(getattr(log, 'user', None), 'full_name', None) or "System",
             "user_email": log.user.email if log.user else None,
+            "details": log.details or {},         
             "action": log.action,
             "entity": log.entity,
             "entity_id": log.entity_id,

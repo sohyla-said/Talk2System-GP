@@ -11,6 +11,10 @@ from app.models.transcript import TranscriptSegment
 from app.models.session_membership import SessionMembership
 from app.services.notification_service import create_notification
 
+from app.services.audit_service import log_action
+from app.models.user import User
+from app.dependencies.auth import get_current_user
+
 from app.services.transcription_service import (
     transcribe_audio,
     save_transcription,
@@ -46,6 +50,7 @@ async def transcribe(
     title: Optional[str] = None,
     participant_ids: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
@@ -67,6 +72,18 @@ async def transcribe(
         project_id=project_id,
     )
     db.add(session)
+    log_action(
+        db,
+        current_user.id,
+        "uploaded_audio",
+        "session",
+        project_id=project_id,
+        entity_id=session.id,
+        details={
+            "label": f'Session: "{session.title}"',
+            "extra": f"({file.filename})"
+        }
+    )
     db.commit()
     db.refresh(session)
 
@@ -159,6 +176,7 @@ def upload_transcript_text(
     project_id: int,
     payload: TranscriptTextPayload,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
@@ -172,6 +190,19 @@ def upload_transcript_text(
     db.add(session)
     db.commit()
     db.refresh(session)
+    log_action(
+        db,
+        current_user.id,
+        "uploaded_transcript_text",
+        "session",
+        project_id=project_id,
+        entity_id=session.id,
+        details={
+            "label": f'Session: "{session.title}"',
+            "extra": f'("{payload.transcript[:80]}...")'
+        }
+    )
+    db.commit() 
 
     # Session memberships
     if payload.participant_ids:
@@ -294,11 +325,36 @@ def update_segment(
     session_id: int,
     payload: SegmentUpdatePayload,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    old_segments = (
+        db.query(TranscriptSegment)
+        .filter(TranscriptSegment.session_id == session_id)
+        .order_by(TranscriptSegment.start_time.nulls_last(), TranscriptSegment.id)
+        .all()
+    )
+    if payload.segment_index < 0 or payload.segment_index >= len(old_segments):
+        raise HTTPException(status_code=404, detail="Segment not found")
+    
+    old_text = old_segments[payload.segment_index].text or ""
+    
+    log_action(
+        db,
+        current_user.id,
+        "edited_transcript_segment",
+        "session",
+        project_id=session.project_id,
+        entity_id=session_id,
+        details={
+            "label": f'Session: "{session.title}"',
+            "before": old_text[:80] + ("..." if len(old_text) > 80 else ""),
+            "after": payload.text[:80] + ("..." if len(payload.text) > 80 else "")
+        }
+    )
     updated = update_transcript_segment(
         db,
         session_id=session_id,
@@ -326,11 +382,40 @@ def delete_segments(
     session_id: int,
     payload: SegmentDeletePayload,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-
+   
+    
+    segments = (
+        db.query(TranscriptSegment)
+        .filter(TranscriptSegment.session_id == session_id)
+        .order_by(TranscriptSegment.start_time.nulls_last(), TranscriptSegment.id)
+        .all()
+    )
+    
+    deleted_snippets = []
+    for idx in payload.segment_indices:
+        if 0 <= idx < len(segments):
+            text = segments[idx].text or ""
+            # Truncate to 60 chars so the log doesn't become huge
+            deleted_snippets.append(text[:60] + ("..." if len(text) > 60 else ""))
+    
+    log_action(
+        db,
+        current_user.id,
+        "deleted_transcript_segments",
+        "session",
+        project_id=session.project_id,
+        entity_id=session_id,
+        details={
+            "label": f'Session: "{session.title}"',
+            "extra": f"Deleted {len(payload.segment_indices)} segment(s)",
+            "deleted_texts": deleted_snippets # Array of strings to show what was removed
+        }
+    )
     deleted = delete_transcript_segments(db, session_id, payload.segment_indices)
     return {"ok": True, "deleted": deleted}
 
@@ -359,9 +444,6 @@ def approve_transcript(
 
     try:
         transcript.approval_status = "approved"
-        db.commit()
-        db.refresh(transcript)
-
         log_action(
             db,
             current_user.id,
@@ -369,8 +451,13 @@ def approve_transcript(
             "session",
             project_id=session.project_id,
             entity_id=session_id,
+            details={
+                "label": f'Session: "{session.title}"'
+            }
         )
 
+        db.commit()
+        db.refresh(transcript)
         return {
             "session_id": session_id,
             "project_id": session.project_id,

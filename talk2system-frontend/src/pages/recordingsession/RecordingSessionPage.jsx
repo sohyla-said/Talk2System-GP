@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams,useLocation } from "react-router-dom";
-
+import { getToken } from "../../api/authApi";
 export default function RecordingSessionPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -114,6 +114,9 @@ export default function RecordingSessionPage() {
 
       const res = await fetch(`http://localhost:8000/api/projects/${projectId}/transcribe?${query}`, {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
         body: formData,
       });
 

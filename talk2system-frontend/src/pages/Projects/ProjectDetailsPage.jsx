@@ -24,9 +24,6 @@ export default function ProjectDetailsPage() {
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [auditLogs, setAuditLogs] = useState([]);
   const [reqVersions, setReqVersions] = useState([]);
-  const [reqDetailsMap, setReqDetailsMap] = useState({}); 
-  const [sessionDetailsMap, setSessionDetailsMap] = useState({});
-
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [members, setMembers] = useState([]);
 
@@ -64,107 +61,11 @@ export default function ProjectDetailsPage() {
     load();
   }, [projectId]);
   
-  const openLogsModal = async () => {
+   const openLogsModal = async () => {
     try {
-      const [logData, versionsData] = await Promise.all([
-        fetchProjectAuditLogs(projectId),
-        fetch(`${BASE_URL}/api/projects/${projectId}/requirements/versions`, {
-          headers: { Authorization: `Bearer ${getToken()}` },
-        }).then((r) => r.json()).catch(() => []) 
-      ]);
-      
+      const logData = await fetchProjectAuditLogs(projectId);
       setAuditLogs(logData);
-      setReqVersions(Array.isArray(versionsData) ? versionsData : []);
       
-      const editedReqIds = [...new Set(
-        logData
-          .filter(log => log.entity?.includes("requirement") && log.action?.includes("edit"))
-          .map(log => log.entity_id)
-          .filter(Boolean)
-      )];
-
-      const editedTranscriptIds = [...new Set(
-        logData
-          .filter(log => (log.entity?.includes("transcript") || log.entity?.includes("session")) && log.action?.includes("edit"))
-          .map(log => log.entity_id)
-          .filter(Boolean)
-      )];
-
-      if (editedReqIds.length > 0) {
-        const detailsPromises = editedReqIds.map(async (id) => {
-          try {
-            let res = await fetch(`${BASE_URL}/api/projects/requirements/${id}`, {
-              headers: { Authorization: `Bearer ${getToken()}` }
-            });
-            if (!res.ok) {
-              res = await fetch(`${BASE_URL}/api/sessions/requirements/${id}`, {
-                headers: { Authorization: `Bearer ${getToken()}` }
-              });
-            }
-            if (!res.ok) throw new Error("Not found");
-            
-            const data = await res.json();
-            const allReqs = [
-              ...(data.data?.functional_requirements || []),
-              ...(data.data?.nonfunctional_requirements || data.data?.non_functional_requirements || [])
-            ];
-            
-            return {
-              id,
-              sessionTitle: allReqs[0]?.src_session_title || null,
-              snippet: allReqs[0]?.text 
-                ? (allReqs[0].text.length > 45 ? allReqs[0].text.substring(0, 45) + "..." : allReqs[0].text)
-                : null
-            };
-          } catch(e) {
-            return { id, sessionTitle: null, snippet: null };
-          }
-        });
-        
-        const detailsResults = await Promise.all(detailsPromises);
-        const map = {};
-        detailsResults.forEach(d => map[d.id] = d);
-        setReqDetailsMap(map);
-      } else {
-        setReqDetailsMap({});
-      }
-
-      if (editedTranscriptIds.length > 0) {
-        const transPromises = editedTranscriptIds.map(async (id) => {
-          try {
-            const res = await fetch(`${BASE_URL}/api/sessions/${id}`, {
-              headers: { Authorization: `Bearer ${getToken()}` }
-            });
-            if (!res.ok) throw new Error("Not found");
-            
-            const data = await res.json();
-            let transText = "";
-            if (Array.isArray(data.transcript) && data.transcript.length > 0) {
-              transText = data.transcript[0].text || "";
-            } else if (typeof data.transcript === "string") {
-              transText = data.transcript;
-            }            
-            
-            return {
-              id,
-              sessionTitle: data.title || null,
-              snippet: transText 
-                ? (transText.length > 45 ? transText.substring(0, 45) + "..." : transText)
-                : null
-            };
-          } catch(e) {
-            return { id, sessionTitle: null, snippet: null };
-          }
-        });
-
-        const transResults = await Promise.all(transPromises);
-        const sMap = {};
-        transResults.forEach(d => sMap[d.id] = d);
-        setSessionDetailsMap(sMap);
-      } else {
-        setSessionDetailsMap({});
-      }
-
       setShowLogsModal(true);
     } catch (err) {
       console.error(err);
@@ -176,45 +77,6 @@ export default function ProjectDetailsPage() {
     const member = members.find((m) => m.email === userEmail);
     if (member) return member.role.replace(/_/g, " ");
     return "Admin";
-  };
-
-  const getTargetEntityLabel = (entity, entityId, action) => {
-    if (!entityId) return "";
-
-    if (entity === "user") {
-      const targetMember = members.find((m) => m.user_id === entityId);
-      if (targetMember) return targetMember.full_name || targetMember.email;
-      return `User #${entityId}`;
-    }
-
-    if (entity.includes("requirement")) {
-      if (action?.includes("edit") && reqDetailsMap[entityId]) {
-        const details = reqDetailsMap[entityId];
-        let label = "requirements";
-        if (details.sessionTitle) label += ` from "${details.sessionTitle}"`;
-        if (details.snippet) label += ` ("${details.snippet}")`;
-        return label;
-      }
-
-      const req = reqVersions.find((r) => r.id === entityId);
-      if (req) return `Requirements Version ${req.version}`;
-      return `Requirement #${entityId}`;
-    }
-
-    // FIXED: Removed duplicate "transcript" word
-    if (entity.includes("session") || entity.includes("transcript")) {
-      if (sessionDetailsMap[entityId]) {
-        const details = sessionDetailsMap[entityId];
-        let label = "";
-        if (details.sessionTitle) label += `from "${details.sessionTitle}"`;
-        if (details.snippet && action?.includes("edit")) label += ` ("${details.snippet}")`;
-        if (!label) label = "transcript";
-        return label;
-      }
-      return `Transcript #${entityId}`;
-    }
-
-    return `${entity} #${entityId}`;
   };
 
   const handleAccept = async (invId, userName) => {
@@ -297,7 +159,9 @@ export default function ProjectDetailsPage() {
               ) : (
                 auditLogs.map((log) => {
                   const roleName = getActingRole(log.user_email);
-                  const targetName = getTargetEntityLabel(log.entity, log.entity_id, log.action);
+                  const targetName = log.details?.label || `${log.entity} #${log.entity_id}`;
+                  const extraInfo = log.details?.extra || "";
+
                   return (
                     <div key={log.id} className="flex items-start gap-4 p-3 rounded-lg bg-gray-50 dark:bg-[#231e3d]">
                       <span className="material-symbols-outlined text-primary mt-0.5 text-lg">circle</span>
@@ -308,7 +172,37 @@ export default function ProjectDetailsPage() {
                           <span className="font-normal text-gray-500 dark:text-gray-400">
                             {log.action.replace(/_/g, " ")} {targetName}
                           </span>
+                          {extraInfo && (
+                            <span className="font-normal text-primary text-xs ml-1">{extraInfo}</span>
+                          )}
                         </p>
+                        
+                        {log.details?.before && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-white dark:bg-[#1a162e] border border-gray-200 dark:border-white/10 text-xs font-mono space-y-1.5">
+                            <div className="flex items-start gap-2">
+                              <span className="text-red-500 font-bold min-w-[55px]">Before:</span>
+                              <span className="text-red-400 line-through break-words">{log.details.before}</span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="text-green-600 font-bold min-w-[55px]">After:</span>
+                              <span className="text-green-600 break-words">{log.details.after}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {log.details?.deleted_texts && log.details.deleted_texts.length > 0 && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30">
+                            <p className="text-xs font-bold text-red-500 mb-1">{log.details.extra || "Deleted Text:"}</p>
+                            <ul className="space-y-1">
+                              {log.details.deleted_texts.map((text, i) => (
+                                <li key={i} className="text-xs font-mono text-red-400 line-through break-words">
+                                  - {text}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
                         <p className="text-xs text-gray-400 mt-1">{new Date(log.created_at).toLocaleString()} • {log.user_email}</p>
                       </div>
                     </div>
