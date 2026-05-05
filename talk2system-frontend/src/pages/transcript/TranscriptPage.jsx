@@ -145,7 +145,9 @@ export default function TranscriptPage() {
             const projData = await projRes.json();
             setProjectName(projData.name ?? null);
           }
-        } catch (_) {}
+        } catch (err) {
+          console.error("Failed to fetch project details:", err);
+        }
       }
               
         setSessionTitle(data.title || "");
