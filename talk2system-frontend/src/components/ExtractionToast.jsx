@@ -41,13 +41,8 @@ export default function ExtractionToast({
     navigate(`/transcript/${sessionId}/requirements/choice`, {
       state: {
         projectId,
-        commonData:     taskOutput.common_data,
         hybridRunId:    taskOutput.Hybrid_run_id,
-        hybridData:     taskOutput.Hybrid_data,
-        hybridOnlyData: taskOutput.Hybrid_only_data,
         llmRunId:       taskOutput.LLM_run_id,
-        llmData:        taskOutput.LLM_data,
-        llmOnlyData:    taskOutput.LLM_only_data,
       },
     });
     onDismiss();

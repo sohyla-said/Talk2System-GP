@@ -25,40 +25,41 @@ export default function RequirementsChoicePage() {
 	const {
 		projectId,
 		transcriptText,
-		commonData,
-		common_data,
 		hybridRunId,
-		hybridData,
-		hybridOnlyData,
-		Hybrid_only_data,
-		Hybird_only_data,
 		llmRunId,
-		llmData,
-		llmOnlyData,
-		LLM_only_data,
 	} = extractionState;
+
+	const [comparisonData, setComparisonData] = useState(null);
+	const [loadingComparison, setLoadingComparison]   = useState(true);
+	const [comparisonError, setComparisonError]       = useState(null);
+
+	const commonData = comparisonData?.common_data ?? comparisonData?.commonData ?? null;
+	const hybridData = comparisonData?.hybrid_data ?? comparisonData?.hybridData ?? null;
+	const hybridOnlyData = comparisonData?.hybrid_only_data ?? comparisonData?.hybridOnlyData ?? null;
+	const llmData = comparisonData?.llm_data ?? comparisonData?.llmData ?? null;
+	const llmOnlyData = comparisonData?.llm_only_data ?? comparisonData?.llmOnlyData ?? null;
 
 	const hasLLMResults = !!llmData;
 	const hasHybridResults = !!hybridData;
 
 	const normalizedLlm = useMemo(() => normalizeGrouped(llmData), [llmData]);
 	const normalizedHybrid = useMemo(() => normalizeGrouped(hybridData), [hybridData]);
-	const normalizedCommon = useMemo(() => normalizeGrouped(commonData || common_data), [commonData, common_data]);
+	const normalizedCommon = useMemo(() => normalizeGrouped(commonData), [commonData]);
 	const normalizedLlmDiff = useMemo(() => {
-		const llmDiffSource = llmOnlyData || LLM_only_data;
+		const llmDiffSource = llmOnlyData;
 		if ((!llmDiffSource || Object.keys(llmDiffSource).length === 0) && !hasHybridResults) {
 			return normalizeGrouped(llmData);
 		}
 		return normalizeGrouped(llmDiffSource);
-	}, [llmOnlyData, LLM_only_data, llmData, hasHybridResults]);
+	}, [llmOnlyData, llmData, hasHybridResults]);
 
 	const normalizedHybridDiff = useMemo(() => {
-		const hybridDiffSource = hybridOnlyData || Hybrid_only_data || Hybird_only_data;
+		const hybridDiffSource = hybridOnlyData;
 		if ((!hybridDiffSource || Object.keys(hybridDiffSource).length === 0) && !hasLLMResults) {
 			return normalizeGrouped(hybridData);
 		}
 		return normalizeGrouped(hybridDiffSource);
-	}, [hybridOnlyData, Hybrid_only_data, Hybird_only_data, hybridData, hasLLMResults]);
+	}, [hybridOnlyData, hybridData, hasLLMResults]);
 
 	const summary = useMemo(() => {
 		const commonCount = normalizedCommon.functional_requirements.length + normalizedCommon.nonfunctional_requirements.length;
@@ -88,6 +89,24 @@ export default function RequirementsChoicePage() {
 		fetchSessionMeta();
 	}, [sessionId]);
 
+	useEffect(() => {
+		if (!hybridRunId || !llmRunId) {
+			setLoadingComparison(false);
+			return;
+		}
+		const load = async () => {
+			try {
+				const data = await fetchRequirementComparison();
+			setComparisonData(data);
+			} catch (err) {
+				setComparisonError(err.message);
+			} finally {
+				setLoadingComparison(false);
+			}
+		};
+		load();
+	}, [hybridRunId, llmRunId]);
+
 	const fetchSessionMeta = async () => {
 		try {
 			const response = await fetch(`http://127.0.0.1:8000/api/sessions/${sessionId}`, {
@@ -112,6 +131,23 @@ export default function RequirementsChoicePage() {
 			console.error(err);
 		}
 	};
+
+
+	const fetchRequirementComparison = async () => {
+		const res = await fetch(
+			`http://localhost:8000/api/sessions/requirements/comparison?hybrid_run_id=${hybridRunId}&llm_run_id=${llmRunId}`,
+			{
+				headers: { 
+					Authorization: `Bearer ${getToken()}`,
+				}
+			}
+		);
+		if (!res.ok) {
+			const err = await res.json().catch(() => ({}));
+			throw new Error(err.detail || "Failed to fetch requirements comparison");
+		}
+		return res.json();
+	}
 
 	const formatTranscriptForBackend = (segments) => {
 		return segments
@@ -335,6 +371,28 @@ export default function RequirementsChoicePage() {
 	// 		</div>
 	// 	);
 	// }
+
+	if (loadingComparison) {
+		return (
+			<div className="flex items-center justify-center h-64">
+			<span className="material-symbols-outlined animate-spin text-gray-400 text-3xl">
+				progress_activity
+			</span>
+			</div>
+		);
+	}
+
+	if (comparisonError || !comparisonData) {
+		return (
+			<div className="flex flex-col items-center justify-center h-64 gap-3">
+			<span className="material-symbols-outlined text-red-400 text-3xl">error</span>
+			<p className="text-gray-500">{comparisonError || "No comparison data available."}</p>
+			<button onClick={() => navigate(-1)} className="text-primary text-sm font-bold hover:underline">
+				Go back
+			</button>
+			</div>
+		);
+	}
 
 	return (
 		<div className="w-full max-w-7xl mx-auto p-4 space-y-4">

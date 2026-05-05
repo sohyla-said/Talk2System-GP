@@ -112,32 +112,11 @@ class RequirementService:
             db.rollback()
             raise
 
-        common_reqs = None
-        diff_hybrid = None
-        diff_llm = None
-
-        # Both engines produced results: compute common and differences
-        if grouped_hybrid and grouped_llm:
-            common_reqs = get_common_requirments(grouped_hybrid, grouped_llm)
-            diff_hybrid = get_reqs_not_in_common(grouped_hybrid, common_reqs)
-            diff_llm = get_reqs_not_in_common(grouped_llm, common_reqs)
-        # Only LLM produced results: surface them in the LLM-only bucket so the
-        # frontend can render functional/nonfunctional lists under "LLM Differences".
-        elif grouped_llm and not grouped_hybrid:
-            diff_llm = grouped_llm
-        # Only Hybrid produced results: surface them in the hybrid-only bucket.
-        elif grouped_hybrid and not grouped_llm:
-            diff_hybrid = grouped_hybrid
-
         return {
             "project_id": project_id,
-            "common_requirements": common_reqs,
             "hybrid_run_id": db_run_hybrid.id if db_run_hybrid else None,
-            "hybrid": grouped_hybrid,
-            "diff_hybrid": diff_hybrid,
             "llm_run_id": db_run_llm.id if db_run_llm else None,
-            "llm": grouped_llm,
-            "diff_llm": diff_llm
+            
         }
     
     #################################################################################################
@@ -194,6 +173,56 @@ class RequirementService:
             "preferred_type": src_run.run_type
         }
         
+    # get requirement data for a specific run id
+    @staticmethod
+    def get_req_run_by_id(db: Session, run_id: int):
+        run = db.query(RequirementRun).filter(RequirementRun.id == run_id).first()
+
+        if not run:
+            raise ValueError(f"Run with id {run_id} not found")
+        return run
+    
+    # Fetches grouped data for both runs and computes common/diff logic.
+    # Called by Requirements_choice_page instead of relying on router state.
+    @staticmethod
+    def get_requirements_for_comparison(db: Session, hybrid_run_id: int, llm_run_id: int):
+        hybrid_run = RequirementService.get_req_run_by_id(db, hybrid_run_id)
+        
+        grouped_hybrid = hybrid_run.grouped_json
+        
+        llm_run = RequirementService.get_req_run_by_id(db, llm_run_id)
+        
+        grouped_llm = llm_run.grouped_json
+
+        common_reqs = None
+        diff_hybrid = None
+        diff_llm = None
+
+        # Both engines produced results: compute common and differences
+        if grouped_hybrid and grouped_llm:
+            common_reqs = get_common_requirments(grouped_hybrid, grouped_llm)
+            diff_hybrid = get_reqs_not_in_common(grouped_hybrid, common_reqs)
+            diff_llm = get_reqs_not_in_common(grouped_llm, common_reqs)
+
+        # Only LLM produced results: surface them in the LLM-only bucket so the
+        # frontend can render functional/nonfunctional lists under "LLM Differences".
+        elif grouped_llm and not grouped_hybrid:
+            diff_llm = grouped_llm
+
+        # Only Hybrid produced results: surface them in the hybrid-only bucket.
+        elif grouped_hybrid and not grouped_llm:
+            diff_hybrid = grouped_hybrid
+        
+        return {
+            "common_data": common_reqs,
+            "hybrid_run_id": hybrid_run_id,
+            "hybrid_data": grouped_hybrid,
+            "hybrid_only_data": diff_hybrid,
+            "llm_run_id": llm_run_id,
+            "llm_data": grouped_llm,
+            "llm_only_data": diff_llm
+        }
+
         ############################################# Project Requirements ####################################################   
     
     # get latest project requirement version
@@ -524,11 +553,6 @@ def run_async_extraction_task(task_id: int, project_id: int, session_id: int, tr
                 "engine":           "both",
                 "Hybrid_run_id":    result.get("hybrid_run_id"),
                 "LLM_run_id":       result.get("llm_run_id"),
-                "common_data":      result.get("common_requirements"),
-                "Hybrid_data":      result.get("hybrid"),
-                "hybrid_only_data": result.get("diff_hybrid"),
-                "LLM_data":         result.get("llm"),
-                "LLM_only_data":    result.get("diff_llm"),
             }
 
         task.status = "done"
@@ -542,7 +566,7 @@ def run_async_extraction_task(task_id: int, project_id: int, session_id: int, tr
             notification_type="requirements_extracted_both" if engine == "both" else "requirements_extracted",
             title="Requirements Extracted",
             message=(
-                "Both extraction engines finished. Compare the results to choose your preferred output."
+                f"Both extraction engines finished. Compare the results to choose your preferred output.\n [session_id:{session_id}] \n [hybrid_run_id:{result.get('hybrid_run_id')}] \n [llm_run_id:{result.get('llm_run_id')}]"
                 if engine == "both"
                 else "Requirement extraction completed successfully. You can now review the results."
             ),

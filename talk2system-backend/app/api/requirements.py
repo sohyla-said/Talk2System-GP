@@ -52,13 +52,8 @@ def extract_requirements(
 
         return {
             "message": "Requirements extracted and stored successfully",
-            "common_data": result['common_requirements'],
             "LLM_run_id": result['llm_run_id'],
-            "LLM_data": result["llm"],
-            "LLM_only_data": result['diff_llm'],
             "Hybrid_run_id": result['hybrid_run_id'],
-            "Hybrid_data": result['hybrid'],
-            "Hybrid_only_data": result['diff_hybrid']
 
         }
     except ValueError as e:
@@ -165,6 +160,19 @@ def get_latest_extraction_task(
         "task_output": task.task_output,
         "session_id": task.session_id,
     }
+
+# get requirements data for comparison and choice
+@router.get("/sessions/requirements/comparison")
+def get_requirements_for_choice(
+    hybrid_run_id: int,
+    llm_run_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        return RequirementService.get_requirements_for_comparison(db, hybrid_run_id, llm_run_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 # set the preferred requirements from llm or hybrid
 @router.post("/projects/{project_id}/session/{session_id}/choose-requirements")
