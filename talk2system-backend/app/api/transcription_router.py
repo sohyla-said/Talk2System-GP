@@ -142,6 +142,7 @@ async def transcribe(
                 title="Transcription Ready",
                 message=f'The transcription for session "{session.title}" is ready for your review.',
                 project_id=session.project_id,
+                session_id=session.id,
             )
         db.commit()
 
@@ -250,6 +251,7 @@ def upload_transcript_text(
                 title="Transcription Ready",
                 message=f'The transcription for session "{session.title}" is ready for your review.',
                 project_id=session.project_id,
+                session_id=session.id,
             )
         db.commit()
 

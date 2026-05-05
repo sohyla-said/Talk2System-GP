@@ -53,6 +53,7 @@ def translate(
                     title="Translation Ready",
                     message=f'The translation for session "{session.title}" is ready for your review.',
                     project_id=session.project_id,
+                    session_id=session.id,
                 )
             db.commit() 
     except ValueError as ve:

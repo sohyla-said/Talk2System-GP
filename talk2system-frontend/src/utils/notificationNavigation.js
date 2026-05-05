@@ -5,12 +5,21 @@
  * For all other types, navigates synchronously.
  */
 export async function handleNotificationNav(notif, navigate, getToken) {
-  const { notification_type, project_id, message } = notif;
+  const { notification_type, project_id, message ,session_id } = notif;
 
   // Extract session_id from message suffix "[session_id:123]"
   const sessionMatch = message?.match(/\[session_id:(\d+)\]/);
   const sessionId = sessionMatch ? parseInt(sessionMatch[1], 10) : null;
 
+  if (
+    notification_type === "transcription_done" ||
+    notification_type === "translation_done"
+  ) {
+    if (session_id) {
+      navigate(`/transcript/${session_id}`);  // ← navigate using the column value
+      return;
+    }
+  }
   // ── Single-engine success: requirements view ──────────────────────────────
   if (notification_type === "requirements_extracted" && sessionId && project_id) {
     navigate(`/transcript/${sessionId}/requirements`, {

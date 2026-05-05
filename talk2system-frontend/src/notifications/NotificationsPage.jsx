@@ -24,6 +24,8 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
+
+  
   
   // Search state
   const [searchQuery, setSearchQuery] = useState("");

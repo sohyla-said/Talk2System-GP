@@ -18,6 +18,7 @@ class Notification(Base):
     project_name    = Column(String(255), nullable=True)
     is_read         = Column(Boolean, default=False)
     created_at      = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    session_id      = Column(Integer, ForeignKey("sessions.id"), nullable=True)
 
     user = relationship("User", foreign_keys=[user_id], lazy="joined")
 

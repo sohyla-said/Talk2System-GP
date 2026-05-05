@@ -21,6 +21,7 @@ class NotificationResponse(BaseModel):
     actor_email: Optional[str]
     project_id: Optional[int]
     project_name: Optional[str]
+    session_id: Optional[int] 
     is_read: bool
     created_at: datetime
 

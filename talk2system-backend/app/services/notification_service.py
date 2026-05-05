@@ -12,6 +12,7 @@ def create_notification(
     actor_email: str = None,
     project_id: int = None,
     project_name: str = None,
+    session_id: int = None,
 ) -> Notification:
     """Create a notification. Call BEFORE db.commit()."""
     notif = Notification(
@@ -23,6 +24,7 @@ def create_notification(
         actor_email=actor_email,
         project_id=project_id,
         project_name=project_name,
+        session_id=session_id,
     )
     db.add(notif)
     return notif
