@@ -48,6 +48,7 @@ export default function TranscriptPage() {
   const [pendingEngineAction, setPendingEngineAction] = useState(null);
   const [existingRequirementId, setExistingRequirementId] = useState(null);
   const [isCheckingReq, setIsCheckingReq] = useState(false);
+  const [sessionCompleted, setSessionCompleted] = useState(false);
 
   // ── Translation state ────────────────────────────────────────────────────
   const [detectedLanguage, setDetectedLanguage] = useState(null);
@@ -265,6 +266,16 @@ export default function TranscriptPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detectedLanguage, transcriptData.length, translationData]);
+  
+  useEffect(() => {
+    if (!sessionId) return;
+    fetch(`http://localhost:8000/api/sessions/${sessionId}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((r) => r.json())
+      .then((data) => setSessionCompleted(data.status === "completed"))
+      .catch(console.error);
+  }, [sessionId]);
 
   // ── Background translation ───────────────────────────────────────────────
   const runBackgroundTranslation = async () => {
@@ -647,6 +658,7 @@ export default function TranscriptPage() {
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => { setSelectionMode((v) => !v); setSelectedIds(new Set()); }}
+              disabled={sessionCompleted}
               className="flex items-center gap-2 rounded-lg border border-border-light dark:border-white/10 px-4 py-2.5 text-sm font-semibold bg-white dark:bg-background-dark/50 hover:bg-gray-50 dark:hover:bg-white/5 shadow-soft transition-colors"
             >
               <span className="material-symbols-outlined text-lg">
@@ -657,7 +669,7 @@ export default function TranscriptPage() {
 
             <button
               onClick={handleApprove}
-              disabled={approved}
+              disabled={approved || sessionCompleted}
               className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold text-white shadow-soft transition-colors
                 ${approved ? "bg-green-600 cursor-default" : "bg-primary hover:bg-primary/90"}`}
             >
@@ -668,6 +680,13 @@ export default function TranscriptPage() {
             </button>
           </div>
         </div>
+        {/* ── Completed session banner ── */}
+        {sessionCompleted && (
+          <div className="flex items-center gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 px-4 py-3 text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-4">
+            <span className="material-symbols-outlined text-lg">lock</span>
+            This session is completed. All content is view-only — editing and generation are disabled.
+          </div>
+        )}
 
         {/* ── Body grid ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
@@ -780,6 +799,7 @@ export default function TranscriptPage() {
               <div className="flex flex-col gap-3">
                 <button
                   onClick={() => handleGenerate("sum")}
+                  disabled={sessionCompleted}
                   className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-primary-accent/90"
                 >
                   <span className="material-symbols-outlined text-xl">summarize</span>
@@ -797,7 +817,7 @@ export default function TranscriptPage() {
                     </button>
                     <button
                       onClick={() => handleGenerate("req", true)}
-                      disabled={isSubmittingReq || isCheckingReq || isTranslating || (shouldAutoTranslate && !translationData)}
+                      disabled={sessionCompleted || isSubmittingReq || isCheckingReq || isTranslating || (shouldAutoTranslate && !translationData)}
                       className="flex w-full items-center justify-center gap-3 rounded-lg border border-primary-accent/50 bg-transparent px-4 py-2.5 text-sm font-semibold text-primary-accent hover:bg-primary-accent/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isSubmittingReq || isCheckingReq ? (

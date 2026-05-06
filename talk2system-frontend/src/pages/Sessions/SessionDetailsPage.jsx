@@ -19,6 +19,9 @@ export default function SessionDetailsPage() {
   const [projectName, setProjectName] = useState(null);
   const [notification, setNotification] = useState(null);
 
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+
   // Derive active tab from current path
   const currentPath = location.pathname;
   const getActiveTab = () => {
@@ -100,6 +103,29 @@ export default function SessionDetailsPage() {
       navigate(`/projects/${resolvedProjectId}/sessions/${sessionId}/srs/generate`);
     }
   };
+  const handleCompleteSession = async () => {
+  setIsCompleting(true);
+  try {
+    const res = await fetch(
+      `http://127.0.0.1:8000/api/sessions/${sessionId}/complete`,
+      { method: "PATCH", headers: getAuthHeaders() }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Failed to complete session");
+
+    // Update local session state so UI reflects completed immediately
+    setSession((prev) => ({ ...prev, status: "completed" }));
+    setShowCompleteModal(false);
+    setNotification({ type: "success", message: "Session marked as completed." });
+    setTimeout(() => setNotification(null), 3000);
+  } catch (err) {
+    console.error(err);
+    setNotification({ type: "error", message: err.message });
+    setTimeout(() => setNotification(null), 3000);
+  } finally {
+    setIsCompleting(false);
+  }
+ };
 
   const getStatusStyle = (status) => {
     const s = (status || "").toLowerCase();
@@ -184,24 +210,42 @@ export default function SessionDetailsPage() {
             <span className="text-text-dark dark:text-text-light font-medium leading-normal">{title}</span>
           </div>
 
-          {/* Title + meta — same padding/sizing as project page */}
           <div className="flex flex-wrap justify-between items-start gap-4 p-4 pl-0">
-            <div className="flex min-w-72 flex-col gap-2">
-              <p className="text-gray-900 dark:text-white text-4xl font-black leading-tight">{title}</p>
+          <div className="flex min-w-72 flex-col gap-2">
+            <p className="text-gray-900 dark:text-white text-4xl font-black leading-tight">{title}</p>
 
-              {/* Chips — styled identically to project page */}
-              <div className="flex gap-3 pt-1 flex-wrap">
-                {createdAt && (
-                  <span className="flex h-7 items-center rounded-full bg-primary/10 px-3 text-primary text-xs font-medium">
-                    Created: {new Date(createdAt).toLocaleDateString()}
-                  </span>
-                )}
-                <span className={`flex h-7 items-center rounded-full px-3 text-xs font-medium ${getStatusStyle(status)}`}>
-                  Status: {status.replace(/_/g, " ")}
+            {/* Chips */}
+            <div className="flex gap-3 pt-1 flex-wrap">
+              {createdAt && (
+                <span className="flex h-7 items-center rounded-full bg-primary/10 px-3 text-primary text-xs font-medium">
+                  Created: {new Date(createdAt).toLocaleDateString()}
                 </span>
-              </div>
+              )}
+              <span className={`flex h-7 items-center rounded-full px-3 text-xs font-medium ${getStatusStyle(status)}`}>
+                Status: {status.replace(/_/g, " ")}
+              </span>
             </div>
           </div>
+
+          {/* Mark as Completed button — only shown when session is NOT already completed */}
+          {status !== "completed" && (
+            <button
+              onClick={() => setShowCompleteModal(true)}
+              className="flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-4 py-2.5 text-sm font-bold text-white transition-colors shadow-sm"
+            >
+              <span className="material-symbols-outlined text-lg">task_alt</span>
+              Mark as Completed
+            </button>
+          )}
+
+          {/* Badge shown when already completed */}
+          {status === "completed" && (
+            <div className="flex items-center gap-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 px-4 py-2.5 text-sm font-bold text-indigo-700 dark:text-indigo-300">
+              <span className="material-symbols-outlined text-lg">verified</span>
+              Session Completed
+            </div>
+          )}
+        </div>
 
           {/* ── Tabs — each navigates to its own route ── */}
           <div className="border-b border-gray-200 dark:border-gray-700 mb-2">
@@ -392,6 +436,55 @@ export default function SessionDetailsPage() {
           </div>
         </div>
       </div>
+      
+      {showCompleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowCompleteModal(false)}
+            />
+
+            {/* Modal card */}
+            <div className="relative w-full max-w-md rounded-2xl bg-white dark:bg-gray-800 p-8 shadow-2xl border border-gray-200 dark:border-gray-700">
+              <div className="flex flex-col items-center text-center">
+
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 mb-6">
+                  <span className="material-symbols-outlined text-4xl">task_alt</span>
+                </div>
+
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
+                  Mark Session as Completed?
+                </h3>
+
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
+                  This will lock the session. You will no longer be able to generate or edit anything — all pages will become <strong>view-only</strong>. This action cannot be undone.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={handleCompleteSession}
+                  disabled={isCompleting}
+                  className="inline-flex w-full justify-center items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-4 py-3 text-sm font-bold text-white transition-all"
+                >
+                  <span className="material-symbols-outlined text-lg">
+                    {isCompleting ? "hourglass_empty" : "check_circle"}
+                  </span>
+                  {isCompleting ? "Completing..." : "Yes, Mark as Completed"}
+                </button>
+
+                <button
+                  onClick={() => setShowCompleteModal(false)}
+                  disabled={isCompleting}
+                  className="inline-flex w-full justify-center items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-3 text-sm font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       {/* Toast */}
       {notification && (

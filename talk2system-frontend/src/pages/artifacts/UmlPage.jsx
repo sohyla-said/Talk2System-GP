@@ -15,6 +15,7 @@ const BASE_URL = "http://localhost:8000";
 
 export default function UmlPage() {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [sessionCompleted, setSessionCompleted] = useState(false);
   const [approved, setApproved] = useState(false);
   const [hasNewUnapproved, setHasNewUnapproved] = useState(false); // ✅ NEW
   const [umlApproval, setUmlApproval] = useState({
@@ -80,6 +81,16 @@ export default function UmlPage() {
       }
     }
   }, [projectId, location.state]);
+
+  useEffect(() => {
+  if (!sessionId || isProjectSource) return;
+  fetch(`http://localhost:8000/api/sessions/${sessionId}`, {
+    headers: getAuthHeaders(),
+  })
+    .then((r) => r.json())
+    .then((data) => setSessionCompleted(data.status === "completed"))
+    .catch(console.error);
+  }, [sessionId, isProjectSource]);
 
   const fetchVersions = async (resolvedSessionId = sessionId) => {
     try {
@@ -378,6 +389,12 @@ export default function UmlPage() {
               Generated from all project sessions' aggregated requirements
             </p>
           )}
+          {sessionCompleted && (
+          <div className="flex items-center gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 px-4 py-3 text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-4">
+            <span className="material-symbols-outlined text-lg">lock</span>
+            This session is completed. Generation is disabled — view only.
+          </div>
+        )}
         </div>
 
         {/* DIAGRAM TYPE */}
@@ -412,10 +429,10 @@ export default function UmlPage() {
 
               {/* GENERATE */}
               <button
-                onClick={handleGenerate}
-                disabled={loading || (!isProjectSource && !sessionId)}
-                className="h-10 px-4 rounded-lg bg-primary text-white disabled:opacity-50"
-              >
+                 onClick={handleGenerate}
+                 disabled={loading || (!isProjectSource && !sessionId) || (!isProjectSource && sessionCompleted)}
+                  className="h-10 px-4 rounded-lg bg-primary text-white disabled:opacity-50"
+                >
                 {loading ? "Generating..." : "Generate UML"}
               </button>
 
@@ -452,7 +469,7 @@ export default function UmlPage() {
                 // Project-level: direct artifact approval, no session members needed
                 <button
                   onClick={handleProjectApprove}
-                  disabled={approved || !artifactId}
+                  disabled={approved || !artifactId || sessionCompleted}
                   className={`h-10 px-6 rounded-lg flex items-center gap-2 text-white
                     ${approved ? "bg-green-600" : "bg-primary"}`}
                 >

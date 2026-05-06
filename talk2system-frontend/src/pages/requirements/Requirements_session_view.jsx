@@ -17,6 +17,7 @@ export default function RequirementsSessionView() {
   const [showApprovalModal, setShowApprovalModal] = useState(false);  // controls visibility of the approval modal
   const [pendingNavigation, setPendingNavigation] = useState(null);   // Stores target route temporarily when user tries to move to another tab before approval.
   const [showEditModal, setShowEditModal] = useState(false);  // controls whether the edit modal is opened
+  const [sessionCompleted, setSessionCompleted] = useState(false);
   const [editingSection, setEditingSection] = useState(null); // Stores which section is being edited, such as functional, nonFunctional, actors, features.
   const [versions, setVersions] = useState([]); // Holds all available versions for the current session requirement set (for dropdown).
   const [selectedVersionId, setSelectedVersionId] = useState(null); // Tracks currently selected version in the dropdown.
@@ -86,14 +87,15 @@ export default function RequirementsSessionView() {
     refreshRequirementsApproval();
   }, [sessionId]);
 
-  // useEffect(() => {
-  //   if (versions.length > 0) {
-  //     const latest = versions[0]; // already sorted DESC
-  //     setSelectedVersionId(latest.id);
-  //     fetchRequirementById(latest.id);
-  //   }
-  // }, [versions]);
-
+  useEffect(() => {
+  if (!sessionId) return;
+  fetch(`http://localhost:8000/api/sessions/${sessionId}`, {
+    headers: getAuthHeaders(),
+  })
+    .then((r) => r.json())
+    .then((data) => setSessionCompleted(data.status === "completed"))
+    .catch(console.error);
+  }, [sessionId]);
   // poll for versions changes to support multi-user live sync
   useEffect(() => {
     if (!projectId || !sessionId) return;
@@ -658,6 +660,12 @@ const handleApprove = async () => {
               These requirements are choosen from the <strong>{chosenRunType || "selected extractor"}</strong>.
             </p>
           </div>
+          {sessionCompleted && (
+            <div className="flex items-center gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 px-4 py-3 text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-2">
+              <span className="material-symbols-outlined text-lg">lock</span>
+              This session is completed. All content is view-only — editing and generation are disabled.
+            </div>
+          )}
           <div className="flex items-start gap-3">
             <div className="flex flex-col items-stretch sm:items-end gap-3 w-full sm:w-auto">
               <button
@@ -667,7 +675,7 @@ const handleApprove = async () => {
                     ? 'bg-green-600 text-white cursor-default'
                     : 'bg-primary text-white hover:bg-primary/90'
                 }`}
-                disabled={approved || !(currentRequirementId ?? requirementId)}
+                disabled={approved || sessionCompleted || !(currentRequirementId ?? requirementId)}
               >
                 <span className="material-symbols-outlined text-lg">
                   {approved ? 'check_circle' : 'approval'}
@@ -728,7 +736,7 @@ const handleApprove = async () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-4 pb-4">
               <button
                 onClick={() => handleGenerate("uml")}
-                disabled={!requirementsApproval.all_members_approved}
+                disabled={sessionCompleted || !requirementsApproval.all_members_approved}
                 className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary px-4 py-3 font-bold text-white shadow-soft transition-colors hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined text-xl">schema</span>
@@ -736,7 +744,7 @@ const handleApprove = async () => {
               </button>
               <button
                 onClick={() => handleGenerate("srs")}
-                disabled={!requirementsApproval.all_members_approved}
+                disabled={sessionCompleted || !requirementsApproval.all_members_approved}
                 className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary px-4 py-3 font-bold text-white shadow-soft transition-colors hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined text-xl">description</span>
@@ -778,6 +786,7 @@ const handleApprove = async () => {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Functional Requirements
                       </p>
+                      {!sessionCompleted && (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -789,6 +798,7 @@ const handleApprove = async () => {
                         <span className="material-symbols-outlined text-sm leading-none">delete</span>
                         {selectionMode.functional ? "Cancel" : "Select"}
                       </button>
+                      )}
                       {selectionMode.functional && (
                         <button
                           type="button"
@@ -802,15 +812,17 @@ const handleApprove = async () => {
                           Delete Selected ({(selectedItems.functional || []).length})
                         </button>
                       )}
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditSection('functional');
-                        }}
-                        className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
-                      >
-                        edit
-                      </span>
+                      {!sessionCompleted && (
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditSection('functional');
+                          }}
+                          className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
+                        >
+                          edit
+                        </span>
+                      )}
                     </div>
                     <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal">
                       User-facing features and system behaviors.
@@ -863,6 +875,7 @@ const handleApprove = async () => {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Non-Functional Requirements
                       </p>
+                      {!sessionCompleted && (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -874,6 +887,7 @@ const handleApprove = async () => {
                         <span className="material-symbols-outlined text-sm leading-none">delete</span>
                         {selectionMode.nonFunctional ? "Cancel" : "Select"}
                       </button>
+                      )}
                       {selectionMode.nonFunctional && (
                         <button
                           type="button"
@@ -887,15 +901,17 @@ const handleApprove = async () => {
                           Delete Selected ({(selectedItems.nonFunctional || []).length})
                         </button>
                       )}
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditSection('nonFunctional');
-                        }}
-                        className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
-                      >
-                        edit
-                      </span>
+                      {!sessionCompleted && (
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditSection('nonFunctional');
+                          }}
+                          className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
+                        >
+                          edit
+                        </span>
+                      )}
                     </div>
                     <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal">
                       System qualities like performance, security, and usability.
@@ -948,6 +964,7 @@ const handleApprove = async () => {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Actors
                       </p>
+                      {!sessionCompleted && (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -959,6 +976,7 @@ const handleApprove = async () => {
                         <span className="material-symbols-outlined text-sm leading-none">delete</span>
                         {selectionMode.actors ? "Cancel" : "Select"}
                       </button>
+                      )}
                       {selectionMode.actors && (
                         <button
                           type="button"
@@ -972,6 +990,7 @@ const handleApprove = async () => {
                           Delete Selected ({(selectedItems.actors || []).length})
                         </button>
                       )}
+                      {!sessionCompleted && (
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
@@ -981,6 +1000,7 @@ const handleApprove = async () => {
                       >
                         edit
                       </span>
+                    )}
                     </div>
                     <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal">
                       Roles that interact with the system.
@@ -1023,6 +1043,7 @@ const handleApprove = async () => {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Features
                       </p>
+                      {!sessionCompleted && (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -1034,6 +1055,7 @@ const handleApprove = async () => {
                         <span className="material-symbols-outlined text-sm leading-none">delete</span>
                         {selectionMode.features ? "Cancel" : "Select"}
                       </button>
+                      )}
                       {selectionMode.features && (
                         <button
                           type="button"
@@ -1047,15 +1069,17 @@ const handleApprove = async () => {
                           Delete Selected ({(selectedItems.features || []).length})
                         </button>
                       )}
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditSection('features');
-                        }}
-                        className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
-                      >
-                        edit
-                      </span>
+                      {!sessionCompleted && (
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditSection('features');
+                          }}
+                          className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
+                        >
+                          edit
+                        </span>
+                      )}
                     </div>
                     <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal">
                       High-level capabilities of the system.

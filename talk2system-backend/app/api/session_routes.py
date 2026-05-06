@@ -117,3 +117,19 @@ def update_session_status( session_id: int,status: str,db: Session = Depends(get
         raise HTTPException(status_code=404, detail="Session not found")
 
     return
+@router.patch("/{session_id}/complete")
+def complete_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        result = SessionService.complete_session(db, session_id, current_user.id)
+        return result
+    except ValueError as e:
+        msg = str(e)
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=404, detail=msg)
+        if "not a member" in msg.lower():
+            raise HTTPException(status_code=403, detail=msg)
+        raise HTTPException(status_code=400, detail=msg)

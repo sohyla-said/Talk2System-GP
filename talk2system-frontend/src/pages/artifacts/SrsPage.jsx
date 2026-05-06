@@ -253,7 +253,8 @@ export default function SrsPage() {
   const [versions, setVersions] = useState([]);
   const [artifactId, setArtifactId] = useState(null);
   const [approved, setApproved] = useState(false);
-  const [hasNewUnapproved, setHasNewUnapproved] = useState(false); // ✅ NEW
+  const [hasNewUnapproved, setHasNewUnapproved] = useState(false); 
+  const [sessionCompleted, setSessionCompleted] = useState(false);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [srsContent, setSrsContent] = useState(null);
   const [srsApproval, setSrsApproval] = useState({
@@ -330,6 +331,15 @@ export default function SrsPage() {
     }
   }, [projectId, urlSessionId, location.state]);
 
+  useEffect(() => {
+  if (!sessionId || isProjectSource) return;
+  fetch(`${BASE_URL}/api/sessions/${sessionId}`, {
+    headers: getAuthHeaders(),
+  })
+    .then((r) => r.json())
+    .then((data) => setSessionCompleted(data.status === "completed"))
+    .catch(console.error);
+  }, [sessionId, isProjectSource]);
   // ===============================
   // FETCH VERSIONS
   // ===============================
@@ -601,6 +611,12 @@ export default function SrsPage() {
             </p>
           )}
         </div>
+        {sessionCompleted && (
+          <div className="flex items-center gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 px-4 py-3 text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-4">
+            <span className="material-symbols-outlined text-lg">lock</span>
+            This session is completed. Generation is disabled — view only.
+          </div>
+        )}
 
         {/* =============================================
             FORMAT SELECTOR SECTION
@@ -662,7 +678,7 @@ export default function SrsPage() {
             <div className="flex gap-3 items-center">
               <button
                 onClick={handleGenerate}
-                disabled={loading || (!isProjectSource && !sessionId)}
+                disabled={loading || (!isProjectSource && !sessionCompleted)}
                 className="h-10 px-4 rounded-lg bg-primary text-white disabled:opacity-50"
               >
                 {loading ? "Generating..." : "Generate SRS"}
@@ -717,7 +733,7 @@ export default function SrsPage() {
               ) : (
               <button
                 onClick={() => setShowApprovalModal(true)}
-                disabled={isApprovedState || !artifactId}
+                disabled={isApprovedState || !artifactId || sessionCompleted}
                 className={`h-10 px-6 rounded-lg flex items-center gap-2 text-white ${isApprovedState ? "bg-green-600" : "bg-primary"}`}
               >
                 <span className="material-symbols-outlined">{isApprovedState ? "check_circle" : "approval"}</span>

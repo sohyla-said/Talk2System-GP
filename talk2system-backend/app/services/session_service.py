@@ -1,4 +1,3 @@
-
 from sqlalchemy.orm import Session
 from app.models.session import Session as SessionModel
 from app.models.session_membership import SessionMembership
@@ -102,3 +101,37 @@ class SessionService:
         session.status = status
         db.commit()
         return True
+
+
+    @staticmethod
+    def complete_session(db: Session, session_id: int, user_id: int):
+        """
+        Marks a session as completed.
+        Raises ValueError with a message if validation fails.
+        """
+        session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+        if not session:
+            raise ValueError("Session not found")
+
+        # Only session members can complete it
+        membership = (
+            db.query(SessionMembership)
+            .filter_by(session_id=session_id, user_id=user_id)
+            .first()
+        )
+        if not membership:
+            raise ValueError("You are not a member of this session")
+
+        # Prevent completing an already completed session
+        if session.status == "completed":
+            raise ValueError("Session is already completed")
+
+        session.status = "completed"
+        db.commit()
+        db.refresh(session)
+
+        return {
+            "session_id": session.id,
+            "status": session.status,
+            "message": "Session marked as completed"
+        }
