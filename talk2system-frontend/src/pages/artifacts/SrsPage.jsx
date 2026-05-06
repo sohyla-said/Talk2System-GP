@@ -445,7 +445,6 @@ export default function SrsPage() {
       setApproved(false);
       setHasNewUnapproved(true); 
 
-      
       setSrsApproval((prev) => ({
         ...prev,
         approved_members_count: 0,
@@ -454,11 +453,17 @@ export default function SrsPage() {
         status: "pending",
       }));
 
-      
-      await fetch(
-        `${BASE_URL}/api/sessions/${sessionId}/features/srs/approvals`,
-        { method: "DELETE", headers: getAuthHeaders() }
+      const statusRes = await fetch(
+        `${BASE_URL}/api/sessions/${sessionId}/computed-status`,
+        { headers: getAuthHeaders() }
       );
+      if (statusRes.ok) {
+        const { status: computedStatus } = await statusRes.json();
+        await fetch(
+          `${BASE_URL}/api/sessions/${sessionId}/status?status=${computedStatus}`,
+          { method: "PUT", headers: getAuthHeaders() }
+        );
+      }
 
       fetchVersions(sessionId);
       refreshSrsApproval(sessionId);
@@ -488,61 +493,79 @@ export default function SrsPage() {
   // SELECT VERSION
   // ===============================
   const handleSelectVersion = async (selectedId) => {
-    try {
-      const res = await getSrsArtifact(selectedId);
-      setArtifactId(res.data.id);
-      setSrsContent(res.data.file_path);
-      setApproved(
-        Boolean(srsApproval.current_user_approved) || res.data.approval_status === "approved"
+  try {
+    const res = await getSrsArtifact(selectedId);
+    setArtifactId(res.data.id);
+    setSrsContent(res.data.file_path);
+    setPreviewText(null);
+    setPreviewMode(false);
+    await fetchSrsText(res.data.id);
+
+    // Fetch the real approval status for THIS specific version — no delete
+    if (!isProjectSource && sessionId) {
+      const approvalRes = await fetch(
+        `${BASE_URL}/api/sessions/${sessionId}/features/srs/approval-status/${selectedId}`,
+        { headers: getAuthHeaders() }
       );
-      setPreviewText(null);
-      setPreviewMode(false);
-      await fetchSrsText(res.data.id);
-    } catch (err) {
-      console.error(err);
+      if (approvalRes.ok) {
+        const approvalData = await approvalRes.json();
+        setSrsApproval(approvalData);
+        setApproved(Boolean(approvalData.current_user_approved));
+        setHasNewUnapproved(!approvalData.all_members_approved);
+      }
+    } else {
+      setApproved(res.data.approval_status === "approved");
     }
-  };
+  } catch (err) {
+    console.error(err);
+  }
+};
 
   // ===============================
   // APPROVE
   // ===============================
   const handleApprove = async () => {
-    try {
-      const response = await fetch(
-        `${BASE_URL}/api/sessions/${sessionId}/features/srs/approve`,
-        {
-          method: "POST",
-          headers: getAuthHeaders(),
-        }
-      );
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.detail || "Failed to approve SRS");
+  try {
+    const response = await fetch(
+      `${BASE_URL}/api/sessions/${sessionId}/features/srs/approve`,
+      {
+        method: "POST",
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ version_id: artifactId }),   // ← tie approval to this artifact version
       }
+    );
 
-      setSrsApproval(data);
-      setApproved(Boolean(data.current_user_approved));
-      setHasNewUnapproved(false); 
-      setShowApprovalModal(false);
-
-      const newStatus = data.all_members_approved ? "processing" : "pending approval";
-      await fetch(
-        `${BASE_URL}/api/sessions/${sessionId}/status?status=${newStatus}`,
-        {
-          method: "PUT",
-          headers: { Authorization: `Bearer ${getToken()}` },
-        }
-      );
-
-      if (data.all_members_approved && artifactId) {
-        await approveSrsArtifact(artifactId);
-        fetchVersions(sessionId);
-      }
-    } catch (err) {
-      console.error(err);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.detail || "Failed to approve SRS");
     }
-  };
+
+    setSrsApproval(data);
+    setApproved(Boolean(data.current_user_approved));
+    setHasNewUnapproved(false);
+    setShowApprovalModal(false);
+
+    // Use computed-status instead of hardcoded string
+    const statusRes = await fetch(
+      `${BASE_URL}/api/sessions/${sessionId}/computed-status`,
+      { headers: getAuthHeaders() }
+    );
+    if (statusRes.ok) {
+      const { status: computedStatus } = await statusRes.json();
+      await fetch(
+        `${BASE_URL}/api/sessions/${sessionId}/status?status=${computedStatus}`,
+        { method: "PUT", headers: getAuthHeaders() }
+      );
+    }
+
+    if (data.all_members_approved && artifactId) {
+      await approveSrsArtifact(artifactId);
+      fetchVersions(sessionId);
+    }
+  } catch (err) {
+    console.error(err);
+  }
+ };
 
   // Derived: is the button currently in "approved" display state?
   const isApprovedState = approved && !hasNewUnapproved; 

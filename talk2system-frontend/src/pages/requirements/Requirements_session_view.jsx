@@ -256,6 +256,21 @@ export default function RequirementsSessionView() {
       console.error("Failed to load requirements approval status:", err);
     }
   };
+  const refreshRequirementsApprovalForVersion = async (versionId) => {
+  if (!sessionId || !versionId) return;
+  try {
+    const res = await fetch(
+      `http://localhost:8000/api/sessions/${sessionId}/features/requirements/approval-status/${versionId}`,
+      { headers: getAuthHeaders() }
+    );
+    if (!res.ok) return;
+    const data = await res.json();
+    setRequirementsApproval(data);
+    setApproved(Boolean(data.current_user_approved));
+  } catch (err) {
+    console.error("Failed to load version approval status:", err);
+  }
+ };
 
     const hasExtractedRequirements =
     requirements.functional.length > 0 ||
@@ -444,7 +459,9 @@ const handleApprove = async () => {
       `http://localhost:8000/api/sessions/${sessionId}/features/requirements/approve`,
       {
         method: 'POST',
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(true),
+        body: JSON.stringify({ version_id: currentRequirementId }),
+
       }
     );
 
@@ -456,11 +473,17 @@ const handleApprove = async () => {
     setRequirementsApproval(data);
     setApproved(Boolean(data.current_user_approved));
     setShowApprovalModal(false);
-    const newStatus = data.all_members_approved ? "processing" : "pending approval";
-    await fetch(
-      `http://localhost:8000/api/sessions/${sessionId}/status?status=${newStatus}`,
-      { method: "PUT", headers: getAuthHeaders() }
+    const statusRes = await fetch(
+      `http://localhost:8000/api/sessions/${sessionId}/computed-status`,
+      { headers: getAuthHeaders() }
     );
+    if (statusRes.ok) {
+      const { status: computedStatus } = await statusRes.json();
+      await fetch(
+        `http://localhost:8000/api/sessions/${sessionId}/status?status=${computedStatus}`,
+        { method: "PUT", headers: getAuthHeaders() }
+      );}
+    
 
     if (data.all_members_approved){
       const targetRequirementId = currentRequirementId ?? requirementId;
@@ -529,17 +552,24 @@ const handleApprove = async () => {
       if (!res.ok) {
         throw new Error(data.detail || "Failed to update requirements");
       }
-      await fetch(
-      `http://localhost:8000/api/sessions/${sessionId}/features/requirements/approvals`,
-      { method: "DELETE", headers: getAuthHeaders() }
-     );
-
-   
-      await fetch(
-        `http://localhost:8000/api/sessions/${sessionId}/status?status=pending_approval`,
-        { method: "PUT", headers: getAuthHeaders() }
+      setRequirementsApproval((prev) => ({
+        ...prev,
+        approved_members_count: 0,
+        current_user_approved: false,
+        all_members_approved: false,
+        status: "pending",
+      }));
+      setApproved(false);
+      const statusRes = await fetch(
+        `http://localhost:8000/api/sessions/${sessionId}/computed-status`,
+        { headers: getAuthHeaders() }
       );
-
+      if (statusRes.ok) {
+        const { status: computedStatus } = await statusRes.json();
+        await fetch(
+          `http://localhost:8000/api/sessions/${sessionId}/status?status=${computedStatus}`,
+          { method: "PUT", headers: getAuthHeaders() }
+        );}
       // Update UI with NEW version
       setCurrentRequirementId(data.id);
       setRequirementId(data.id);
@@ -658,10 +688,11 @@ const handleApprove = async () => {
                 </div>
                 <select
                   value={selectedVersionId || ""}
-                  onChange={(e) => {
-                    const id = e.target.value;
+                  onChange={async (e) => {
+                    const id = Number(e.target.value);
                     setSelectedVersionId(id);
-                    fetchRequirementById(id);
+                    await fetchRequirementById(id);
+                    await refreshRequirementsApprovalForVersion(id);  // ← ADD: check this version's real approval state
                   }}
                   className={`appearance-none w-full h-full bg-transparent pl-10 pr-10 text-sm font-semibold tracking-wide focus:outline-none focus:ring-2 focus:ring-primary/30 rounded-xl ${
                     approved ? 'text-green-600 dark:text-green-300' : 'text-primary'

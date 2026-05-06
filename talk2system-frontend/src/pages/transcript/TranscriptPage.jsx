@@ -301,37 +301,69 @@ export default function TranscriptPage() {
   };
 
   const handleSaveEdit = async (updatedSpeaker) => {
-    const segmentIndex = updatedSpeaker.id - 1;
-    try {
-      const res = await fetch(
-        `http://localhost:8000/api/sessions/${sessionId}/transcript/segment`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${getToken()}`,
-          },
-          body: JSON.stringify({
-            segment_index: segmentIndex,
-            speaker: updatedSpeaker.name,
-            text: updatedSpeaker.text,
-          }),
-        }
-      );
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail ?? "Failed to save segment");
+  const segmentIndex = updatedSpeaker.id - 1;
+  try {
+    const res = await fetch(
+      `http://localhost:8000/api/sessions/${sessionId}/transcript/segment`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({
+          segment_index: segmentIndex,
+          speaker: updatedSpeaker.name,
+          text: updatedSpeaker.text,
+        }),
       }
-      setTranscriptData((prev) =>
-        prev.map((sp) => (sp.id === updatedSpeaker.id ? updatedSpeaker : sp))
-      );
-    } catch (error) {
-      console.error("Error saving transcript edit:", error);
-      alert(error.message);
-    } finally {
-      setShowEditModal(false);
-      setEditingSpeaker(null);
+    );
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail ?? "Failed to save segment");
     }
+
+    // Update UI with edited segment
+    setTranscriptData((prev) =>
+      prev.map((sp) => (sp.id === updatedSpeaker.id ? updatedSpeaker : sp))
+    );
+
+    // ── Transcript was edited: reset approvals for transcript feature ──────
+    await fetch(
+      `http://localhost:8000/api/sessions/${sessionId}/features/transcript/approvals`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${getToken()}` } }
+    );
+
+    // Reset local approval UI state
+    setApproved(false);
+    setTranscriptApproval({
+      approved_members_count: 0,
+      total_members_count: transcriptApproval.total_members_count,
+      current_user_approved: false,
+      all_members_approved: false,
+      status: "pending",
+    });
+
+    // Update session status via computed-status
+    const statusRes = await fetch(
+      `http://localhost:8000/api/sessions/${sessionId}/computed-status`,
+      { headers: { Authorization: `Bearer ${getToken()}` } }
+    );
+    if (statusRes.ok) {
+      const { status: computedStatus } = await statusRes.json();
+      await fetch(
+        `http://localhost:8000/api/sessions/${sessionId}/status?status=${computedStatus}`,
+        { method: "PUT", headers: { Authorization: `Bearer ${getToken()}` } }
+      );
+    }
+
+  } catch (error) {
+    console.error("Error saving transcript edit:", error);
+    alert(error.message);
+  } finally {
+    setShowEditModal(false);
+    setEditingSpeaker(null);
+  }
   };
 
   // ── Approve ──────────────────────────────────────────────────────────────
@@ -349,11 +381,18 @@ export default function TranscriptPage() {
         setApproved(Boolean(data.current_user_approved));
         setShowModal(false);
 
-        const newStatus = data.all_members_approved ? "processing" : "pending approval";
-        await fetch(
-          `http://localhost:8000/api/sessions/${sessionId}/status?status=${newStatus}`,
-          { method: "PUT", headers: { Authorization: `Bearer ${getToken()}` } }
+        // Compute the real session status from backend instead of hardcoding
+        const statusRes = await fetch(
+          `http://localhost:8000/api/sessions/${sessionId}/computed-status`,
+          { headers: { Authorization: `Bearer ${getToken()}` } }
         );
+        if (statusRes.ok) {
+          const { status: computedStatus } = await statusRes.json();
+          await fetch(
+            `http://localhost:8000/api/sessions/${sessionId}/status?status=${computedStatus}`,
+            { method: "PUT", headers: { Authorization: `Bearer ${getToken()}` } }
+          );
+        }
 
         if (data.all_members_approved) {
           try {

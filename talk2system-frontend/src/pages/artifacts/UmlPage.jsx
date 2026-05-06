@@ -195,7 +195,7 @@ export default function UmlPage() {
       setApproved(false);
       setHasNewUnapproved(true);
 
-      // ✅ Reset approval counts immediately in UI so it shows 0/N right away
+      //  Reset approval counts immediately in UI so it shows 0/N right away
       setUmlApproval((prev) => ({
         ...prev,
         approved_members_count: 0,
@@ -203,12 +203,19 @@ export default function UmlPage() {
         all_members_approved: false,
         status: "pending",
       }));
-
-      // ✅ DELETE first, then refresh so the server reflects the reset before we re-fetch
-      await fetch(
-        `http://localhost:8000/api/sessions/${sessionId}/features/uml/approvals`,
-        { method: "DELETE", headers: getAuthHeaders() }
+      const statusRes = await fetch(
+        `http://localhost:8000/api/sessions/${sessionId}/computed-status`,
+        { headers: getAuthHeaders() }
       );
+      if (statusRes.ok) {
+        const { status: computedStatus } = await statusRes.json();
+        await fetch(
+          `http://localhost:8000/api/sessions/${sessionId}/status?status=${computedStatus}`,
+          { method: "PUT", headers: getAuthHeaders() }
+        );
+      }
+
+      
 
       fetchVersions(sessionId);
       await refreshUmlApproval(sessionId);
@@ -246,57 +253,76 @@ export default function UmlPage() {
   // ===============================
   // SELECT VERSION
   // ===============================
-  const handleSelectVersion = async (artifactId) => {
-    try {
-      const res = await getArtifact(artifactId);
-      setDiagramUrl(`${BASE_URL}/${res.data.file_path}`);
-      setArtifactId(res.data.id);
-      setApproved(Boolean(umlApproval.current_user_approved) || res.data.approval_status === "approved");
-    } catch (err) {
-      console.error(err);
-    }
-  };
+ const handleSelectVersion = async (selectedArtifactId) => {
+  try {
+    const res = await getArtifact(selectedArtifactId);
+    setDiagramUrl(`${BASE_URL}/${res.data.file_path}`);
+    setArtifactId(res.data.id);
 
+    // Fetch the real approval status for THIS specific version
+    if (!isProjectSource && sessionId) {
+      const approvalRes = await fetch(
+        `${BASE_URL}/api/sessions/${sessionId}/features/uml/approval-status/${selectedArtifactId}`,
+        { headers: getAuthHeaders() }
+      );
+      if (approvalRes.ok) {
+        const approvalData = await approvalRes.json();
+        setUmlApproval(approvalData);
+        setApproved(Boolean(approvalData.current_user_approved));
+        setHasNewUnapproved(!approvalData.all_members_approved);
+      }
+    } else {
+      setApproved(res.data.approval_status === "approved");
+    }
+  } catch (err) {
+    console.error(err);
+  }
+ };
   // ===============================
   // APPROVE
   // ===============================
   const handleApprove = async () => {
-    try {
-      const response = await fetch(
-        `${BASE_URL}/api/sessions/${sessionId}/features/uml/approve`,
-        {
-          method: "POST",
-          headers: getAuthHeaders(),
-        }
-      );
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.detail || "Failed to approve UML");
+  try {
+    const response = await fetch(
+      `${BASE_URL}/api/sessions/${sessionId}/features/uml/approve`,
+      {
+        method: "POST",
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ version_id: artifactId }),   // ← pass current artifact as version
       }
+    );
 
-      setUmlApproval(data);
-      setApproved(Boolean(data.current_user_approved));
-      setHasNewUnapproved(false); // ✅ NEW — clear flag after successful approval
-      setShowApprovalModal(false);
-
-      const newStatus = data.all_members_approved ? "processing" : "pending approval";
-      await fetch(
-        `http://localhost:8000/api/sessions/${sessionId}/status?status=${newStatus}`,
-        {
-          method: "PUT",
-          headers: { Authorization: `Bearer ${getToken()}` },
-        }
-      );
-
-      if (data.all_members_approved && artifactId) {
-        await approveArtifact(artifactId);
-        fetchVersions();
-      }
-    } catch (err) {
-      console.error(err);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.detail || "Failed to approve UML");
     }
-  };
+
+    setUmlApproval(data);
+    setApproved(Boolean(data.current_user_approved));
+    setHasNewUnapproved(false);
+    setShowApprovalModal(false);
+
+    // Use computed-status instead of hardcoded string
+    const statusRes = await fetch(
+      `${BASE_URL}/api/sessions/${sessionId}/computed-status`,
+      { headers: getAuthHeaders() }
+    );
+    if (statusRes.ok) {
+      const { status: computedStatus } = await statusRes.json();
+      await fetch(
+        `${BASE_URL}/api/sessions/${sessionId}/status?status=${computedStatus}`,
+        { method: "PUT", headers: getAuthHeaders() }
+      );
+    }
+
+    if (data.all_members_approved && artifactId) {
+      await approveArtifact(artifactId);
+      fetchVersions();
+    }
+  } catch (err) {
+    console.error(err);
+  }
+ };
 
   // ===============================
   // EXPORT

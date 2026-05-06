@@ -1,49 +1,3 @@
-# from sqlalchemy import Column, String, DateTime, ForeignKey, Text, JSON, Integer
-# from sqlalchemy.orm import relationship
-# from datetime import datetime
-# from app.db.base import Base
-
-
-# class Session(Base):
-#     __tablename__ = "sessions"
-
-#     id = Column(Integer, primary_key=True, autoincrement=True)
-#     title = Column(String, nullable=False)
-#     project_id = Column(Integer, ForeignKey("projects.id"))
-#     status = Column(String, default="processing")
-#     audio_file_path = Column(String, nullable=True)
-#     transcript_text = Column(Text, nullable=True)
-#     created_at = Column(DateTime, default=datetime.utcnow)
-   
-#  #relationships
-#     project = relationship("Project", back_populates="sessions")
-#     artifacts = relationship("Artifact",back_populates="session")
-#     session_requirements = relationship("SessionRequirement",back_populates="session")
-#     transcripts = relationship("TranscriptSegment",back_populates="session", cascade="all, delete")
-#     requirement_runs = relationship(
-#         "RequirementRun",
-#         back_populates="session",
-#         cascade="all, delete-orphan"
-#     )
-#     summaries = relationship(
-#     "Summary",
-#     back_populates="session",
-#     cascade="all, delete-orphan"
-#    )
-#     session_memberships = relationship(
-#         "SessionMembership",
-#         back_populates="session",
-#         cascade="all, delete-orphan"
-#     )
-#     approvals = relationship(
-#     "Approval",
-#     back_populates="session",
-#     cascade="all, delete-orphan"
-# )
-
-
-
-
 from sqlalchemy import Boolean, Column, String, DateTime, ForeignKey, Text, JSON, Integer
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -56,7 +10,7 @@ class Session(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     title = Column(String, nullable=False)
     project_id = Column(Integer, ForeignKey("projects.id"))
-    status = Column(String, default="processing")
+    status = Column(String, default="In Progress")
     audio_file_path = Column(String, nullable=True)
     transcript_text = Column(Text, nullable=True)
     translation_notified = Column(Boolean, default=False, nullable=False, server_default="false")

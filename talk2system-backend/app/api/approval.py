@@ -1,6 +1,6 @@
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException,Body,Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -20,6 +20,9 @@ class ApprovalItem(BaseModel):
     all_members_approved: bool
     status: str
     exists: bool
+class ApproveRequest(BaseModel):
+    version_id: Optional[int] = None
+
 
 
 class ApprovalStatusResponse(BaseModel):
@@ -35,10 +38,48 @@ def get_features_approval_status( session_id: int,db: Session = Depends(get_db),
         raise HTTPException(status_code=exc.status_code, detail=exc.detail)
 
 
+
 @router.post("/sessions/{session_id}/features/{feature}/approve", response_model=ApprovalItem)
-def approve_feature(session_id: int,feature: str,db: Session = Depends(get_db),current_user: User = Depends(get_current_user),):
+def approve_feature(
+    session_id: int, feature: str,
+    body: ApproveRequest = Body(default=ApproveRequest()),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     try:
-        return ApprovalService.approve_feature(db, session_id, current_user.id, feature)
+        return ApprovalService.approve_feature(
+            db, session_id, current_user.id, feature,
+            version_id=body.version_id   # ← pass version_id
+        )
+    except ApprovalError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+
+
+@router.get("/sessions/{session_id}/features/{feature}/approval-status/{version_id}",response_model=ApprovalItem)
+def get_version_approval_status(
+    session_id: int, feature: str, version_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return ApprovalService.get_version_approval_status(
+            db, session_id, current_user.id, feature, version_id
+        )
+    except ApprovalError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+
+
+@router.delete("/sessions/{session_id}/features/{feature}/approvals")
+def reset_feature_approvals(
+    session_id: int, feature: str,
+    version_id: Optional[int] = Query(default=None),   # ← optional filter
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        ApprovalService._ensure_session_membership(db, session_id, current_user.id)
+        ApprovalService.reset_feature_approvals(db, session_id, feature, version_id=version_id)
+        return ApprovalService.get_approval_status(db, session_id, current_user.id)
     except ApprovalError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail)
     
@@ -55,17 +96,8 @@ def approve_feature_for_all(
     except ApprovalError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail)
     
-@router.delete("/sessions/{session_id}/features/{feature}/approvals")
-def reset_feature_approvals(
-    session_id: int,
-    feature: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    try:
-        # Only session members should be able to reset
-        ApprovalService._ensure_session_membership(db, session_id, current_user.id)
-        ApprovalService.reset_feature_approvals(db, session_id, feature)
-        return ApprovalService.get_approval_status(db, session_id, current_user.id)
-    except ApprovalError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+@router.get("/sessions/{session_id}/computed-status")
+def get_computed_status(session_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    ApprovalService._ensure_session_membership(db, session_id, current_user.id)
+    status = ApprovalService.compute_session_status(db, session_id)
+    return {"status": status}
