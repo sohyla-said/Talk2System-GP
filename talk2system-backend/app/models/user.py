@@ -54,6 +54,7 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    project_approvals = relationship("ProjectApproval", back_populates="user")
 
     def __repr__(self):
         return f"<User id={self.id} email={self.email!r} role={self.role!r} status={self.status!r}>"

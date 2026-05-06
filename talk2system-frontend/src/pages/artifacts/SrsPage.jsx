@@ -411,30 +411,30 @@ export default function SrsPage() {
   // GENERATE SRS
   // ===============================
   const handleGenerate = async () => {
-        if (isProjectSource) {
-      // PROJECT-LEVEL generation — new path, touches nothing in session logic
-      try {
-        setLoading(true);
-        const res = await fetch(
-          `${BASE_URL}/api/projects/${projectId}/generate-srs?format_version=${formatVersion}`,
-          { method: "POST", headers: getAuthHeaders() }
-        );
-        if (!res.ok) throw new Error("SRS generation failed");
-        const data = await res.json();
-        const artifact = data.artifact;
-        setArtifactId(artifact.id);
-        setSrsContent(artifact.file_path);
-        fetchSrsText(artifact.id);
-        setApproved(false);
-        fetchVersions(); // project-level fetchVersions (no sessionId needed)
-      } catch (err) {
-        console.error(err);
-        alert("SRS generation failed. Make sure Ollama is running.");
-      } finally {
-        setLoading(false);
-      }
-      return; // ✅ Early return — session logic below never runs for project source
-    }
+      if (isProjectSource) {
+  // PROJECT-LEVEL generation — new path, touches nothing in session logic
+  try {
+    setLoading(true);
+    const res = await fetch(
+      `${BASE_URL}/api/projects/${projectId}/generate-srs?format_version=${formatVersion}`,
+      { method: "POST", headers: getAuthHeaders() }
+    );
+    if (!res.ok) throw new Error("SRS generation failed");
+    const data = await res.json();
+    const artifact = data.artifact;
+    setArtifactId(artifact.id);
+    setSrsContent(artifact.file_path);
+    fetchSrsText(artifact.id);
+    setApproved(false);
+    fetchVersions(); // project-level fetchVersions (no sessionId needed)
+  } catch (err) {
+    console.error(err);
+    alert("SRS generation failed. Make sure Ollama is running.");
+  } finally {
+    setLoading(false);
+  }
+  return; // ✅ Early return
+ }
 
     if (!sessionId) {
       alert("No session found. Please start a meeting session first.");
@@ -489,15 +489,42 @@ export default function SrsPage() {
   // APPROVE (project-level — direct artifact approval)
   // ===============================
   const handleProjectApprove = async () => {
-    if (!artifactId) return;
-    try {
-      const res = await approveSrsArtifact(artifactId); // calls POST /api/artifacts/{id}/approve
-      setApproved(res.data.status === "approved" || res.data.approval_status === "approved");
-      fetchVersions(); // refresh version dropdown to show updated status
-    } catch (err) {
-      console.error("Failed to approve project SRS artifact:", err);
+  if (!artifactId) return;
+  try {
+    const res = await fetch(
+      `${BASE_URL}/api/projects/${projectId}/features/srs/approve`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ version_id: artifactId }),
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    setApproved(Boolean(data.current_user_approved));
+
+    if (data.all_members_approved) {
+      await approveSrsArtifact(artifactId);
+      fetchVersions();
     }
-  };
+
+    // Update project status
+    const statusRes = await fetch(
+      `${BASE_URL}/api/projects/${projectId}/computed-status`,
+      { headers: getAuthHeaders() }
+    );
+    if (statusRes.ok) {
+      const { status: computedStatus } = await statusRes.json();
+      await fetch(
+        `${BASE_URL}/api/projects/${projectId}/status?status=${computedStatus}`,
+        { method: "PUT", headers: getAuthHeaders() }
+      );
+    }
+  } catch (err) {
+    console.error("Failed to approve project SRS artifact:", err);
+  }
+ };
 
   // ===============================
   // SELECT VERSION

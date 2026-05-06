@@ -167,29 +167,43 @@ export default function UmlPage() {
 
   const handleGenerate = async () => {
 
-        if (isProjectSource) {
-      // ✅ PROJECT-LEVEL generation — new path, touches nothing in session logic
-      try {
-        setLoading(true);
-        const res = await fetch(
-          `${BASE_URL}/api/projects/${projectId}/generate-uml?diagram_type=${diagramType}`,
-          { method: "POST", headers: getAuthHeaders() }
-        );
+       if (isProjectSource) {
+  // ✅ PROJECT-LEVEL generation — new path, touches nothing in session logic
+  try {
+    setLoading(true);
+    const res = await fetch(
+      `${BASE_URL}/api/projects/${projectId}/generate-uml?diagram_type=${diagramType}`,
+      { method: "POST", headers: getAuthHeaders() }
+    );
 
-        if (!res.ok) throw new Error("Generation failed");
-        const data = await res.json();
-        setDiagramUrl(`${BASE_URL}/${data.file_path}`);
-        setArtifactId(data.artifact.id);
-        setApproved(false);
-        fetchVersions(); // project-level fetchVersions (no sessionId needed)
-      } catch (err) {
-        console.error(err);
-        alert("Failed to generate UML diagram.");
-      } finally {
-        setLoading(false);
-      }
-      return; // ✅ Early return — session logic below never runs for project source
+    if (!res.ok) throw new Error("Generation failed");
+    const data = await res.json();
+    setDiagramUrl(`${BASE_URL}/${data.file_path}`);
+    setArtifactId(data.artifact.id);
+    setApproved(false);
+    fetchVersions();
+
+    // ← ADD: update project status since new artifact has no approvals yet
+    const statusRes = await fetch(
+      `${BASE_URL}/api/projects/${projectId}/computed-status`,
+      { headers: getAuthHeaders() }
+    );
+    if (statusRes.ok) {
+      const { status: computedStatus } = await statusRes.json();
+      await fetch(
+        `${BASE_URL}/api/projects/${projectId}/status?status=${computedStatus}`,
+        { method: "PUT", headers: getAuthHeaders() }
+      );
     }
+
+  } catch (err) {
+    console.error(err);
+    alert("Failed to generate UML diagram.");
+  } finally {
+    setLoading(false);
+  }
+  return;
+ }
 
     if (!sessionId) {
       alert("No session found for this project. Please start a meeting session first.");
@@ -241,15 +255,44 @@ export default function UmlPage() {
   // APPROVE (project-level — direct artifact approval, no session members)
   // ===============================
   const handleProjectApprove = async () => {
-    if (!artifactId) return;
-    try {
-      const res = await approveArtifact(artifactId); // calls POST /api/artifacts/{id}/approve
-      setApproved(res.data.status === "approved");
-      fetchVersions(); // refresh version dropdown to show updated status
-    } catch (err) {
-      console.error("Failed to approve project artifact:", err);
+  if (!artifactId) return;
+  try {
+    // Approve via project approval service
+    const res = await fetch(
+      `${BASE_URL}/api/projects/${projectId}/features/uml/approve`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ version_id: artifactId }),
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    setApproved(Boolean(data.current_user_approved));
+
+    // If all approved, also mark artifact as approved
+    if (data.all_members_approved) {
+      await approveArtifact(artifactId);
+      fetchVersions();
     }
-  };
+
+    // Update project status
+    const statusRes = await fetch(
+      `${BASE_URL}/api/projects/${projectId}/computed-status`,
+      { headers: getAuthHeaders() }
+    );
+    if (statusRes.ok) {
+      const { status: computedStatus } = await statusRes.json();
+      await fetch(
+        `${BASE_URL}/api/projects/${projectId}/status?status=${computedStatus}`,
+        { method: "PUT", headers: getAuthHeaders() }
+      );
+    }
+  } catch (err) {
+    console.error("Failed to approve project artifact:", err);
+  }
+};
 
   // Re-fetch when diagramType changes OR when sessionId/isProjectSource is first resolved
   useEffect(() => {

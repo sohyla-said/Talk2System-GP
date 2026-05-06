@@ -502,7 +502,18 @@ const handleApprove = async () => {
             headers: getAuthHeaders()
           }
         );
-        
+         const projectStatusRes = await fetch(
+          `http://localhost:8000/api/projects/${projectId}/computed-status`,
+          { headers: getAuthHeaders() }
+        );
+        if (projectStatusRes.ok) {
+          const { status: computedProjectStatus } = await projectStatusRes.json();
+          await fetch(
+            `http://localhost:8000/api/projects/${projectId}/status?status=${computedProjectStatus}`,
+            { method: "PUT", headers: getAuthHeaders() }
+          );
+        }
+      
       }catch (err) {
         console.error(err);
       }

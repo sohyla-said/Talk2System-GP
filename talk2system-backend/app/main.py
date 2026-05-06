@@ -23,7 +23,7 @@ from app.models import notification
 from app.api.notification_routes import router as notification_router 
 from app.api.translation_router import router as translation_router
 from app.models.background_task import BackgroundTask
-
+from app.api.project_approval import router as project_approval_router
 app = FastAPI()
 
 app.add_middleware(
@@ -46,6 +46,7 @@ app.include_router(oauth_router)
 app.include_router(notification_router)
 app.include_router(requirements.router, prefix="/api")
 app.include_router(approval_router)
+app.include_router(project_approval_router)
 app.include_router(transcription_router, prefix="/api")
 app.include_router(translation_router, prefix="/api", tags=["Translation"])
 app.include_router(document_router, prefix="/api")

@@ -25,6 +25,14 @@ export default function RequirementsProjectView() {
     actors: [],
     features: []
   });
+  const [requirementsApproval, setRequirementsApproval] = useState({
+  approved_members_count: 0,
+  total_members_count: 0,
+  current_user_approved: false,
+  all_members_approved: false,
+  status: "pending",
+  exists: false,
+ });
     // multi select state for bulk deletion
   const [selectionMode, setSelectionMode] = useState({
     functional: false,
@@ -184,6 +192,21 @@ export default function RequirementsProjectView() {
       console.error(err);
     }
   };
+  const refreshRequirementsApprovalForVersion = async (versionId) => {
+  if (!projectId || !versionId) return;
+  try {
+    const res = await fetch(
+      `http://localhost:8000/api/projects/${projectId}/features/requirements/approval-status/${versionId}`,
+      { headers: { Authorization: `Bearer ${getToken()}` } }
+    );
+    if (!res.ok) return;
+    const data = await res.json();
+    setRequirementsApproval(data);
+    setApproved(Boolean(data.current_user_approved));
+  } catch (err) {
+    console.error(err);
+  }
+ };
 
   const hasExtractedRequirements =
     requirements.functional.length > 0 ||
@@ -363,38 +386,52 @@ const toggleSelectionMode = (sectionType) => {
     
   // Handle approval
   const handleApprove = async () => {
-    const targetRequirementId = currentRequirementId ?? requirementId;
+  const targetRequirementId = currentRequirementId ?? requirementId;
+  if (!targetRequirementId) return;
 
-    if (!targetRequirementId) {
-      console.error("No requirement ID available for approval");
-      return;
-    }
+  try {
+    const response = await fetch(
+      `http://localhost:8000/api/projects/${projectId}/features/requirements/approve`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ version_id: targetRequirementId }),
+      }
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Failed to approve");
 
-    try{
-      const response = await fetch(
+    setApproved(Boolean(data.current_user_approved));
+    setShowApprovalModal(false);
+
+    // If all members approved → mark the requirement record as approved
+    if (data.all_members_approved) {
+      await fetch(
         `http://localhost:8000/api/projects/requirements/${targetRequirementId}/approve`,
-        { method: 'PATCH' , headers: { Authorization: `Bearer ${getToken()}` }}
+        { method: "PATCH", headers: { Authorization: `Bearer ${getToken()}` } }
       );
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || "Failed to approve requirements");
-      }
-
-      setApproved(true);
-      setRequirementId(targetRequirementId);
-      setCurrentRequirementId(targetRequirementId);
-      setShowApprovalModal(false);
-
-      if (pendingNavigation) {
-        navigate(pendingNavigation);
-        setPendingNavigation(null);
-      }
     }
-    catch (err) {
-      console.error(err);
+
+    // Update project status via computed-status
+    const statusRes = await fetch(
+      `http://localhost:8000/api/projects/${projectId}/computed-status`,
+      { headers: { Authorization: `Bearer ${getToken()}` } }
+    );
+    if (statusRes.ok) {
+      const { status: computedStatus } = await statusRes.json();
+      await fetch(
+        `http://localhost:8000/api/projects/${projectId}/status?status=${computedStatus}`,
+        { method: "PUT", headers: { Authorization: `Bearer ${getToken()}` } }
+      );
     }
-   
+
+    if (pendingNavigation) {
+      navigate(pendingNavigation);
+      setPendingNavigation(null);
+    }
+  } catch (err) {
+    console.error(err);
+  }
   };
 
   // Close modal and cancel navigation
@@ -443,6 +480,17 @@ const toggleSelectionMode = (sectionType) => {
 
       // Refresh versions list
       fetchVersions();
+      const statusRes = await fetch(
+      `http://localhost:8000/api/projects/${projectId}/computed-status`,
+      { headers: { Authorization: `Bearer ${getToken()}` } }
+    );
+    if (statusRes.ok) {
+      const { status: computedStatus } = await statusRes.json();
+      await fetch(
+        `http://localhost:8000/api/projects/${projectId}/status?status=${computedStatus}`,
+        { method: "PUT", headers: { Authorization: `Bearer ${getToken()}` } }
+      );
+    }
 
       setShowEditModal(false);
 
@@ -536,10 +584,11 @@ const toggleSelectionMode = (sectionType) => {
                 </div>
                 <select
                   value={selectedVersionId || ""}
-                  onChange={(e) => {
-                    const id = e.target.value;
+                  onChange={async (e) => {
+                    const id = Number(e.target.value);
                     setSelectedVersionId(id);
                     fetchRequirementById(id);
+                    await refreshRequirementsApprovalForVersion(id);
                   }}
                   className={`appearance-none w-full h-full bg-transparent pl-10 pr-10 text-sm font-semibold tracking-wide focus:outline-none focus:ring-2 focus:ring-primary/30 rounded-xl ${
                     approved ? 'text-green-600 dark:text-green-300' : 'text-primary'

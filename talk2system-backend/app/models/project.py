@@ -12,7 +12,7 @@ class Project(Base):
     description = Column(String)
     domain = Column(String(50))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    project_status = Column(String, default="Active")
+    project_status = Column(String, default="In Progress")
 
     # relationships
     sessions = relationship("Session", back_populates="project")
@@ -34,3 +34,4 @@ class Project(Base):
     project_requirements = relationship("ProjectRequirement", back_populates="project",cascade="all, delete-orphan")
     memberships = relationship("ProjectMembership", back_populates="project",cascade="all, delete-orphan")
     invitations = relationship("Invitation", back_populates="project",cascade="all, delete-orphan")
+    project_approvals = relationship("ProjectApproval", back_populates="project", cascade="all, delete-orphan")
