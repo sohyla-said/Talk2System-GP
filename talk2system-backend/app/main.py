@@ -18,6 +18,7 @@ from app.api import project_routes, session_routes
 from app.api import summary
 from app.api.auth_routes import router as auth_router
 from app.api.admin_routes import router as admin_router
+from app.api.oauth_routes import router as oauth_router
 from app.models import notification  
 from app.api.notification_routes import router as notification_router 
 from app.api.translation_router import router as translation_router
@@ -41,6 +42,7 @@ app.add_middleware(
 Base.metadata.create_all(bind=engine)
 app.include_router(auth_router)
 app.include_router(admin_router)
+app.include_router(oauth_router)
 app.include_router(notification_router)
 app.include_router(requirements.router, prefix="/api")
 app.include_router(approval_router)

@@ -13,6 +13,7 @@ import Login from "../pages/auth/LoginPage";
 import Signup from "../pages/auth/SignupPage";
 import PendingApproval from "../pages/auth/PendingApprovalPage";
 import RoleApproval from "../pages/auth/role-approval";
+import OAuthCallbackPage from "../pages/auth/OAuthCallbackPage";
 
 // Dashboard
 import Dashboard from "../pages/dashboard/DashboardPage";
@@ -87,6 +88,7 @@ export default function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
+      <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
 
 
        {/* Auth pages */}

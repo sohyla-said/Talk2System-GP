@@ -42,7 +42,13 @@ const STORAGE_KEYS = [
   "user_status",
   "user_full_name",
 ];
+export function loginWithGoogle() {
+  window.location.href = `http://127.0.0.1:8000/api/auth/google/login`;
+}
 
+export function loginWithGitHub() {
+  window.location.href = `http://127.0.0.1:8000/api/auth/github/login`;
+}
 export function saveSession(data, rememberMe = true) {
   const storage = getStorage(rememberMe);
   const otherStorage = rememberMe ? sessionStorage : localStorage;
