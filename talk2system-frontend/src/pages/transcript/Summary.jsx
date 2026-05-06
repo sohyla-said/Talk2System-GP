@@ -1,22 +1,30 @@
 // import ReactMarkdown from "react-markdown";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { getToken } from "../../api/authApi";
 
 export default function CheckoutSummary() {
   const [summary, setSummary] = useState("");
   const [loading, setLoading] = useState(true);
+  const hasFetched = useRef(false);  
 
   const navigate = useNavigate();
   const { sessionId } = useParams(); // 👈 important
 
   // 🔥 Fetch first if not found, then Generate Summary
   useEffect(() => {
+    if (hasFetched.current) return;  
+    hasFetched.current = true; 
     const fetchSummary = async () => {
       try {
         setLoading(true);
 
         // 1️⃣ Try to get existing summary
-        let res = await fetch(`http://localhost:8000/api/summary/${sessionId}`);
+        let res = await fetch(`http://localhost:8000/api/summary/${sessionId}`, {
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+        });
 
         if (res.ok) {
           const data = await res.json();
@@ -30,6 +38,9 @@ export default function CheckoutSummary() {
         // 2️⃣ If not found → generate it
         res = await fetch(`http://localhost:8000/api/summarize/${sessionId}`, {
           method: "POST",
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
         });
 
         const data = await res.json();
