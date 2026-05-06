@@ -3,6 +3,7 @@ import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { logout, getCurrentUser, isAdmin } from "../../api/authApi";
 import { fetchMyRole } from "../../api/projectApi";
 import NotificationBell from "./NotificationBell";
+import ThemeToggle from "./ThemeToggle";
 
 export default function Header() {
   const navigate = useNavigate();
@@ -65,10 +66,18 @@ export default function Header() {
         to="/"
         className="flex items-center gap-4 text-[#100d1c] dark:text-white hover:opacity-90 transition-opacity shrink-0"
       >
+        {/* Light Mode Logo */}
         <img
           src="/logo.png"
           alt="Talk2System Logo"
-          className="h-12 w-auto object-contain"
+          className="h-12 w-auto object-contain block dark:hidden"
+          onError={(e) => { e.target.onerror = null; e.target.style.display = "none"; }}
+        />
+        {/* Dark Mode Logo */}
+        <img
+          src="/Darkmode_logo.png"
+          alt="Talk2SystemLogo"
+          className="h-12 w-auto object-contain hidden dark:block"
           onError={(e) => { e.target.onerror = null; e.target.style.display = "none"; }}
         />
       </NavLink>
@@ -90,7 +99,10 @@ export default function Header() {
           </NavLink>
         )}
         {!isAdmin() && <NotificationBell />}
-
+        
+        {/* ── Theme Toggle ── */}
+        <ThemeToggle />
+        
         {/* User info */}
         {user?.email && (
           <div className="flex flex-col items-end ml-2">
