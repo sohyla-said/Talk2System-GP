@@ -71,13 +71,18 @@ export async function handleNotificationNav(notif, navigate, getToken) {
     const sessionMatch = message?.match(/\[session_id:(\d+)\]/);
     const sId = sessionMatch ? parseInt(sessionMatch[1], 10) : null;
     if (sId) {
-      // navigate(`/projects/${project_id}/sessions/${sId}/artifacts/srs`);
-      navigate(`/projects/${project_id}/sessions/${sId}/srs/generate`);  
-
+      navigate(`/projects/${project_id}/sessions/${sId}/srs/generate`, {
+        state: {
+          source: "session",
+          sessionId: sId,
+        },
+      });
     } else {
-      // navigate(`/projects/${project_id}/artifacts/srs`);
-      navigate(`/projects/${project_id}/srs/generate`); 
-
+      navigate(`/projects/${project_id}/srs/generate`, {
+        state: {
+          source: "project",
+        },
+      });
     }
     return;
   }

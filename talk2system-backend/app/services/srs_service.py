@@ -65,6 +65,184 @@ def format_requirements_for_prompt(requirements_json: dict) -> str:
 
     return "\n".join(lines)
 
+# ==========================
+# REQUIREMENTS CHUNKING
+# ==========================
+# Threshold: if total FRs + NFRs exceed this, split into chunks
+FR_CHUNK_THRESHOLD = 10   # anything above 10 FRs+NFRs gets chunked
+FR_CHUNK_SIZE      = 8    # 8 FRs per chunk — small enough for CPU
+NFR_CHUNK_SIZE     = 5    # 5 NFRs per chunk
+
+def chunk_requirements(requirements_json: dict) -> list[dict]:
+    """
+    Splits a large requirements_json into smaller chunks, each under
+    FR_CHUNK_SIZE functional requirements and NFR_CHUNK_SIZE non-functional.
+    Returns a list of requirements_json dicts — each is a valid slice.
+    If requirements are small enough, returns a single-element list (no chunking).
+    """
+    frs  = requirements_json.get("functional_requirements", [])
+    nfrs = requirements_json.get("nonfunctional_requirements", []) or \
+           requirements_json.get("non_functional_requirements", [])
+    actors   = requirements_json.get("actors", [])
+    features = requirements_json.get("features", [])
+
+    total = len(frs) + len(nfrs)
+
+    # ── No chunking needed ─────────────────────────────────────────────────
+    if total <= FR_CHUNK_THRESHOLD:
+        logger.info(f"Requirements within threshold ({total} items) — no chunking needed")
+        return [requirements_json]
+
+    logger.info(
+        f"Requirements exceed threshold ({len(frs)} FRs, {len(nfrs)} NFRs) "
+        f"— splitting into chunks of {FR_CHUNK_SIZE} FRs / {NFR_CHUNK_SIZE} NFRs"
+    )
+
+    chunks = []
+    fr_batches  = [frs[i:i + FR_CHUNK_SIZE]  for i in range(0, max(len(frs), 1),  FR_CHUNK_SIZE)]
+    nfr_batches = [nfrs[i:i + NFR_CHUNK_SIZE] for i in range(0, max(len(nfrs), 1), NFR_CHUNK_SIZE)]
+
+    # Pad the shorter list so zip covers everything
+    max_batches = max(len(fr_batches), len(nfr_batches))
+    while len(fr_batches)  < max_batches: fr_batches.append([])
+    while len(nfr_batches) < max_batches: nfr_batches.append([])
+
+    for idx, (fr_batch, nfr_batch) in enumerate(zip(fr_batches, nfr_batches)):
+        chunk = {
+            "actors":   actors,    # keep actors + features in every chunk for context
+            "features": features,
+            "functional_requirements":     fr_batch,
+            "nonfunctional_requirements":  nfr_batch,
+            "_chunk_index": idx + 1,       # internal metadata for logging
+            "_total_chunks": max_batches,
+        }
+        chunks.append(chunk)
+        logger.info(
+            f"Chunk {idx+1}/{max_batches}: "
+            f"{len(fr_batch)} FRs, {len(nfr_batch)} NFRs"
+        )
+
+    return chunks
+
+
+def _call_ollama_for_chunk(
+    prompt: str,
+    chunk_index: int,
+    total_chunks: int,
+    timeout: int = 600,
+) -> str:
+    """
+    Calls Ollama with a single SRS chunk prompt.
+    Raises on connection error or non-200 status.
+    """
+    logger.info(f"Calling Ollama for SRS chunk {chunk_index}/{total_chunks}...")
+    try:
+        response = requests.post(
+            OLLAMA_URL,
+            json={
+                "model": OLLAMA_MODEL,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.3,
+                    "num_predict": 800,  # per chunk — enough for partial sections
+                    "num_ctx":    2048,   # reduced context = faster CPU inference
+                }
+            },
+            timeout=timeout,
+        )
+    except requests.exceptions.ConnectionError:
+        raise Exception("Ollama is not running. Start it with: ollama serve")
+    except requests.exceptions.Timeout:
+        raise Exception(
+            f"Ollama timed out on chunk {chunk_index}/{total_chunks}. "
+            "Try reducing requirements or restarting Ollama."
+        )
+
+    if response.status_code != 200:
+        raise Exception(
+            f"Ollama error on chunk {chunk_index}/{total_chunks}: "
+            f"{response.status_code} — {response.text[:200]}"
+        )
+
+    text = response.json().get("response", "").strip()
+    logger.info(
+        f"Chunk {chunk_index}/{total_chunks} done — "
+        f"{len(text.split())} words generated"
+    )
+    return text
+
+def build_chunk_prompt(
+    chunk: dict,
+    project_name: str,
+    chunk_index: int,
+    total_chunks: int,
+    format_version: str,
+) -> str:
+    formatted = format_requirements_for_prompt(chunk)
+
+    if chunk_index == 1:
+        return f"""You are a senior software engineer writing a formal SRS document for "{project_name}".
+This is part {chunk_index} of {total_chunks}. Write the document introduction and the requirements below.
+
+Requirements Data:
+{formatted}
+
+Output ONLY using this structure:
+
+# 1. Introduction
+## 1.1 Purpose
+## 1.2 Scope
+
+# 2. Overall Description
+## 2.1 Product Perspective
+## 2.2 User Classes
+
+# 3. Functional Requirements
+For each FR use exactly this format on two lines:
+**FR-N** | Actor: [actor] | Feature: [feature]
+The system shall [requirement text].
+
+# 4. Non-Functional Requirements
+For each NFR use exactly this format:
+**NFR-N** | Category: [category]
+[requirement text].
+
+STRICT RULES:
+- Output ONLY the document, nothing before or after it
+- Start directly with # 1. Introduction
+- Use "shall" for all functional requirements
+- Do NOT include traceability matrices or acceptance criteria sections
+- Do NOT skip any requirement from the data above
+"""
+
+    # ── Chunks 2+: output ONLY FR and NFR lines, nothing else ─────────────
+    frs  = chunk.get("functional_requirements", [])
+    nfrs = chunk.get("nonfunctional_requirements", []) or \
+           chunk.get("non_functional_requirements", [])
+
+    fr_start  = (chunk_index - 1) * FR_CHUNK_SIZE + 1
+    nfr_start = (chunk_index - 1) * NFR_CHUNK_SIZE + 1
+
+    # Build the FR/NFR entries directly — no LLM needed for continuation chunks
+    # This guarantees ALL requirements appear and avoids Ollama hallucinating structure
+    lines = []
+    for i, fr in enumerate(frs, fr_start):
+        actor   = fr.get("actor", "system")
+        text    = fr.get("text", "")
+        feature = fr.get("feature", "")
+        lines.append(f"**FR-{i}** | Actor: {actor} | Feature: {feature}")
+        lines.append(f"The system shall {text.lower().lstrip('the system must').lstrip('the system shall').lstrip('users must').strip()}.")
+        lines.append("")
+
+    for i, nfr in enumerate(nfrs, nfr_start):
+        category = nfr.get("category", "General")
+        text     = nfr.get("text", "")
+        lines.append(f"**NFR-{i}** | Category: {category}")
+        lines.append(f"{text}")
+        lines.append("")
+
+    return "\n".join(lines)
 
 # ==========================
 # BUILD PROMPT — IEEE 830
@@ -254,35 +432,139 @@ def generate_srs_text_with_ollama(
     project_name: str = "Software System",
     format_version: str = "ieee_830"
 ) -> str:
-    prompt = build_srs_prompt(requirements_json, project_name, format_version)
+    """
+    Generates SRS text via Ollama.
+    - If requirements are small (≤ FR_CHUNK_THRESHOLD items): single prompt, single call.
+    - If requirements are large: splits into chunks, calls Ollama per chunk,
+      then merges all outputs into one coherent document.
+    """
+    chunks = chunk_requirements(requirements_json)
 
-    try:
-        response = requests.post(
-            OLLAMA_URL,
-            json={
-                "model": OLLAMA_MODEL,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": 0.3,
-                    "num_predict": 2000,
-                    "num_ctx": 8192
-                }
-            },
-            timeout=900
+    if len(chunks) == 1:
+        # ── Fast path: single prompt (original behavior) ───────────────────
+        logger.info("Single-chunk SRS generation (no splitting needed)")
+        prompt = build_srs_prompt(requirements_json, project_name, format_version)
+        return _call_ollama_for_chunk(prompt, chunk_index=1, total_chunks=1)
+
+    # ── Chunked path ───────────────────────────────────────────────────────
+    logger.info(f"Chunked SRS generation: {len(chunks)} chunks")
+    parts = []
+
+    for chunk in chunks:
+        idx   = chunk["_chunk_index"]
+        total = chunk["_total_chunks"]
+
+        prompt = build_chunk_prompt(
+            chunk=chunk,
+            project_name=project_name,
+            chunk_index=idx,
+            total_chunks=total,
+            format_version=format_version,
         )
 
-        if response.status_code != 200:
-            raise Exception(f"Ollama error: {response.status_code} — {response.text}")
+        if idx == 1:
+            # Only chunk 1 goes to Ollama — it generates the doc skeleton + first batch
+            part = _call_ollama_for_chunk(
+                prompt=prompt,
+                chunk_index=idx,
+                total_chunks=total,
+                timeout=600,
+            )
+            logger.info(f"SRS chunk {idx}/{total} from Ollama ({len(part.split())} words)")
+        else:
+            # Chunks 2+ are pre-built directly from requirements — no Ollama call
+            # This guarantees ALL requirements appear, no timeout risk
+            part = prompt   # prompt IS the content for continuation chunks
+            logger.info(
+                f"SRS chunk {idx}/{total} built directly "
+                f"({len(part.split())} words, no Ollama call)"
+            )
 
-        data = response.json()
-        return data.get("response", "").strip()
+        parts.append(part)
 
-    except requests.exceptions.ConnectionError:
-        raise Exception("Ollama is not running. Start it with: ollama serve")
-    except requests.exceptions.Timeout:
-        raise Exception("Ollama timed out generating the SRS. Try again.")
+    # ── Merge all parts ────────────────────────────────────────────────────
+    merged = _merge_srs_chunks(parts)
+    logger.info(
+        f"SRS generation complete — {len(chunks)} chunks merged, "
+        f"{len(merged.split())} total words"
+    )
+    return merged
 
+def _merge_srs_chunks(parts: list[str]) -> str:
+    """
+    Merges multiple SRS chunk outputs into one document.
+    Strategy: inject continuation FR/NFR entries into section 3/4 of part 1,
+    not after section 4 — so all requirements appear in the right place.
+    """
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return parts[0]
+
+    # Collect all continuation content from chunks 2+
+    continuation_frs  = []
+    continuation_nfrs = []
+
+    for part in parts[1:]:
+        cleaned = part.strip()
+        # Remove any accidental section 1/2 headers Ollama adds
+        cleaned = re.sub(r"^(#\s*(1\.|2\.)[^\n]*\n)+", "", cleaned, flags=re.MULTILINE).strip()
+
+        for line in cleaned.split("\n"):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            # Detect FR lines: **FR-N** | ... or FR-N | ...
+            if re.match(r"^\*?\*?FR-\d+\*?\*?", stripped):
+                continuation_frs.append(stripped)
+            # Detect NFR lines: NFR-N | ... or **NFR-N** | ...
+            elif re.match(r"^\*?\*?NFR-\d+\*?\*?", stripped):
+                continuation_nfrs.append(stripped)
+            # Detect "The system shall..." lines that follow an FR header
+            elif stripped.lower().startswith("the system shall") or \
+                 stripped.lower().startswith("the system must") or \
+                 stripped.lower().startswith("as a "):
+                # Belongs to the last FR entry
+                if continuation_frs:
+                    continuation_frs[-1] = continuation_frs[-1] + "\n" + stripped
+                else:
+                    continuation_frs.append(stripped)
+
+    if not continuation_frs and not continuation_nfrs:
+        # Nothing useful extracted — fall back to simple append
+        merged = parts[0].rstrip()
+        for i, part in enumerate(parts[1:], start=2):
+            cleaned = part.strip()
+            cleaned = re.sub(r"^(#\s*(1\.|2\.)[^\n]*\n)+", "", cleaned, flags=re.MULTILINE).strip()
+            if cleaned:
+                merged += f"\n\n{cleaned}"
+        return merged
+
+    base = parts[0]
+
+    # ── Inject continuation FRs into section 3 (before section 4) ────────
+    # Find the boundary between section 3 and section 4 in chunk 1
+    # Section 4 starts with "# 4." or "## 4." or "# Non-Functional"
+    section4_pattern = re.compile(
+        r"(\n#+\s*(4\.|Non-Functional Requirements))",
+        re.IGNORECASE
+    )
+    match = section4_pattern.search(base)
+
+    if match and continuation_frs:
+        insert_pos = match.start()
+        fr_block = "\n" + "\n".join(continuation_frs) + "\n"
+        base = base[:insert_pos] + fr_block + base[insert_pos:]
+        logger.info(f"Injected {len(continuation_frs)} continuation FR entries into section 3")
+
+    # ── Inject continuation NFRs at the end of section 4 ─────────────────
+    if continuation_nfrs:
+        nfr_block = "\n" + "\n".join(continuation_nfrs)
+        base = base.rstrip() + nfr_block
+        logger.info(f"Injected {len(continuation_nfrs)} continuation NFR entries into section 4")
+
+    logger.info(f"Merge complete — {len(continuation_frs)} FRs + {len(continuation_nfrs)} NFRs injected")
+    return base
 
 # ==========================
 # FORMAT DISPLAY NAMES (used in docx cover subtitle)
@@ -552,8 +834,8 @@ def _notify_srs_members(db, project_id, session_id, notification_type, title, me
         ).all()
         user_ids = [m.user_id for m in memberships]
     else:
-        from app.models.project_membership import ProjectMember
-        members = db.query(ProjectMember).filter(ProjectMember.project_id == project_id).all()
+        from app.models.project_membership import ProjectMembership
+        members = db.query(ProjectMembership).filter(ProjectMembership.project_id == project_id).all()
         user_ids = [m.user_id for m in members]
 
     for uid in user_ids:

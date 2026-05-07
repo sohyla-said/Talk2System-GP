@@ -19,9 +19,15 @@ export default function SrsToast({
 
   const handleView = () => {
     if (sessionId) {
-      navigate(`/projects/${projectId}/sessions/${sessionId}/srs/generate`);
+      navigate(
+        `/projects/${projectId}/sessions/${sessionId}/srs/generate`,
+        { state: { source: "session", sessionId } }
+      );
     } else {
-      navigate(`/projects/${projectId}/srs/generate`);
+      navigate(
+        `/projects/${projectId}/srs/generate`,
+        { state: { source: "project" } }
+      );
     }
     onDismiss();
   };
