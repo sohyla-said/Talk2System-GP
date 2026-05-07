@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { getToken } from "../../api/authApi";
 import SrsApprovalModal from "../../components/modals/SrsApprovalModal";
+import { useContext } from "react";
+import { SrsContext } from "../../App";
 import {
   generateSessionSRS,
   generateProjectSRS,
@@ -410,78 +412,118 @@ export default function SrsPage() {
   // ===============================
   // GENERATE SRS
   // ===============================
-  const handleGenerate = async () => {
-      if (isProjectSource) {
-  // PROJECT-LEVEL generation — new path, touches nothing in session logic
-  try {
-    setLoading(true);
-    const res = await fetch(
-      `${BASE_URL}/api/projects/${projectId}/generate-srs?format_version=${formatVersion}`,
-      { method: "POST", headers: getAuthHeaders() }
-    );
-    if (!res.ok) throw new Error("SRS generation failed");
-    const data = await res.json();
-    const artifact = data.artifact;
-    setArtifactId(artifact.id);
-    setSrsContent(artifact.file_path);
-    fetchSrsText(artifact.id);
-    setApproved(false);
-    fetchVersions(); // project-level fetchVersions (no sessionId needed)
-  } catch (err) {
-    console.error(err);
-    alert("SRS generation failed. Make sure Ollama is running.");
-  } finally {
-    setLoading(false);
-  }
-  return; // ✅ Early return
- }
+//   const handleGenerate = async () => {
+//       if (isProjectSource) {
+//   // PROJECT-LEVEL generation — new path, touches nothing in session logic
+//   try {
+//     setLoading(true);
+//     const res = await fetch(
+//       `${BASE_URL}/api/projects/${projectId}/generate-srs?format_version=${formatVersion}`,
+//       { method: "POST", headers: getAuthHeaders() }
+//     );
+//     if (!res.ok) throw new Error("SRS generation failed");
+//     const data = await res.json();
+//     const artifact = data.artifact;
+//     setArtifactId(artifact.id);
+//     setSrsContent(artifact.file_path);
+//     fetchSrsText(artifact.id);
+//     setApproved(false);
+//     fetchVersions(); // project-level fetchVersions (no sessionId needed)
+//   } catch (err) {
+//     console.error(err);
+//     alert("SRS generation failed. Make sure Ollama is running.");
+//   } finally {
+//     setLoading(false);
+//   }
+//   return; // ✅ Early return
+//  }
 
+//     if (!sessionId) {
+//       alert("No session found. Please start a meeting session first.");
+//       return;
+//     }
+//     try {
+//       setLoading(true);
+//       const res = await fetch(
+//         `${BASE_URL}/api/projects/${projectId}/sessions/${sessionId}/generate-srs?format_version=${formatVersion}`,
+//         { method: "POST", headers: getAuthHeaders() }
+//       );
+//       if (!res.ok) throw new Error("SRS generation failed");
+//       const data = await res.json();
+//       const artifact = data.artifact;
+//       setArtifactId(artifact.id);
+//       setSrsContent(artifact.file_path);
+//       fetchSrsText(artifact.id);
+//       setApproved(false);
+//       setHasNewUnapproved(true); 
+
+//       setSrsApproval((prev) => ({
+//         ...prev,
+//         approved_members_count: 0,
+//         current_user_approved: false,
+//         all_members_approved: false,
+//         status: "pending",
+//       }));
+
+//       const statusRes = await fetch(
+//         `${BASE_URL}/api/sessions/${sessionId}/computed-status`,
+//         { headers: getAuthHeaders() }
+//       );
+//       if (statusRes.ok) {
+//         const { status: computedStatus } = await statusRes.json();
+//         await fetch(
+//           `${BASE_URL}/api/sessions/${sessionId}/status?status=${computedStatus}`,
+//           { method: "PUT", headers: getAuthHeaders() }
+//         );
+//       }
+
+//       fetchVersions(sessionId);
+//       refreshSrsApproval(sessionId);
+//     } catch (err) {
+//       console.error(err);
+//       alert("SRS generation failed. Make sure Ollama is running.");
+//     } finally {
+//       setLoading(false);
+//     }
+//   }; 
+
+  const { startSrsGeneration } = useContext(SrsContext);
+
+  const handleGenerate = async () => {
+
+    // ── PROJECT-LEVEL generation ───────────────────────────────────────────────
+    if (isProjectSource) {
+      try {
+        await startSrsGeneration({
+          projectId,
+          sessionId: null,
+          formatVersion,
+        });
+        // Background task started — SrsToast will notify when done.
+        // fetchVersions runs on mount when user returns via the toast.
+      } catch (err) {
+        console.error(err);
+        alert("Failed to start SRS generation. Make sure Ollama is running.");
+      }
+      return;
+    }
+
+    // ── SESSION-LEVEL generation ───────────────────────────────────────────────
     if (!sessionId) {
       alert("No session found. Please start a meeting session first.");
       return;
     }
+
     try {
-      setLoading(true);
-      const res = await fetch(
-        `${BASE_URL}/api/projects/${projectId}/sessions/${sessionId}/generate-srs?format_version=${formatVersion}`,
-        { method: "POST", headers: getAuthHeaders() }
-      );
-      if (!res.ok) throw new Error("SRS generation failed");
-      const data = await res.json();
-      const artifact = data.artifact;
-      setArtifactId(artifact.id);
-      setSrsContent(artifact.file_path);
-      fetchSrsText(artifact.id);
-      setApproved(false);
-      setHasNewUnapproved(true); 
-
-      setSrsApproval((prev) => ({
-        ...prev,
-        approved_members_count: 0,
-        current_user_approved: false,
-        all_members_approved: false,
-        status: "pending",
-      }));
-
-      const statusRes = await fetch(
-        `${BASE_URL}/api/sessions/${sessionId}/computed-status`,
-        { headers: getAuthHeaders() }
-      );
-      if (statusRes.ok) {
-        const { status: computedStatus } = await statusRes.json();
-        await fetch(
-          `${BASE_URL}/api/sessions/${sessionId}/status?status=${computedStatus}`,
-          { method: "PUT", headers: getAuthHeaders() }
-        );
-      }
-
-      fetchVersions(sessionId);
-      refreshSrsApproval(sessionId);
+      await startSrsGeneration({
+        projectId,
+        sessionId,
+        formatVersion,
+      });
+      // Background task started — SrsToast will notify when done.
     } catch (err) {
       console.error(err);
-      alert("SRS generation failed. Make sure Ollama is running.");
-    } finally {
-      setLoading(false);
+      alert("Failed to start SRS generation. Make sure Ollama is running.");
     }
   };
 
@@ -703,12 +745,19 @@ export default function SrsPage() {
 
             {/* LEFT */}
             <div className="flex gap-3 items-center">
-              <button
+              {/* <button
                 onClick={handleGenerate}
                 disabled={loading || (!isProjectSource && !sessionCompleted)}
                 className="h-10 px-4 rounded-lg bg-primary text-white disabled:opacity-50"
               >
                 {loading ? "Generating..." : "Generate SRS"}
+              </button> */}
+              <button
+                onClick={handleGenerate}
+                disabled={!isProjectSource && sessionCompleted}
+                className="h-10 px-4 rounded-lg bg-primary text-white disabled:opacity-50"
+              >
+                Generate SRS
               </button>
 
               {/* Format badge shown next to button so user sees what will be generated */}

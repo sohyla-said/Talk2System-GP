@@ -49,6 +49,44 @@ export async function handleNotificationNav(notif, navigate, getToken) {
     return;
   }
 
+  // ─── UML & SRS notification navigations ───
+
+  if (notification_type === "uml_generated" && project_id) {
+    const sessionMatch = message?.match(/\[session_id:(\d+)\]/);
+    const sId = sessionMatch ? parseInt(sessionMatch[1], 10) : null;
+    if (sId) {
+      navigate(`/projects/${project_id}/sessions/${sId}/artifacts/uml`);
+    } else {
+      navigate(`/projects/${project_id}/artifacts/uml`);
+    }
+    return;
+  }
+
+  if (notification_type === "uml_generation_failed" && project_id) {
+    navigate(`/projects/${project_id}/artifacts/uml`);
+    return;
+  }
+
+  if (notification_type === "srs_generated" && project_id) {
+    const sessionMatch = message?.match(/\[session_id:(\d+)\]/);
+    const sId = sessionMatch ? parseInt(sessionMatch[1], 10) : null;
+    if (sId) {
+      // navigate(`/projects/${project_id}/sessions/${sId}/artifacts/srs`);
+      navigate(`/projects/${project_id}/sessions/${sId}/srs/generate`);  
+
+    } else {
+      // navigate(`/projects/${project_id}/artifacts/srs`);
+      navigate(`/projects/${project_id}/srs/generate`); 
+
+    }
+    return;
+  }
+
+  if (notification_type === "srs_generation_failed" && project_id) {
+    navigate(`/projects/${project_id}/srs/generate`);
+    return;
+  }
+
   // ── All existing notification types: project page (unchanged behaviour) ───
   if (project_id) {
     navigate(`/projects/${project_id}`);

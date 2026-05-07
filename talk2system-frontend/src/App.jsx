@@ -5,19 +5,26 @@ import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import AppRoutes from "./routes/AppRoutes";
 import { useExtractionTask } from "./hooks/useExtractionTask";
+import { useUmlTask } from "./hooks/useUmlTask";
+import { useSrsTask } from "./hooks/useSrsTask";
 import ExtractionToast from "./components/ExtractionToast";
+import UmlToast from "./components/UmlToast";
+import SrsToast from "./components/SrsToast";
 import { getToken } from "./api/authApi";
 
 export const ExtractionContext = createContext();
+export const UmlContext = createContext();
+export const SrsContext = createContext();
 
 // ─── Inner component — lives INSIDE BrowserRouter so useNavigate works ────────
 function AppInner() {
+
+  // ── Extraction state (unchanged) ──────────────────────────────────────────
   const [toastVisible, setToastVisible]       = useState(false);
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [activeProjectId, setActiveProjectId] = useState(null);
   const [taskOutput, setTaskOutput]           = useState(null);
   const [taskStatus, setTaskStatus]           = useState(null);
-
   const lastCallRef = useRef(null);
 
   const { trackTask, cancelTracking } = useExtractionTask({
@@ -79,8 +86,117 @@ function AppInner() {
     setToastVisible(false);
   };
 
+  // ── UML state ──────────────────────────────────────────────────────────────
+  const [umlToastVisible, setUmlToastVisible] = useState(false);
+  const [umlTaskStatus,   setUmlTaskStatus]   = useState(null);
+  const [umlTaskOutput,   setUmlTaskOutput]   = useState(null);
+  const [umlProjectId,    setUmlProjectId]    = useState(null);
+  const [umlSessionId,    setUmlSessionId]    = useState(null);
+  const lastUmlCallRef = useRef(null);
+
+  const { trackTask: trackUml, cancelTracking: cancelUml } = useUmlTask({
+    onDone: (data) => {
+      setUmlTaskOutput(data.task_output ?? null);
+      setUmlTaskStatus("done");
+      setUmlToastVisible(true);
+    },
+    onFailed: (data) => {
+      setUmlTaskOutput({
+        error_message: data?.error_message ?? "UML generation failed.",
+      });
+      setUmlTaskStatus("failed");
+      setUmlToastVisible(true);
+    },
+  });
+
+  const startUmlGeneration = async ({ projectId, sessionId, diagramType, source }) => {
+    lastUmlCallRef.current = { projectId, sessionId, diagramType, source };
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getToken()}`,
+    };
+
+    const url = sessionId
+      ? `http://localhost:8000/api/projects/${projectId}/sessions/${sessionId}/generate-uml-async`
+      : `http://localhost:8000/api/projects/${projectId}/generate-uml-async?diagram_type=${diagramType}`;
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: sessionId
+        ? JSON.stringify({ diagram_type: diagramType, source })
+        : undefined,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.detail || "Failed to start UML generation");
+    }
+
+    const data = await res.json();
+    setUmlProjectId(projectId);
+    setUmlSessionId(sessionId ?? null);
+    setUmlTaskOutput(null);
+    setUmlTaskStatus("pending");
+    setUmlToastVisible(true);
+    trackUml(data.task_id);
+  };
+
+  // ── SRS state ──────────────────────────────────────────────────────────────
+  const [srsToastVisible, setSrsToastVisible] = useState(false);
+  const [srsTaskStatus,   setSrsTaskStatus]   = useState(null);
+  const [srsTaskOutput,   setSrsTaskOutput]   = useState(null);
+  const [srsProjectId,    setSrsProjectId]    = useState(null);
+  const [srsSessionId,    setSrsSessionId]    = useState(null);
+  const lastSrsCallRef = useRef(null);
+
+  const { trackTask: trackSrs, cancelTracking: cancelSrs } = useSrsTask({
+    onDone: (data) => {
+      setSrsTaskOutput(data.task_output ?? null);
+      setSrsTaskStatus("done");
+      setSrsToastVisible(true);
+    },
+    onFailed: (data) => {
+      setSrsTaskOutput({
+        error_message: data?.error_message ?? "SRS generation failed.",
+      });
+      setSrsTaskStatus("failed");
+      setSrsToastVisible(true);
+    },
+  });
+
+  const startSrsGeneration = async ({ projectId, sessionId, formatVersion }) => {
+    lastSrsCallRef.current = { projectId, sessionId, formatVersion };
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getToken()}`,
+    };
+
+    const url = sessionId
+      ? `http://localhost:8000/api/projects/${projectId}/sessions/${sessionId}/generate-srs-async?format_version=${formatVersion}`
+      : `http://localhost:8000/api/projects/${projectId}/generate-srs-async?format_version=${formatVersion}`;
+
+    const res = await fetch(url, { method: "POST", headers });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.detail || "Failed to start SRS generation");
+    }
+
+    const data = await res.json();
+    setSrsProjectId(projectId);
+    setSrsSessionId(sessionId ?? null);
+    setSrsTaskOutput(null);
+    setSrsTaskStatus("pending");
+    setSrsToastVisible(true);
+    trackSrs(data.task_id);
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <ExtractionContext.Provider value={{ startExtraction }}>
+    <UmlContext.Provider value={{ startUmlGeneration }}>
+    <SrsContext.Provider value={{ startSrsGeneration }}>
       <AppRoutes />
 
       {/* General app notifications — errors, success alerts from any page */}
@@ -107,6 +223,44 @@ function AppInner() {
           onRetry={handleRetry}
         />
       )}
+
+      {/* UML generation toast */}
+      {umlToastVisible && (
+        <UmlToast
+          status={umlTaskStatus}
+          projectId={umlProjectId}
+          sessionId={umlSessionId}
+          taskOutput={umlTaskOutput}
+          onDismiss={() => setUmlToastVisible(false)}
+          onRetry={() => {
+            if (!lastUmlCallRef.current) return;
+            cancelUml();
+            setUmlTaskStatus("pending");
+            setUmlTaskOutput(null);
+            startUmlGeneration(lastUmlCallRef.current);
+          }}
+        />
+      )}
+
+      {/* SRS generation toast */}
+      {srsToastVisible && (
+        <SrsToast
+          status={srsTaskStatus}
+          projectId={srsProjectId}
+          sessionId={srsSessionId}
+          taskOutput={srsTaskOutput}
+          onDismiss={() => setSrsToastVisible(false)}
+          onRetry={() => {
+            if (!lastSrsCallRef.current) return;
+            cancelSrs();
+            setSrsTaskStatus("pending");
+            setSrsTaskOutput(null);
+            startSrsGeneration(lastSrsCallRef.current);
+          }}
+        />
+      )}
+    </SrsContext.Provider>
+    </UmlContext.Provider>
     </ExtractionContext.Provider>
   );
 }

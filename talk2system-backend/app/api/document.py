@@ -3,14 +3,21 @@ from sqlalchemy.orm import Session
 from fastapi.responses import FileResponse
 from app.services.srs_service import SUPPORTED_FORMATS
 from app.db.session import get_db
-from app.services.uml_service import generate_uml_pipeline
+from app.services.uml_service import generate_uml_pipeline, run_async_uml_task
 from app.services.requirement_service import RequirementService
 from app.services.artifact_service import ArtifactService
-from app.services.srs_service import generate_srs_pipeline
+from app.services.srs_service import generate_srs_pipeline, run_async_srs_task, SUPPORTED_FORMATS
 from app.services.project_service import ProjectService
 from app.models.artifact import Artifact
 from app.models.artifact_type import ArtifactType
 from pathlib import Path
+
+from app.models.background_task import BackgroundTask
+from pydantic import BaseModel
+from fastapi import BackgroundTasks
+from app.dependencies.auth import get_current_user
+from app.models.user import User
+
 router = APIRouter()
 
 # ==========================================================================
@@ -263,6 +270,94 @@ def download_artifact(artifact_id: int, db: Session = Depends(get_db)):
         media_type="image/png"
     )
 
+# ─── Async UML — session or project level ─────────────────────────────────────
+class AsyncUmlRequest(BaseModel):
+    diagram_type: str
+    source: str = "session"   # "session" or "project"
+
+@router.post("/projects/{project_id}/sessions/{session_id}/generate-uml-async")
+def generate_uml_async(
+    project_id: int,
+    session_id: int,
+    request: AsyncUmlRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    task = BackgroundTask(
+        user_id=current_user.id,
+        task_type="generate_uml",
+        project_id=project_id,
+        session_id=session_id,
+        status="pending",
+        task_input={"diagram_type": request.diagram_type, "source": request.source},
+    )
+    db.add(task); db.commit(); db.refresh(task)
+
+    background_tasks.add_task(
+        run_async_uml_task,
+        task_id=task.id,
+        project_id=project_id,
+        session_id=session_id,
+        diagram_type=request.diagram_type,
+        source=request.source,
+        user_id=current_user.id,
+    )
+    return {"task_id": task.id, "status": "pending"}
+
+
+@router.post("/projects/{project_id}/generate-uml-async")
+def generate_project_uml_async(
+    project_id: int,
+    diagram_type: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    task = BackgroundTask(
+        user_id=current_user.id,
+        task_type="generate_uml",
+        project_id=project_id,
+        session_id=None,
+        status="pending",
+        task_input={"diagram_type": diagram_type, "source": "project"},
+    )
+    db.add(task); db.commit(); db.refresh(task)
+
+    background_tasks.add_task(
+        run_async_uml_task,
+        task_id=task.id,
+        project_id=project_id,
+        session_id=None,
+        diagram_type=diagram_type,
+        source="project",
+        user_id=current_user.id,
+    )
+    return {"task_id": task.id, "status": "pending"}
+
+
+# ─── UML polling ──────────────────────────────────────────────────────────────
+@router.get("/uml-tasks/{task_id}/status")
+def get_uml_task_status(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    task = db.query(BackgroundTask).filter(
+        BackgroundTask.id == task_id,
+        BackgroundTask.user_id == current_user.id,
+        BackgroundTask.task_type == "generate_uml",
+    ).first()
+    if not task:
+        raise HTTPException(404, "Task not found")
+    return {
+        "task_id": task.id, "status": task.status,
+        "task_type": task.task_type,
+        "project_id": task.project_id, "session_id": task.session_id,
+        "task_output": task.task_output, "error_message": task.error_message,
+    }
+
+
 # ==========================================================================
 # SRS Document Endpoints
 # ==========================================================================
@@ -494,3 +589,93 @@ def download_srs(artifact_id: int, db: Session = Depends(get_db)):
         filename=Path(artifact.file_path).name,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
+
+
+# ─── Async SRS ────────────────────────────────────────────────────────────────
+@router.post("/projects/{project_id}/sessions/{session_id}/generate-srs-async")
+def generate_session_srs_async(
+    project_id: int,
+    session_id: int,
+    format_version: str = "ieee_830",
+    background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if format_version not in SUPPORTED_FORMATS:
+        raise HTTPException(400, f"Unsupported format. Choose from: {SUPPORTED_FORMATS}")
+
+    task = BackgroundTask(
+        user_id=current_user.id,
+        task_type="generate_srs",
+        project_id=project_id,
+        session_id=session_id,
+        status="pending",
+        task_input={"format_version": format_version, "source": "session"},
+    )
+    db.add(task); db.commit(); db.refresh(task)
+
+    background_tasks.add_task(
+        run_async_srs_task,
+        task_id=task.id,
+        project_id=project_id,
+        session_id=session_id,
+        format_version=format_version,
+        source="session",
+        user_id=current_user.id,
+    )
+    return {"task_id": task.id, "status": "pending"}
+
+
+@router.post("/projects/{project_id}/generate-srs-async")
+def generate_project_srs_async(
+    project_id: int,
+    format_version: str = "ieee_830",
+    background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if format_version not in SUPPORTED_FORMATS:
+        raise HTTPException(400, f"Unsupported format. Choose from: {SUPPORTED_FORMATS}")
+
+    task = BackgroundTask(
+        user_id=current_user.id,
+        task_type="generate_srs",
+        project_id=project_id,
+        session_id=None,
+        status="pending",
+        task_input={"format_version": format_version, "source": "project"},
+    )
+    db.add(task); db.commit(); db.refresh(task)
+
+    background_tasks.add_task(
+        run_async_srs_task,
+        task_id=task.id,
+        project_id=project_id,
+        session_id=None,
+        format_version=format_version,
+        source="project",
+        user_id=current_user.id,
+    )
+    return {"task_id": task.id, "status": "pending"}
+
+
+# ─── SRS polling ──────────────────────────────────────────────────────────────
+@router.get("/srs-tasks/{task_id}/status")
+def get_srs_task_status(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    task = db.query(BackgroundTask).filter(
+        BackgroundTask.id == task_id,
+        BackgroundTask.user_id == current_user.id,
+        BackgroundTask.task_type == "generate_srs",
+    ).first()
+    if not task:
+        raise HTTPException(404, "Task not found")
+    return {
+        "task_id": task.id, "status": task.status,
+        "task_type": task.task_type,
+        "project_id": task.project_id, "session_id": task.session_id,
+        "task_output": task.task_output, "error_message": task.error_message,
+    }

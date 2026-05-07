@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import UMLApprovalModal from "../../components/modals/UMLApprovalModal";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { getToken } from "../../api/authApi";
+import { useContext } from "react";
+import { UmlContext } from "../../App";
 
 import {
   generateUML,
@@ -165,91 +167,134 @@ export default function UmlPage() {
     }
   };
 
+//   const handleGenerate = async () => {
+
+//     if (isProjectSource) {
+//   // ✅ PROJECT-LEVEL generation — new path, touches nothing in session logic
+//   try {
+//     setLoading(true);
+//     const res = await fetch(
+//       `${BASE_URL}/api/projects/${projectId}/generate-uml?diagram_type=${diagramType}`,
+//       { method: "POST", headers: getAuthHeaders() }
+//     );
+
+//     if (!res.ok) throw new Error("Generation failed");
+//     const data = await res.json();
+//     setDiagramUrl(`${BASE_URL}/${data.file_path}`);
+//     setArtifactId(data.artifact.id);
+//     setApproved(false);
+//     fetchVersions();
+
+//     // ← ADD: update project status since new artifact has no approvals yet
+//     const statusRes = await fetch(
+//       `${BASE_URL}/api/projects/${projectId}/computed-status`,
+//       { headers: getAuthHeaders() }
+//     );
+//     if (statusRes.ok) {
+//       const { status: computedStatus } = await statusRes.json();
+//       await fetch(
+//         `${BASE_URL}/api/projects/${projectId}/status?status=${computedStatus}`,
+//         { method: "PUT", headers: getAuthHeaders() }
+//       );
+//     }
+
+//   } catch (err) {
+//     console.error(err);
+//     alert("Failed to generate UML diagram.");
+//   } finally {
+//     setLoading(false);
+//   }
+//   return;
+//  }
+
+//     if (!sessionId) {
+//       alert("No session found for this project. Please start a meeting session first.");
+//       return;
+//     }
+
+//     try {
+//       setLoading(true);
+//       const res = await generateUML(projectId, sessionId, diagramType);
+//       const filePath = res.data.file_path;
+//       const artifact = res.data.artifact;
+//       setDiagramUrl(`${BASE_URL}/${filePath}`);
+//       setArtifactId(artifact.id);
+//       setApproved(false);
+//       setHasNewUnapproved(true);
+
+//       //  Reset approval counts immediately in UI so it shows 0/N right away
+//       setUmlApproval((prev) => ({
+//         ...prev,
+//         approved_members_count: 0,
+//         current_user_approved: false,
+//         all_members_approved: false,
+//         status: "pending",
+//       }));
+//       const statusRes = await fetch(
+//         `http://localhost:8000/api/sessions/${sessionId}/computed-status`,
+//         { headers: getAuthHeaders() }
+//       );
+//       if (statusRes.ok) {
+//         const { status: computedStatus } = await statusRes.json();
+//         await fetch(
+//           `http://localhost:8000/api/sessions/${sessionId}/status?status=${computedStatus}`,
+//           { method: "PUT", headers: getAuthHeaders() }
+//         );
+//       }
+
+      
+
+//       fetchVersions(sessionId);
+//       await refreshUmlApproval(sessionId);
+//     } catch (err) {
+//       console.error(err);
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+  const { startUmlGeneration } = useContext(UmlContext);
+
   const handleGenerate = async () => {
 
-       if (isProjectSource) {
-  // ✅ PROJECT-LEVEL generation — new path, touches nothing in session logic
-  try {
-    setLoading(true);
-    const res = await fetch(
-      `${BASE_URL}/api/projects/${projectId}/generate-uml?diagram_type=${diagramType}`,
-      { method: "POST", headers: getAuthHeaders() }
-    );
-
-    if (!res.ok) throw new Error("Generation failed");
-    const data = await res.json();
-    setDiagramUrl(`${BASE_URL}/${data.file_path}`);
-    setArtifactId(data.artifact.id);
-    setApproved(false);
-    fetchVersions();
-
-    // ← ADD: update project status since new artifact has no approvals yet
-    const statusRes = await fetch(
-      `${BASE_URL}/api/projects/${projectId}/computed-status`,
-      { headers: getAuthHeaders() }
-    );
-    if (statusRes.ok) {
-      const { status: computedStatus } = await statusRes.json();
-      await fetch(
-        `${BASE_URL}/api/projects/${projectId}/status?status=${computedStatus}`,
-        { method: "PUT", headers: getAuthHeaders() }
-      );
+    // ── PROJECT-LEVEL generation ───────────────────────────────────────────────
+    if (isProjectSource) {
+      try {
+        await startUmlGeneration({
+          projectId,
+          sessionId: null,
+          diagramType,
+          source: "project",
+        });
+        // Background task started — UmlToast will notify when done.
+        // fetchVersions will be called when user returns to this page via the toast.
+      } catch (err) {
+        console.error(err);
+        alert("Failed to start UML generation.");
+      }
+      return;
     }
 
-  } catch (err) {
-    console.error(err);
-    alert("Failed to generate UML diagram.");
-  } finally {
-    setLoading(false);
-  }
-  return;
- }
-
+    // ── SESSION-LEVEL generation ───────────────────────────────────────────────
     if (!sessionId) {
       alert("No session found for this project. Please start a meeting session first.");
       return;
     }
 
     try {
-      setLoading(true);
-      const res = await generateUML(projectId, sessionId, diagramType);
-      const filePath = res.data.file_path;
-      const artifact = res.data.artifact;
-      setDiagramUrl(`${BASE_URL}/${filePath}`);
-      setArtifactId(artifact.id);
-      setApproved(false);
-      setHasNewUnapproved(true);
-
-      //  Reset approval counts immediately in UI so it shows 0/N right away
-      setUmlApproval((prev) => ({
-        ...prev,
-        approved_members_count: 0,
-        current_user_approved: false,
-        all_members_approved: false,
-        status: "pending",
-      }));
-      const statusRes = await fetch(
-        `http://localhost:8000/api/sessions/${sessionId}/computed-status`,
-        { headers: getAuthHeaders() }
-      );
-      if (statusRes.ok) {
-        const { status: computedStatus } = await statusRes.json();
-        await fetch(
-          `http://localhost:8000/api/sessions/${sessionId}/status?status=${computedStatus}`,
-          { method: "PUT", headers: getAuthHeaders() }
-        );
-      }
-
-      
-
-      fetchVersions(sessionId);
-      await refreshUmlApproval(sessionId);
+      await startUmlGeneration({
+        projectId,
+        sessionId,
+        diagramType,
+        source: "session",
+      });
+      // Background task started — UmlToast will notify when done.
     } catch (err) {
       console.error(err);
-    } finally {
-      setLoading(false);
+      alert("Failed to start UML generation.");
     }
   };
+
 
   // ===============================
   // APPROVE (project-level — direct artifact approval, no session members)
@@ -471,12 +516,20 @@ export default function UmlPage() {
             <div className="flex gap-3 items-center">
 
               {/* GENERATE */}
-              <button
+              {/* <button
                  onClick={handleGenerate}
                  disabled={loading || (!isProjectSource && !sessionId) || (!isProjectSource && sessionCompleted)}
                   className="h-10 px-4 rounded-lg bg-primary text-white disabled:opacity-50"
                 >
                 {loading ? "Generating..." : "Generate UML"}
+              </button> */}
+
+              <button
+                onClick={handleGenerate}
+                disabled={!isProjectSource && sessionCompleted}
+                className="h-10 px-4 rounded-lg bg-primary text-white disabled:opacity-50"
+              >
+                Generate UML
               </button>
 
               {/* VERSION DROPDOWN */}
