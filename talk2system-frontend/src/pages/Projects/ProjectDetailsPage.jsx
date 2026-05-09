@@ -202,7 +202,130 @@ export default function ProjectDetailsPage() {
                             </ul>
                           </div>
                         )}
+                        
+                        {log.details?.before_FRs && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-white dark:bg-[#1a162e] border border-gray-200 dark:border-white/10 text-xs font-mono space-y-1.5">
+                            <p className="text-xs font-bold text-indigo-500 mb-1">Functional Requirements:</p>
+                            <div className="flex items-start gap-2">
+                              <span className="text-red-500 font-bold min-w-[55px]">Before:</span>
+                              <span className="text-red-400 line-through break-words">{log.details.before_FRs.join(", ")}</span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="text-green-600 font-bold min-w-[55px]">After:</span>
+                              <span className="text-green-600 break-words">{log.details.after_FRs.join(", ")}</span>
+                            </div>
+                          </div>
+                        )}
 
+                        {log.details?.before_NFRs && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-white dark:bg-[#1a162e] border border-gray-200 dark:border-white/10 text-xs font-mono space-y-1.5">
+                            <p className="text-xs font-bold text-amber-500 mb-1">Non-Functional Requirements:</p>
+                            <div className="flex items-start gap-2">
+                              <span className="text-red-500 font-bold min-w-[55px]">Before:</span>
+                              <span className="text-red-400 line-through break-words">{log.details.before_NFRs.join(", ")}</span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="text-green-600 font-bold min-w-[55px]">After:</span>
+                              <span className="text-green-600 break-words">{log.details.after_NFRs.join(", ")}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {(log.details?.Actors || log.details?.Features) && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800/30 text-xs">
+                            <p className="text-xs font-bold text-blue-600 mb-1">Included in update:</p>
+                            {log.details.Actors && <p className="text-blue-500 break-words">Actors: {log.details.Actors.join(", ")}</p>}
+                            {log.details.Features && <p className="text-blue-500 break-words">Features: {log.details.Features.join(", ")}</p>}
+                          </div>
+                        )}
+
+                        {log.details?.added_FRs && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30 text-xs">
+                            <p className="text-xs font-bold text-green-600 mb-1">➕ Added Functional Requirements:</p>
+                            <ul className="space-y-0.5">
+                              {log.details.added_FRs.map((text, i) => (
+                                <li key={i} className="text-green-600 break-words">+ {text}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {log.details?.added_NFRs && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30 text-xs">
+                            <p className="text-xs font-bold text-green-600 mb-1">➕ Added Non-Functional Requirements:</p>
+                            <ul className="space-y-0.5">
+                              {log.details.added_NFRs.map((text, i) => (
+                                <li key={i} className="text-green-600 break-words">+ {text}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {log.details?.added_Actors && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30 text-xs">
+                            <p className="text-xs font-bold text-green-600 mb-1">➕ Added Actors:</p>
+                            <ul className="space-y-0.5">
+                              {log.details.added_Actors.map((text, i) => (
+                                <li key={i} className="text-green-600 break-words">+ {text}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {log.details?.added_Features && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30 text-xs">
+                            <p className="text-xs font-bold text-green-600 mb-1">➕ Added Features:</p>
+                            <ul className="space-y-0.5">
+                              {log.details.added_Features.map((text, i) => (
+                                <li key={i} className="text-green-600 break-words">+ {text}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {log.details?.deleted_FRs && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 text-xs">
+                            <p className="text-xs font-bold text-red-500 mb-1">➖ Deleted Functional Requirements:</p>
+                            <ul className="space-y-0.5">
+                              {log.details.deleted_FRs.map((text, i) => (
+                                <li key={i} className="text-red-500 line-through break-words">- {text}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {log.details?.deleted_NFRs && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 text-xs">
+                            <p className="text-xs font-bold text-red-500 mb-1">➖ Deleted Non-Functional Requirements:</p>
+                            <ul className="space-y-0.5">
+                              {log.details.deleted_NFRs.map((text, i) => (
+                                <li key={i} className="text-red-500 line-through break-words">- {text}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {log.details?.deleted_Actors && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 text-xs">
+                            <p className="text-xs font-bold text-red-500 mb-1">➖ Deleted Actors:</p>
+                            <ul className="space-y-0.5">
+                              {log.details.deleted_Actors.map((text, i) => (
+                                <li key={i} className="text-red-500 line-through break-words">- {text}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {log.details?.deleted_Features && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 text-xs">
+                            <p className="text-xs font-bold text-red-500 mb-1">➖ Deleted Features:</p>
+                            <ul className="space-y-0.5">
+                              {log.details.deleted_Features.map((text, i) => (
+                                <li key={i} className="text-red-500 line-through break-words">- {text}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                         <p className="text-xs text-gray-400 mt-1">{new Date(log.created_at).toLocaleString()} • {log.user_email}</p>
                       </div>
                     </div>

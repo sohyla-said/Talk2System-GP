@@ -8,7 +8,8 @@ from app.db.session import get_db
 from app.dependencies.auth import get_current_user
 from app.models.user import User
 from app.services.approval_service import ApprovalError, ApprovalService
-
+from app.services.audit_service import log_action 
+from app.models.session import Session as SessionModel
 router = APIRouter(prefix="/api", tags=["approval"])
 
 
@@ -47,10 +48,32 @@ def approve_feature(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        return ApprovalService.approve_feature(
+        result = ApprovalService.approve_feature(
             db, session_id, current_user.id, feature,
             version_id=body.version_id   # ← pass version_id
         )
+        if result["current_user_approved"]:
+            session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            extra_parts = [
+                f"{feature.capitalize()} approval",
+                f"({result['approved_members_count']}/{result['total_members_count']} members)"
+            ]
+            if body.version_id:
+                extra_parts.append(f"Version #{body.version_id}")
+            log_action(
+                db,
+                current_user.id,
+                f"approved_{feature}",
+                "session",
+                project_id=session.project_id if session else None,
+                entity_id=session_id,
+                details={
+                    "label": f'Session: "{session.title if session else "Unknown"}"',
+                    "extra": " | ".join(extra_parts)
+                }
+            )
+            db.commit()
+        return result
     except ApprovalError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail)
 
@@ -78,7 +101,24 @@ def reset_feature_approvals(
 ):
     try:
         ApprovalService._ensure_session_membership(db, session_id, current_user.id)
+        session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+        extra = f"Reset {feature.capitalize()} approvals"
+        if version_id:
+            extra += f" for Version #{version_id}"
+        log_action(
+            db,
+            current_user.id,
+            f"reset_{feature}_approvals",
+            "session",
+            project_id=session.project_id if session else None,
+            entity_id=session_id,
+            details={
+                "label": f'Session: "{session.title if session else "Unknown"}"',
+                "extra": extra
+            }
+        )   
         ApprovalService.reset_feature_approvals(db, session_id, feature, version_id=version_id)
+        db.commit()
         return ApprovalService.get_approval_status(db, session_id, current_user.id)
     except ApprovalError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail)
@@ -91,7 +131,21 @@ def approve_feature_for_all(
     current_user: User = Depends(get_current_user),
 ):
     try:
+        session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+        log_action(
+            db,
+            current_user.id,
+            f"approved_all_{feature}",
+            "session",
+            project_id=session.project_id if session else None,
+            entity_id=session_id,
+            details={
+                "label": f'Session: "{session.title if session else "Unknown"}"',
+                "extra": f"Approved {feature.capitalize()} for all members"
+            }
+        )
         ApprovalService.approve_feature_for_all(db, session_id, feature)
+        db.commit()
         return ApprovalService.get_approval_status(db, session_id, current_user.id)
     except ApprovalError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail)
