@@ -233,3 +233,32 @@ class ProjectService:
             .order_by(Invitation.created_at.desc())
             .all()
         )
+    # ADD this method to ProjectService class:
+
+    @staticmethod
+    def complete_project(db: Session, project_id: int, user_id: int):
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            raise ValueError("Project not found")
+
+        membership = (
+            db.query(ProjectMembership)
+            .filter_by(project_id=project_id, user_id=user_id)
+            .filter(ProjectMembership.left_at == None)
+            .first()
+        )
+        if not membership:
+            raise ValueError("You are not a member of this project")
+
+        if project.project_status == "completed":
+            raise ValueError("Project is already completed")
+
+        project.project_status = "completed"
+        db.commit()
+        db.refresh(project)
+
+        return {
+            "project_id": project.id,
+            "status": project.project_status,
+            "message": "Project marked as completed"
+        }

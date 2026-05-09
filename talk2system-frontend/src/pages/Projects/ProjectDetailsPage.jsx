@@ -26,6 +26,8 @@ export default function ProjectDetailsPage() {
   const [reqVersions, setReqVersions] = useState([]);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [members, setMembers] = useState([]);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -103,6 +105,27 @@ export default function ProjectDetailsPage() {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   }
+  const handleCompleteProject = async () => {
+  setIsCompleting(true);
+  try {
+    const res = await fetch(
+      `${BASE_URL}/api/projects/${projectId}/complete`,
+      { method: "PATCH", headers: { Authorization: `Bearer ${getToken()}` } }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Failed to complete project");
+
+    setProject((prev) => ({ ...prev, project_status: "completed" }));
+    setShowCompleteModal(false);
+    showToast("Project marked as completed.", "success");
+  } catch (err) {
+    console.error(err);
+    showToast(err.message, "error");
+  } finally {
+    setIsCompleting(false);
+  }
+ };
+
 
   if (loading) return <p className="p-8 text-gray-400">Loading...</p>;
 
@@ -381,7 +404,34 @@ export default function ProjectDetailsPage() {
                 {myRole === "project_manager" && (<button onClick={() => setShowRequestsPanel(true)} className="relative flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition"><span className="material-symbols-outlined text-sm">group_add</span>Requests{pendingRequests.length > 0 && (<span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-primary text-white text-[9px] flex items-center justify-center font-bold">{pendingRequests.length}</span>)}</button>)}
                 {myRole === "project_manager" && (<button onClick={openLogsModal} className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition"><span className="material-symbols-outlined text-sm">history</span>Activity</button>)}
               </div>
-              {myRole === "project_manager" && (<button onClick={() => navigate(`/projects/${projectId}/start-session`)} className="flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-white text-sm font-bold shadow hover:opacity-90 transition"><span className="material-symbols-outlined text-lg">mic</span>Start Meeting Session</button>)}
+             <div className="flex items-center gap-3">
+              {myRole === "project_manager" && project?.project_status !== "completed" && (
+                <button
+                  onClick={() => navigate(`/projects/${projectId}/start-session`)}
+                  className="flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-white text-sm font-bold shadow hover:opacity-90 transition"
+                >
+                  <span className="material-symbols-outlined text-lg">mic</span>
+                  Start Meeting Session
+                </button>
+              )}
+
+              {myRole === "project_manager" && project?.project_status !== "completed" && (
+                <button
+                  onClick={() => setShowCompleteModal(true)}
+                  className="flex items-center gap-2 h-10 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow transition"
+                >
+                  <span className="material-symbols-outlined text-lg">task_alt</span>
+                  Mark as Completed
+                </button>
+              )}
+
+              {project?.project_status === "completed" && (
+                <div className="flex items-center gap-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 px-4 py-2.5 text-sm font-bold text-indigo-700 dark:text-indigo-300">
+                  <span className="material-symbols-outlined text-lg">verified</span>
+                  Project Completed
+                </div>
+              )}
+            </div>
             </div>
           </div>
           <div className="flex gap-3 px-4 pt-1 pb-4 overflow-x-auto">
@@ -398,19 +448,77 @@ export default function ProjectDetailsPage() {
           </div>
           <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {sessions.length === 0 ? (<p className="text-gray-400 col-span-3">No sessions yet.</p>) : (
-              sessions.map((session) => (
-                <div key={session.id} onClick={() => navigate(`/projects/${projectId}/sessions/${session.id}/sessiondetails`,
-                { state:{ sessionId: session.id } }
-                 )} className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border shadow-sm hover:shadow-md cursor-pointer transition">
-                
+             sessions.map((session) => (
+              <div
+                key={session.id}
+                onClick={() => navigate(
+                  `/projects/${projectId}/sessions/${session.id}/sessiondetails`,
+                  { state: { sessionId: session.id, projectCompleted: project?.project_status === "completed" } }
+                )}
+                className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border shadow-sm hover:shadow-md cursor-pointer transition"
+              >
+                <div className="flex items-start justify-between">
                   <h3 className="font-bold text-lg">{session.title || `Session #${session.id}`}</h3>
-                  <span className="text-sm text-gray-500">{new Date(session.created_at).toLocaleDateString()}</span>
+                  {project?.project_status === "completed" && (
+                    <span className="material-symbols-outlined text-indigo-400 text-base">lock</span>
+                  )}
                 </div>
-              ))
+
+                <span className={`self-start flex h-6 items-center rounded-full px-2.5 text-xs font-semibold ${
+                  (session.status || "").toLowerCase() === "completed"
+                    ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
+                    : (session.status || "").toLowerCase() === "in_progress"
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                    : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                }`}>
+                  {(session.status || "pending").replace(/_/g, " ")}
+                </span>
+              </div>
+            ))
             )}
           </div>
         </div>
       </div>
+      {showCompleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowCompleteModal(false)}
+          />
+          <div className="relative w-full max-w-md rounded-2xl bg-white dark:bg-gray-800 p-8 shadow-2xl border border-gray-200 dark:border-gray-700">
+            <div className="flex flex-col items-center text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 mb-6">
+                <span className="material-symbols-outlined text-4xl">task_alt</span>
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
+                Mark Project as Completed?
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
+                This will lock the entire project. All sessions will become <strong>view-only</strong>, and no new sessions, requirements, or artifacts can be generated. This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleCompleteProject}
+                disabled={isCompleting}
+                className="inline-flex w-full justify-center items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-4 py-3 text-sm font-bold text-white transition-all"
+              >
+                <span className="material-symbols-outlined text-lg">
+                  {isCompleting ? "hourglass_empty" : "check_circle"}
+                </span>
+                {isCompleting ? "Completing..." : "Yes, Mark as Completed"}
+              </button>
+              <button
+                onClick={() => setShowCompleteModal(false)}
+                disabled={isCompleting}
+                className="inline-flex w-full justify-center items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-3 text-sm font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {notification && (
         <div className={`fixed bottom-6 right-6 p-4 rounded-xl shadow-xl flex gap-3 border z-50 ${notification.type === "success" ? "bg-white dark:bg-[#1a162e] border-emerald-500/30" : "bg-white dark:bg-[#1a162e] border-red-500/30"}`}>

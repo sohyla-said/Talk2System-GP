@@ -257,6 +257,7 @@ export default function SrsPage() {
   const [approved, setApproved] = useState(false);
   const [hasNewUnapproved, setHasNewUnapproved] = useState(false); 
   const [sessionCompleted, setSessionCompleted] = useState(false);
+  const [projectCompleted, setProjectCompleted] = useState(false);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [srsContent, setSrsContent] = useState(null);
   const [srsApproval, setSrsApproval] = useState({
@@ -267,6 +268,13 @@ export default function SrsPage() {
     status: "pending",
     exists: false,
   });
+  const [projectSrsApproval, setProjectSrsApproval] = useState({
+  approved_members_count: 0,
+  total_members_count: 0,
+  current_user_approved: false,
+  all_members_approved: false,
+  status: "pending",
+});
 
   // track whether we came from the project-level requirements page
   const [isProjectSource, setIsProjectSource] = useState(false);
@@ -297,6 +305,28 @@ export default function SrsPage() {
       setApproved(Boolean(feature.current_user_approved));
     } catch (err) {
       console.error("Failed to load SRS approval status:", err);
+    }
+  };
+
+  const refreshProjectSrsApproval = async () => {
+    if (!projectId) return;
+    try {
+      const res = await fetch(
+        `${BASE_URL}/api/projects/${projectId}/features/approval-status`,
+        { headers: getAuthHeaders() }
+      );
+      if (!res.ok) return;
+
+      const data = await res.json();
+      const feature = Array.isArray(data.features)
+        ? data.features.find((f) => f.feature === "srs")
+        : null;
+      if (!feature) return;
+
+      setProjectSrsApproval(feature);
+      setApproved(Boolean(feature.current_user_approved));
+    } catch (err) {
+      console.error("Failed to load project SRS approval status:", err);
     }
   };
 
@@ -334,7 +364,13 @@ export default function SrsPage() {
   }, [projectId, urlSessionId, location.state]);
 
   useEffect(() => {
-  if (!sessionId || isProjectSource) return;
+  if (isProjectSource) return;
+  const projectCompletedFromState = location.state?.projectCompleted === true;
+  if (projectCompletedFromState) {
+    setSessionCompleted(true);
+    return;
+  }
+  if (!sessionId) return;
   fetch(`${BASE_URL}/api/sessions/${sessionId}`, {
     headers: getAuthHeaders(),
   })
@@ -375,6 +411,9 @@ export default function SrsPage() {
         setSrsContent(latest.file_path);
         setApproved(latest.approval_status === "approved");
         fetchSrsText(latest.id);
+        if (isProjectSource) {
+          await refreshProjectSrsApproval();
+        }
       } else {
         setArtifactId(null);
         setSrsContent(null);
@@ -386,13 +425,19 @@ export default function SrsPage() {
   };
 
   useEffect(() => {
-    if (isProjectSource) {
-      fetchVersions();
-      // No approval refresh needed for project-level artifacts
-    } else if (sessionId) {
-      fetchVersions(sessionId);
-      refreshSrsApproval(sessionId);
-    }
+  if (isProjectSource && projectId) {
+    fetchVersions();
+    // Fetch project completed status
+    fetch(`${BASE_URL}/api/projects/getproject/${projectId}`, {
+      headers: getAuthHeaders(),
+    })
+      .then((r) => r.json())
+      .then((data) => setProjectCompleted(data.project_status === "completed"))
+      .catch(console.error);
+  } else if (sessionId) {
+    fetchVersions();
+    refreshSrsApproval(sessionId);
+  }
   }, [sessionId, isProjectSource]);
 
   // ===============================
@@ -501,6 +546,19 @@ export default function SrsPage() {
         });
         // Background task started — SrsToast will notify when done.
         // fetchVersions runs on mount when user returns via the toast.
+        if (projectId) {
+          const projectStatusRes = await fetch(
+            `${BASE_URL}/api/projects/${projectId}/computed-status`,
+            { headers: getAuthHeaders() }
+          );
+          if (projectStatusRes.ok) {
+            const { status: projectStatus } = await projectStatusRes.json();
+            await fetch(
+              `${BASE_URL}/api/projects/${projectId}/status?status=${projectStatus}`,
+              { method: "PUT", headers: getAuthHeaders() }
+            );
+          }
+        }
       } catch (err) {
         console.error(err);
         alert("Failed to start SRS generation. Make sure Ollama is running.");
@@ -544,6 +602,7 @@ export default function SrsPage() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail);
 
+    setProjectSrsApproval(data);
     setApproved(Boolean(data.current_user_approved));
 
     if (data.all_members_approved) {
@@ -592,8 +651,16 @@ export default function SrsPage() {
         setApproved(Boolean(approvalData.current_user_approved));
         setHasNewUnapproved(!approvalData.all_members_approved);
       }
-    } else {
-      setApproved(res.data.approval_status === "approved");
+    } else if (isProjectSource) {
+      const approvalRes = await fetch(
+        `${BASE_URL}/api/projects/${projectId}/features/srs/approval-status/${selectedId}`,
+        { headers: getAuthHeaders() }
+      );
+      if (approvalRes.ok) {
+        const approvalData = await approvalRes.json();
+        setProjectSrsApproval(approvalData);
+        setApproved(Boolean(approvalData.current_user_approved));
+      }
     }
   } catch (err) {
     console.error(err);
@@ -686,6 +753,12 @@ export default function SrsPage() {
             This session is completed. Generation is disabled — view only.
           </div>
         )}
+        {isProjectSource && projectCompleted && (
+          <div className="flex items-center gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 px-4 py-3 text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-4">
+            <span className="material-symbols-outlined text-lg">lock</span>
+            This project is completed. Generation is disabled — view only.
+          </div>
+        )}
 
         {/* =============================================
             FORMAT SELECTOR SECTION
@@ -754,7 +827,10 @@ export default function SrsPage() {
               </button> */}
               <button
                 onClick={handleGenerate}
-                disabled={!isProjectSource && sessionCompleted}
+                disabled={
+                  (isProjectSource && projectCompleted) ||
+                  (!isProjectSource && sessionCompleted)
+                }
                 className="h-10 px-4 rounded-lg bg-primary text-white disabled:opacity-50"
               >
                 Generate SRS
@@ -800,7 +876,7 @@ export default function SrsPage() {
                 // Project-level: direct artifact approval
                 <button
                   onClick={handleProjectApprove}
-                  disabled={approved || !artifactId}
+                  disabled={approved || !artifactId || projectCompleted}
                   className={`h-10 px-6 rounded-lg flex items-center gap-2 text-white ${approved ? "bg-green-600" : "bg-primary"}`}
                 >
                   <span className="material-symbols-outlined">{approved ? "check_circle" : "approval"}</span>
@@ -832,11 +908,15 @@ export default function SrsPage() {
                 {srsApproval.all_members_approved ? " (all approved)" : " (waiting for members)"}
               </span>
             )}
-            {isProjectSource && !approved && (
-              <span className="text-xs text-gray-600 dark:text-gray-300">
-                Pending approval by project manager
-              </span>
-            )}
+            {isProjectSource && (
+            <span className="text-xs text-gray-600 dark:text-gray-300">
+              Project approvals: {projectSrsApproval.approved_members_count}/
+              {projectSrsApproval.total_members_count}
+              {projectSrsApproval.all_members_approved
+                ? " (all approved)"
+                : " (waiting for members)"}
+            </span>
+          )}
           </div>
         )}
 

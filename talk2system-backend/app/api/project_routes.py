@@ -563,3 +563,18 @@ def get_project_audit_logs(
         }
         for log in logs
     ]
+@router.patch("/{project_id}/complete")
+def complete_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return ProjectService.complete_project(db, project_id, current_user.id)
+    except ValueError as e:
+        msg = str(e)
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=404, detail=msg)
+        if "not a member" in msg.lower():
+            raise HTTPException(status_code=403, detail=msg)
+        raise HTTPException(status_code=400, detail=msg)

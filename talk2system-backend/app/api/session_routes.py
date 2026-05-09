@@ -109,14 +109,7 @@ def delete_session(session_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Session not found")
     return {"message": "Session deleted successfully"}
 
-@router.put("/{session_id}/status", status_code=204)
-def update_session_status( session_id: int,status: str,db: Session = Depends(get_db)):
-    updated = SessionService.update_session_status(db, session_id, status)
 
-    if not updated:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    return
 @router.patch("/{session_id}/complete")
 def complete_session(
     session_id: int,

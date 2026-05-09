@@ -268,6 +268,11 @@ export default function TranscriptPage() {
   }, [detectedLanguage, transcriptData.length, translationData]);
   
   useEffect(() => {
+    const projectCompletedFromState = location.state?.projectCompleted === true;
+    if (projectCompletedFromState) {
+      setSessionCompleted(true);
+      return;
+    }
     if (!sessionId) return;
     fetch(`http://localhost:8000/api/sessions/${sessionId}`, {
       headers: { Authorization: `Bearer ${getToken()}` },
@@ -367,6 +372,19 @@ export default function TranscriptPage() {
         { method: "PUT", headers: { Authorization: `Bearer ${getToken()}` } }
       );
     }
+    if (projectId) {
+      const projectStatusRes = await fetch(
+        `http://localhost:8000/api/projects/${projectId}/computed-status`,
+        { headers: { Authorization: `Bearer ${getToken()}` } }
+      );
+      if (projectStatusRes.ok) {
+        const { status: projectStatus } = await projectStatusRes.json();
+        await fetch(
+          `http://localhost:8000/api/projects/${projectId}/status?status=${projectStatus}`,
+          { method: "PUT", headers: { Authorization: `Bearer ${getToken()}` } }
+        );
+      }
+    }
 
   } catch (error) {
     console.error("Error saving transcript edit:", error);
@@ -403,6 +421,19 @@ export default function TranscriptPage() {
             `http://localhost:8000/api/sessions/${sessionId}/status?status=${computedStatus}`,
             { method: "PUT", headers: { Authorization: `Bearer ${getToken()}` } }
           );
+        }
+        if (projectId) {
+          const projectStatusRes = await fetch(
+            `http://localhost:8000/api/projects/${projectId}/computed-status`,
+            { headers: { Authorization: `Bearer ${getToken()}` } }
+          );
+          if (projectStatusRes.ok) {
+            const { status: projectStatus } = await projectStatusRes.json();
+            await fetch(
+              `http://localhost:8000/api/projects/${projectId}/status?status=${projectStatus}`,
+              { method: "PUT", headers: { Authorization: `Bearer ${getToken()}` } }
+            );
+          }
         }
 
         if (data.all_members_approved) {

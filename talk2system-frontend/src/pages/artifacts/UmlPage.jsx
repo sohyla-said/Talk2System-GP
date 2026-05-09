@@ -19,6 +19,7 @@ export default function UmlPage() {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [sessionCompleted, setSessionCompleted] = useState(false);
   const [approved, setApproved] = useState(false);
+  const [projectCompleted, setProjectCompleted] = useState(false);
   const [hasNewUnapproved, setHasNewUnapproved] = useState(false); // ✅ NEW
   const [umlApproval, setUmlApproval] = useState({
     approved_members_count: 0,
@@ -28,6 +29,13 @@ export default function UmlPage() {
     status: "pending",
     exists: false,
   });
+  const [projectUmlApproval, setProjectUmlApproval] = useState({
+  approved_members_count: 0,
+  total_members_count: 0,
+  current_user_approved: false,
+  all_members_approved: false,
+  status: "pending",
+});
   const [diagramType, setDiagramType] = useState("usecase");
 
   const [diagramUrl, setDiagramUrl] = useState(null);
@@ -85,8 +93,14 @@ export default function UmlPage() {
   }, [projectId, location.state]);
 
   useEffect(() => {
-  if (!sessionId || isProjectSource) return;
-  fetch(`http://localhost:8000/api/sessions/${sessionId}`, {
+  if (isProjectSource) return;
+  const projectCompletedFromState = location.state?.projectCompleted === true;
+  if (projectCompletedFromState) {
+    setSessionCompleted(true);
+    return;
+  }
+  if (!sessionId) return;
+  fetch(`${BASE_URL}/api/sessions/${sessionId}`, {
     headers: getAuthHeaders(),
   })
     .then((r) => r.json())
@@ -134,6 +148,9 @@ export default function UmlPage() {
         setDiagramUrl(`${BASE_URL}/${latest.file_path}`);
         setArtifactId(latest.id);
         setApproved(latest.approval_status === "approved");
+        if (isProjectSource) {
+          await refreshProjectUmlApproval();
+        }
       } else {
         setDiagramUrl(null);
         setArtifactId(null);
@@ -164,6 +181,28 @@ export default function UmlPage() {
       setApproved(Boolean(feature.current_user_approved));
     } catch (err) {
       console.error("Failed to load UML approval status:", err);
+    }
+  };
+
+  const refreshProjectUmlApproval = async () => {
+    if (!projectId) return;
+    try {
+      const res = await fetch(
+        `${BASE_URL}/api/projects/${projectId}/features/approval-status`,
+        { headers: getAuthHeaders() }
+      );
+      if (!res.ok) return;
+
+      const data = await res.json();
+      const feature = Array.isArray(data.features)
+        ? data.features.find((f) => f.feature === "uml")
+        : null;
+      if (!feature) return;
+
+      setProjectUmlApproval(feature);
+      setApproved(Boolean(feature.current_user_approved));
+    } catch (err) {
+      console.error("Failed to load project UML approval status:", err);
     }
   };
 
@@ -268,6 +307,19 @@ export default function UmlPage() {
         });
         // Background task started — UmlToast will notify when done.
         // fetchVersions will be called when user returns to this page via the toast.
+        if (projectId) {
+          const projectStatusRes = await fetch(
+            `http://localhost:8000/api/projects/${projectId}/computed-status`,
+            { headers: { Authorization: `Bearer ${getToken()}` } }
+          );
+          if (projectStatusRes.ok) {
+            const { status: projectStatus } = await projectStatusRes.json();
+            await fetch(
+              `http://localhost:8000/api/projects/${projectId}/status?status=${projectStatus}`,
+              { method: "PUT", headers: { Authorization: `Bearer ${getToken()}` } }
+            );
+          }
+        }
       } catch (err) {
         console.error(err);
         alert("Failed to start UML generation.");
@@ -314,6 +366,7 @@ export default function UmlPage() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail);
 
+    setProjectUmlApproval(data);
     setApproved(Boolean(data.current_user_approved));
 
     // If all approved, also mark artifact as approved
@@ -341,14 +394,22 @@ export default function UmlPage() {
 
   // Re-fetch when diagramType changes OR when sessionId/isProjectSource is first resolved
   useEffect(() => {
-    if (isProjectSource) {
-      fetchVersions();
-      // No approval refresh needed for project-level artifacts
-    } else if (sessionId) {
-      fetchVersions();
-      refreshUmlApproval();
+  if (isProjectSource) {
+    fetchVersions();
+    // Fetch project completed status
+    if (projectId) {
+      fetch(`${BASE_URL}/api/projects/getproject/${projectId}`, {
+        headers: getAuthHeaders(),
+      })
+        .then((r) => r.json())
+        .then((data) => setProjectCompleted(data.project_status === "completed"))
+        .catch(console.error);
     }
-  }, [diagramType, sessionId, isProjectSource]);
+  } else if (sessionId) {
+    fetchVersions();
+    refreshUmlApproval();
+  }
+}, [diagramType, sessionId, isProjectSource]);
   // ===============================
   // SELECT VERSION
   // ===============================
@@ -370,8 +431,16 @@ export default function UmlPage() {
         setApproved(Boolean(approvalData.current_user_approved));
         setHasNewUnapproved(!approvalData.all_members_approved);
       }
-    } else {
-      setApproved(res.data.approval_status === "approved");
+    } else if (isProjectSource) {
+      const approvalRes = await fetch(
+        `${BASE_URL}/api/projects/${projectId}/features/uml/approval-status/${selectedArtifactId}`,
+        { headers: getAuthHeaders() }
+      );
+      if (approvalRes.ok) {
+        const approvalData = await approvalRes.json();
+        setProjectUmlApproval(approvalData);
+        setApproved(Boolean(approvalData.current_user_approved));
+      }
     }
   } catch (err) {
     console.error(err);
@@ -483,6 +552,12 @@ export default function UmlPage() {
             This session is completed. Generation is disabled — view only.
           </div>
         )}
+        {isProjectSource && projectCompleted && (
+          <div className="flex items-center gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 px-4 py-3 text-sm font-medium text-indigo-700 dark:text-indigo-300 mt-2">
+            <span className="material-symbols-outlined text-lg">lock</span>
+            This project is completed. Generation is disabled — view only.
+          </div>
+        )}
         </div>
 
         {/* DIAGRAM TYPE */}
@@ -526,7 +601,10 @@ export default function UmlPage() {
 
               <button
                 onClick={handleGenerate}
-                disabled={!isProjectSource && sessionCompleted}
+                disabled={
+                  (isProjectSource && projectCompleted) ||
+                  (!isProjectSource && sessionCompleted)
+                }
                 className="h-10 px-4 rounded-lg bg-primary text-white disabled:opacity-50"
               >
                 Generate UML
@@ -565,7 +643,7 @@ export default function UmlPage() {
                 // Project-level: direct artifact approval, no session members needed
                 <button
                   onClick={handleProjectApprove}
-                  disabled={approved || !artifactId || sessionCompleted}
+                  disabled={approved || !artifactId || projectCompleted}
                   className={`h-10 px-6 rounded-lg flex items-center gap-2 text-white
                     ${approved ? "bg-green-600" : "bg-primary"}`}
                 >
@@ -577,7 +655,7 @@ export default function UmlPage() {
               ) : (
                 <button
                   onClick={() => setShowApprovalModal(true)}
-                  disabled={isApprovedState || !artifactId}
+                  disabled={isApprovedState || !artifactId|| sessionCompleted}
                 className={`h-10 px-6 rounded-lg flex items-center gap-2 text-white
                   ${isApprovedState ? "bg-green-600" : "bg-primary"}`}
               >
@@ -600,7 +678,11 @@ export default function UmlPage() {
           )}
           {isProjectSource && artifactId && (
             <div className="px-4 pb-3 text-sm text-slate-500 dark:text-slate-400">
-              {approved ? "✓ Project artifact approved" : "Pending approval by project manager"}
+              Project approvals: {projectUmlApproval.approved_members_count}/
+              {projectUmlApproval.total_members_count}
+              {projectUmlApproval.all_members_approved
+                ? " (all approved)"
+                : " (waiting for members)"}
             </div>
           )}
         </div>

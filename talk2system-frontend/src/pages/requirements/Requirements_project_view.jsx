@@ -6,6 +6,7 @@ import { getToken } from "../../api/authApi";
 export default function RequirementsProjectView() {
   const [approved, setApproved] = useState(false);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [projectCompleted, setProjectCompleted] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingSection, setEditingSection] = useState(null);
@@ -62,13 +63,28 @@ export default function RequirementsProjectView() {
     }
   }, [initialData]);
 
-  // useEffect(() => {
-  //   if (versions.length > 0) {
-  //     const latest = versions[0]; // already sorted DESC
-  //     setSelectedVersionId(latest.id);
-  //     fetchRequirementById(latest.id);
-  //   }
-  // }, [versions]);
+  useEffect(() => {
+  if (!projectId) return;
+  fetch(`http://localhost:8000/api/projects/getproject/${projectId}`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  })
+    .then((r) => r.json())
+    .then((data) => setProjectCompleted(data.project_status === "completed"))
+    .catch(console.error);
+  }, [projectId]);
+  useEffect(() => {
+  if (!projectId || !currentRequirementId) return;
+  fetch(
+    `http://localhost:8000/api/projects/${projectId}/features/requirements/approval-status/${currentRequirementId}`,
+    { headers: { Authorization: `Bearer ${getToken()}` } }
+  )
+    .then((r) => r.json())
+    .then((data) => {
+      setRequirementsApproval(data);
+      setApproved(Boolean(data.current_user_approved));
+    })
+    .catch(console.error);
+  }, [projectId, currentRequirementId]);
 
   // poll for versions changes to support multi-user live sync
   useEffect(() => {
@@ -139,7 +155,6 @@ export default function RequirementsProjectView() {
 
       setRequirementId(data.id ?? null);
       setCurrentRequirementId(data.id ?? null);
-      setApproved(data.approval_status === "approved");
       mapBackendData(data.data || data);
     }
     catch (err) {
@@ -185,29 +200,24 @@ export default function RequirementsProjectView() {
 
       setCurrentRequirementId(data.id);
       setRequirementId(data.id);
-      setApproved(data.approval_status === "approved");
       mapBackendData(data.data);
+
+      const approvalRes = await fetch(
+      `http://localhost:8000/api/projects/${projectId}/features/requirements/approval-status/${data.id}`,
+      { headers: { Authorization: `Bearer ${getToken()}` } }
+      );
+      if (approvalRes.ok) {
+        const approvalData = await approvalRes.json();
+        setRequirementsApproval(approvalData);
+        setApproved(Boolean(approvalData.current_user_approved));
+      }
+
     }
     catch (err) {
       console.error(err);
     }
   };
-  const refreshRequirementsApprovalForVersion = async (versionId) => {
-  if (!projectId || !versionId) return;
-  try {
-    const res = await fetch(
-      `http://localhost:8000/api/projects/${projectId}/features/requirements/approval-status/${versionId}`,
-      { headers: { Authorization: `Bearer ${getToken()}` } }
-    );
-    if (!res.ok) return;
-    const data = await res.json();
-    setRequirementsApproval(data);
-    setApproved(Boolean(data.current_user_approved));
-  } catch (err) {
-    console.error(err);
-  }
- };
-
+  
   const hasExtractedRequirements =
     requirements.functional.length > 0 ||
     requirements.nonFunctional.length > 0 ||
@@ -401,6 +411,7 @@ const toggleSelectionMode = (sectionType) => {
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "Failed to approve");
 
+    setRequirementsApproval(data);  
     setApproved(Boolean(data.current_user_approved));
     setShowApprovalModal(false);
 
@@ -559,6 +570,12 @@ const toggleSelectionMode = (sectionType) => {
               Review, filter, and manage project requirements generated from all brainstorming sessions.
             </p>
           </div>
+          {projectCompleted && (
+            <div className="flex items-center gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 px-4 py-3 text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-2">
+              <span className="material-symbols-outlined text-lg">lock</span>
+              This project is completed. All content is view-only — editing and generation are disabled.
+            </div>
+          )}
           <div className="flex items-start gap-3">
             <div className="flex flex-col items-stretch sm:items-end gap-3 w-full sm:w-auto">
               <button
@@ -568,13 +585,18 @@ const toggleSelectionMode = (sectionType) => {
                     ? 'bg-green-600 text-white cursor-default'
                     : 'bg-primary text-white hover:bg-primary/90'
                 }`}
-                disabled={approved || !(currentRequirementId ?? requirementId)}
+                disabled={approved || projectCompleted || !(currentRequirementId ?? requirementId)}
               >
                 <span className="material-symbols-outlined text-lg">
                   {approved ? 'check_circle' : 'approval'}
                 </span>
                 <span>{approved ? 'Approved' : 'Approve Requirements'}</span>
               </button>
+               <p className="text-xs text-slate-500 dark:text-slate-400 text-center sm:text-right">
+                Project approvals: {requirementsApproval.approved_members_count}/
+                {requirementsApproval.total_members_count}
+                {requirementsApproval.all_members_approved ? " (all approved)" : " (waiting for members)"}
+              </p>
 
               <div className={`relative min-w-[220px] h-12 rounded-xl border border-[#d9d2f2] dark:border-[#3a3360] bg-[#f3f0ff] dark:bg-[#1f1a36] transition-all shadow-sm ${
                 approved ? 'text-green-600 dark:text-green-300' : 'text-primary'
@@ -588,7 +610,6 @@ const toggleSelectionMode = (sectionType) => {
                     const id = Number(e.target.value);
                     setSelectedVersionId(id);
                     fetchRequirementById(id);
-                    await refreshRequirementsApprovalForVersion(id);
                   }}
                   className={`appearance-none w-full h-full bg-transparent pl-10 pr-10 text-sm font-semibold tracking-wide focus:outline-none focus:ring-2 focus:ring-primary/30 rounded-xl ${
                     approved ? 'text-green-600 dark:text-green-300' : 'text-primary'
@@ -624,6 +645,7 @@ const toggleSelectionMode = (sectionType) => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-4 pb-4">
               <button
                 onClick={() => handleGenerate("uml")}
+                disabled={projectCompleted || !requirementsApproval.all_members_approved}
                 className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary px-4 py-3 font-bold text-white shadow-soft transition-colors hover:bg-primary/90"
               >
                 <span className="material-symbols-outlined text-xl">schema</span>
@@ -631,6 +653,7 @@ const toggleSelectionMode = (sectionType) => {
               </button>
               <button
                 onClick={() => handleGenerate("srs")}
+                disabled={projectCompleted || !requirementsApproval.all_members_approved}
                 className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary px-4 py-3 font-bold text-white shadow-soft transition-colors hover:bg-primary/90"
               >
                 <span className="material-symbols-outlined text-xl">description</span>
@@ -672,17 +695,19 @@ const toggleSelectionMode = (sectionType) => {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Functional Requirements
                       </p>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleSelectionMode("functional");
-                        }}
-                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
-                      >
-                        <span className="material-symbols-outlined text-sm leading-none">delete</span>
-                        {selectionMode.functional ? "Cancel" : "Select"}
-                      </button>
+                      {!projectCompleted && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSelectionMode("functional");
+                          }}
+                          className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                        >
+                          <span className="material-symbols-outlined text-sm leading-none">delete</span>
+                          {selectionMode.functional ? "Cancel" : "Select"}
+                        </button>
+                      )}
                       {selectionMode.functional && (
                         <button
                           type="button"
@@ -696,15 +721,17 @@ const toggleSelectionMode = (sectionType) => {
                           Delete Selected ({(selectedItems.functional || []).length})
                         </button>
                       )}
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditSection('functional');
-                        }}
-                        className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
-                      >
-                        edit
-                      </span>
+                      {!projectCompleted && (
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditSection('functional');
+                          }}
+                          className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
+                        >
+                          edit
+                        </span>
+                      )}
                     </div>
                     <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal">
                       User-facing features and system behaviors.
@@ -757,17 +784,19 @@ const toggleSelectionMode = (sectionType) => {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Non-Functional Requirements
                       </p>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleSelectionMode("nonFunctional");
-                        }}
-                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
-                      >
-                        <span className="material-symbols-outlined text-sm leading-none">delete</span>
-                        {selectionMode.nonFunctional ? "Cancel" : "Select"}
-                      </button>
+                      {!projectCompleted && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSelectionMode("nonFunctional");
+                          }}
+                          className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                        >
+                          <span className="material-symbols-outlined text-sm leading-none">delete</span>
+                          {selectionMode.nonFunctional ? "Cancel" : "Select"}
+                        </button>
+                      )}
                       {selectionMode.nonFunctional && (
                         <button
                           type="button"
@@ -781,15 +810,17 @@ const toggleSelectionMode = (sectionType) => {
                           Delete Selected ({(selectedItems.nonFunctional || []).length})
                         </button>
                       )}
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditSection('nonFunctional');
-                        }}
-                        className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
-                      >
-                        edit
-                      </span>
+                      {!projectCompleted && (
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditSection('nonFunctional');
+                          }}
+                          className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
+                        >
+                          edit
+                        </span>
+                      )}
                     </div>
                     <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal">
                       System qualities like performance, security, and usability.
@@ -842,17 +873,19 @@ const toggleSelectionMode = (sectionType) => {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Actors
                       </p>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleSelectionMode("actors");
-                        }}
-                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
-                      >
-                        <span className="material-symbols-outlined text-sm leading-none">delete</span>
-                        {selectionMode.actors ? "Cancel" : "Select"}
-                      </button>
+                      {!projectCompleted && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSelectionMode("actors");
+                          }}
+                          className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                        >
+                          <span className="material-symbols-outlined text-sm leading-none">delete</span>
+                          {selectionMode.actors ? "Cancel" : "Select"}
+                        </button>
+                      )}
                       {selectionMode.actors && (
                         <button
                           type="button"
@@ -866,6 +899,7 @@ const toggleSelectionMode = (sectionType) => {
                           Delete Selected ({(selectedItems.actors || []).length})
                         </button>
                       )}
+                      {!projectCompleted && (
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
@@ -875,6 +909,7 @@ const toggleSelectionMode = (sectionType) => {
                       >
                         edit
                       </span>
+                      )}
                     </div>
                     <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal">
                       Roles that interact with the system.
@@ -917,18 +952,20 @@ const toggleSelectionMode = (sectionType) => {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Features
                       </p>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleSelectionMode("features");
-                        }}
-                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
-                      >
-                        <span className="material-symbols-outlined text-sm leading-none">delete</span>
-                        {selectionMode.features ? "Cancel" : "Select"}
-                        
-                      </button>
+                      {!projectCompleted && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSelectionMode("features");
+                          }}
+                          className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600"
+                        >
+                          <span className="material-symbols-outlined text-sm leading-none">delete</span>
+                          {selectionMode.features ? "Cancel" : "Select"}
+                          
+                        </button>
+                      )}
                       {selectionMode.features && (
                         <button
                           type="button"
@@ -942,15 +979,17 @@ const toggleSelectionMode = (sectionType) => {
                           Delete Selected ({(selectedItems.features || []).length})
                         </button>
                       )}
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditSection('features');
-                        }}
-                        className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
-                      >
-                        edit
-                      </span>
+                      {!projectCompleted && (
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditSection('features');
+                          }}
+                          className="material-symbols-outlined text-slate-400 hover:text-primary text-lg cursor-pointer transition-colors"
+                        >
+                          edit
+                        </span>
+                      )}
                     </div>
                     <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal">
                       High-level capabilities of the system.

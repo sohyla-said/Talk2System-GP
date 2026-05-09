@@ -88,6 +88,11 @@ export default function RequirementsSessionView() {
   }, [sessionId]);
 
   useEffect(() => {
+  const projectCompletedFromState = location.state?.projectCompleted === true;
+  if (projectCompletedFromState) {
+    setSessionCompleted(true);
+    return;
+  }
   if (!sessionId) return;
   fetch(`http://localhost:8000/api/sessions/${sessionId}`, {
     headers: getAuthHeaders(),
@@ -485,7 +490,19 @@ const handleApprove = async () => {
         `http://localhost:8000/api/sessions/${sessionId}/status?status=${computedStatus}`,
         { method: "PUT", headers: getAuthHeaders() }
       );}
-    
+    if (projectId) {
+      const projectStatusRes = await fetch(
+        `http://localhost:8000/api/projects/${projectId}/computed-status`,
+        { headers: getAuthHeaders() }
+      );
+      if (projectStatusRes.ok) {
+        const { status: projectStatus } = await projectStatusRes.json();
+        await fetch(
+          `http://localhost:8000/api/projects/${projectId}/status?status=${projectStatus}`,
+          { method: "PUT", headers: getAuthHeaders() }
+        );
+      }
+    }
 
     if (data.all_members_approved){
       const targetRequirementId = currentRequirementId ?? requirementId;
@@ -583,6 +600,19 @@ const handleApprove = async () => {
           `http://localhost:8000/api/sessions/${sessionId}/status?status=${computedStatus}`,
           { method: "PUT", headers: getAuthHeaders() }
         );}
+        if (projectId) {
+          const projectStatusRes = await fetch(
+            `http://localhost:8000/api/projects/${projectId}/computed-status`,
+            { headers: getAuthHeaders() }
+          );
+          if (projectStatusRes.ok) {
+            const { status: projectStatus } = await projectStatusRes.json();
+            await fetch(
+              `http://localhost:8000/api/projects/${projectId}/status?status=${projectStatus}`,
+              { method: "PUT", headers: getAuthHeaders() }
+            );
+          }
+        }
       // Update UI with NEW version
       setCurrentRequirementId(data.id);
       setRequirementId(data.id);
