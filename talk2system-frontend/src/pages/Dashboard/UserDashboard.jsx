@@ -306,6 +306,64 @@ export default function UserDashboardPage() {
           </div>
         </div>
 
+        {/* ── Pending approval section ── */}
+        {!loading && (
+          stats?.projects_pending_approval?.length > 0 || stats?.sessions_pending_approval?.length > 0
+        ) && (
+          <div className="mb-6 bg-white dark:bg-[#1C192B] rounded-2xl border border-red-200 dark:border-red-700/40 px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="material-symbols-outlined text-[16px] text-red-500">pending_actions</span>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Pending Approval</p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+
+              {stats?.projects_pending_approval?.length > 0 && (
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+                    Projects ({stats.projects_pending_approval.length})
+                  </p>
+                  <ul className="grid grid-cols-2 sm:grid-cols-3 gap-1">
+                    {stats.projects_pending_approval.map((p) => (
+                      <li key={p.id}>
+                        <button
+                          onClick={() => navigate(`/projects/${p.id}`)}
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-700/30 hover:bg-red-100 dark:hover:bg-red-900/20 transition text-left"
+                        >
+                          <span className="material-symbols-outlined text-[14px] text-red-500 shrink-0">folder_open</span>
+                          <span className="text-xs font-medium text-gray-800 dark:text-gray-100 truncate flex-1">{p.name}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {stats?.sessions_pending_approval?.length > 0 && (
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+                    Sessions ({stats.sessions_pending_approval.length})
+                  </p>
+                  <ul className="grid grid-cols-2 sm:grid-cols-3 gap-1">
+                    {stats.sessions_pending_approval.map((s) => (
+                      <li key={s.id}>
+                        <button
+                          onClick={() => navigate(`/projects/${s.project_id}/sessions/${s.id}/sessiondetails`)}
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-700/30 hover:bg-red-100 dark:hover:bg-red-900/20 transition text-left"
+                        >
+                          <span className="material-symbols-outlined text-[14px] text-red-500 shrink-0">mic</span>
+                          <span className="text-xs font-medium text-gray-800 dark:text-gray-100 truncate flex-1">{s.name}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+            </div>
+          </div>
+        )}
+        
         {/* ── Project charts row: status + domain ── */}
         {!loading && stats?.total_projects > 0 && (
           <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -387,118 +445,46 @@ export default function UserDashboardPage() {
           </div>
         )}
 
-        {/* ── Pending approval section ── */}
-        {!loading && (
-          (stats?.projects_pending_approval?.length > 0 || stats?.sessions_pending_approval?.length > 0)
-        ) && (
-          <div className="mb-10 bg-white dark:bg-[#1C192B] rounded-2xl border border-red-200 dark:border-red-700/40 p-5 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="material-symbols-outlined text-[18px] text-red-500">pending_actions</span>
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                Pending Approval
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-
-              {/* Pending Projects */}
-              {stats.projects_pending_approval?.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                    Projects ({stats.projects_pending_approval.length})
-                  </p>
-                  <ul className="flex flex-col gap-2">
-                    {stats.projects_pending_approval.map((p) => (
-                      <li key={p.id}>
-                        <button
-                          onClick={() => navigate(`/projects/${p.id}`)}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-700/30 hover:bg-red-100 dark:hover:bg-red-900/20 transition text-left"
-                        >
-                          <span className="material-symbols-outlined text-[16px] text-red-500">folder_open</span>
-                          <span className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate flex-1">{p.name}</span>
-                          <span className="material-symbols-outlined text-[16px] text-gray-400">chevron_right</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Pending Sessions */}
-              {stats.sessions_pending_approval?.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                    Sessions ({stats.sessions_pending_approval.length})
-                  </p>
-                  <ul className="flex flex-col gap-2">
-                    {stats.sessions_pending_approval.map((s) => (
-                      <li key={s.id}>
-                        <button
-                          onClick={() => navigate(`/projects/${s.project_id}/sessions/${s.id}/sessiondetails`)}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-700/30 hover:bg-red-100 dark:hover:bg-red-900/20 transition text-left"
-                        >
-                          <span className="material-symbols-outlined text-[16px] text-red-500">mic</span>
-                          <span className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate flex-1">{s.name}</span>
-                          <span className="material-symbols-outlined text-[16px] text-gray-400">chevron_right</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-            </div>
-          </div>
-        )}
 
         {/* ── Stale sessions (PM only) ── */}
         {!loading && stats?.is_pm && stats?.stale_sessions?.length > 0 && (
-          <div className="mb-6 bg-white dark:bg-[#1C192B] rounded-2xl border border-orange-200 dark:border-orange-700/40 p-5 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="material-symbols-outlined text-[18px] text-orange-500">schedule</span>
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                Stale Sessions
-              </p>
-              <span className="ml-auto text-xs font-semibold bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2 py-0.5 rounded-full">
+          <div className="mb-6 bg-white dark:bg-[#1C192B] rounded-2xl border border-orange-200 dark:border-orange-700/40 px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="material-symbols-outlined text-[16px] text-orange-500">schedule</span>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Stale Sessions</p>
+              <span className="ml-auto text-[11px] font-semibold bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2 py-0.5 rounded-full">
                 {stats.stale_sessions.length} session{stats.stale_sessions.length !== 1 ? "s" : ""}
               </span>
             </div>
 
-            <ul className="flex flex-col gap-2">
+            <ul className="grid grid-cols-2 sm:grid-cols-3 gap-1">
               {stats.stale_sessions.map((s) => {
                 const daysColor =
                   s.days_stale >= 14 ? "text-red-500 dark:text-red-400" :
                   s.days_stale >= 7  ? "text-orange-500 dark:text-orange-400" :
                                        "text-amber-500 dark:text-amber-400";
-
                 const statusLabel =
-                  s.status === "In Progress"    ? "In Progress" :
-                  s.status === "processing"      ? "Processing"  :
-                                                   "Pending Approval";
-
+                  s.status === "In Progress" ? "In Progress" :
+                  s.status === "processing"   ? "Processing"  : "Pending";
                 const statusColor =
-                  s.status === "In Progress"    ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" :
-                  s.status === "processing"      ? "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400" :
-                                                   "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400";
-
+                  s.status === "In Progress" ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" :
+                  s.status === "processing"   ? "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400" :
+                                                "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400";
                 return (
                   <li key={s.session_id}>
                     <button
                       onClick={() => navigate(`/projects/${s.project_id}/sessions/${s.session_id}/sessiondetails`)}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-700/30 hover:bg-orange-100 dark:hover:bg-orange-900/20 transition text-left"
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-700/30 hover:bg-orange-100 dark:hover:bg-orange-900/20 transition text-left"
                     >
-                      <span className="material-symbols-outlined text-[16px] text-orange-400">mic</span>
+                      <span className="material-symbols-outlined text-[14px] text-orange-400 shrink-0">mic</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">{s.title}</p>
-                        <p className="text-xs text-gray-400 truncate">{s.project_name}</p>
+                        <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{s.title}</p>
+                        <p className="text-[11px] text-gray-400 truncate">{s.project_name}</p>
                       </div>
-                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${statusColor}`}>
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${statusColor}`}>
                         {statusLabel}
                       </span>
-                      <span className={`text-xs font-bold shrink-0 ${daysColor}`}>
-                        {s.days_stale}d
-                      </span>
-                      <span className="material-symbols-outlined text-[16px] text-gray-400">chevron_right</span>
+                      <span className={`text-[11px] font-bold shrink-0 ${daysColor}`}>{s.days_stale}d</span>
                     </button>
                   </li>
                 );
@@ -507,61 +493,60 @@ export default function UserDashboardPage() {
           </div>
         )}
 
-        {/* ── Artifact approval strip ── */}
+        {/* ── Artifact status + type distribution row ── */}
         {!loading && stats?.total_artifacts > 0 && (
-          <div className="mb-6 bg-white dark:bg-[#1C192B] rounded-2xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
-              Artifact Status
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
 
-              {/* SRS */}
-              {stats.srs_count > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">
-                      SRS Documents ({stats.srs_count})
-                    </span>
-                    <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
-                      {stats.srs_approved} approved · {stats.srs_pending} pending
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
-                    <div
-                      className="h-full bg-amber-500 rounded-full transition-all duration-700"
-                      style={{ width: `${pct(stats.srs_approved, stats.srs_count)}%` }}
-                    />
-                  </div>
-                </div>
-              )}
+            {/* Artifact Status */}
+            <div className="bg-white dark:bg-[#1C192B] rounded-2xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
+                Artifact Status
+              </p>
+              <div className="flex flex-col gap-5">
 
-              {/* UML */}
-              {stats.uml_count > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">
-                      UML Diagrams ({stats.uml_count})
-                    </span>
-                    <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
-                      {stats.uml_approved} approved · {stats.uml_pending} pending
-                    </span>
+                {stats.srs_count > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                        SRS Documents ({stats.srs_count})
+                      </span>
+                      <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                        {stats.srs_approved} approved · {stats.srs_pending} pending
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="h-full bg-amber-500 rounded-full transition-all duration-700"
+                        style={{ width: `${pct(stats.srs_approved, stats.srs_count)}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
-                    <div
-                      className="h-full bg-amber-400 rounded-full transition-all duration-700"
-                      style={{ width: `${pct(stats.uml_approved, stats.uml_count)}%` }}
-                    />
-                  </div>
-                </div>
-              )}
+                )}
 
+                {stats.uml_count > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                        UML Diagrams ({stats.uml_count})
+                      </span>
+                      <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                        {stats.uml_approved} approved · {stats.uml_pending} pending
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="h-full bg-amber-400 rounded-full transition-all duration-700"
+                        style={{ width: `${pct(stats.uml_approved, stats.uml_count)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+              </div>
             </div>
-          </div>
-        )}
 
-        {/* ── Artifact type distribution ── */}
-        {!loading && stats?.total_artifacts > 0 && (
-          <div className="mb-6 bg-white dark:bg-[#1C192B] rounded-2xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
+            {/* Artifact Type Distribution */}
+            <div className="bg-white dark:bg-[#1C192B] rounded-2xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
               Artifact Type Distribution · {stats.total_artifacts} total
             </p>
@@ -597,6 +582,8 @@ export default function UserDashboardPage() {
                 );
               })}
             </div>
+            </div>
+
           </div>
         )}
 
