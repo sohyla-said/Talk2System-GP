@@ -111,10 +111,9 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          
+
           {/* Feature Card 1 - Recording */}
-          <Link
-            to="/transcript"
+          <div
             className="group bg-white dark:bg-[#1C192B] p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 hover:shadow-xl hover:border-primary/30 dark:hover:border-primary/30 transition-all"
           >
             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl inline-flex mb-6">
@@ -126,11 +125,10 @@ export default function Home() {
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
               {t("featureRecordingDesc")}
             </p>
-          </Link>
+          </div>
 
           {/* Feature Card 2 - Requirements */}
-          <Link
-            to="/requirements"
+          <div
             className="group bg-white dark:bg-[#1C192B] p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 hover:shadow-xl hover:border-primary/30 dark:hover:border-primary/30 transition-all"
           >
             <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl inline-flex mb-6">
@@ -142,11 +140,10 @@ export default function Home() {
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
               {t("featureRequirementDesc")}
             </p>
-          </Link>
+          </div>
 
           {/* Feature Card 3 - SRS */}
-          <Link
-            to="/artifacts/srs"
+          <div
             className="group bg-white dark:bg-[#1C192B] p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 hover:shadow-xl hover:border-primary/30 dark:hover:border-primary/30 transition-all"
           >
             <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl inline-flex mb-6">
@@ -158,11 +155,10 @@ export default function Home() {
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
               {t("featureSrsDesc")}
             </p>
-          </Link>
+          </div>
 
           {/* Feature Card 4 - UML */}
-          <Link
-            to="/artifacts/uml"
+          <div
             className="group bg-white dark:bg-[#1C192B] p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 hover:shadow-xl hover:border-primary/30 dark:hover:border-primary/30 transition-all"
           >
             <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl inline-flex mb-6">
@@ -174,11 +170,10 @@ export default function Home() {
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
               {t("featureUmlDesc")}
             </p>
-          </Link>
+          </div>
 
           {/* Feature Card 5 - Projects */}
-          <Link
-            to="/projects"
+          <div
             className="group bg-white dark:bg-[#1C192B] p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 hover:shadow-xl hover:border-primary/30 dark:hover:border-primary/30 transition-all"
           >
             <div className="p-3 bg-pink-50 dark:bg-pink-900/20 rounded-xl inline-flex mb-6">
@@ -190,11 +185,10 @@ export default function Home() {
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
               {t("featureProjectsDesc")}
             </p>
-          </Link>
+          </div>
 
           {/* Feature Card 6 - Dashboard */}
-          <Link
-            to="/dashboard"
+          <div
             className="group bg-white dark:bg-[#1C192B] p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 hover:shadow-xl hover:border-primary/30 dark:hover:border-primary/30 transition-all"
           >
             <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl inline-flex mb-6">
@@ -206,7 +200,7 @@ export default function Home() {
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
               {t("featureDashboardDesc")}
             </p>
-          </Link>
+          </div>
 
         </div>
       </div>

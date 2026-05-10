@@ -1,16 +1,8 @@
 import { useState, useEffect } from "react";
-import { NavLink } from "react-router-dom"; // ADDED NavLink
 import { getToken, logout } from "../../api/authApi";
+import Header from "../../components/layout/Header";
 
 const BASE_URL = "http://127.0.0.1:8000";
-
-const linkClasses = ({ isActive }) =>
-  `text-sm font-semibold transition-colors
-   ${
-     isActive
-       ? "text-primary"
-       : "text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-white"
-   }`;
 
 export default function RoleApprovalPage() {
   const [users, setUsers]             = useState([]);
@@ -101,45 +93,8 @@ export default function RoleApprovalPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background-light dark:bg-background-dark text-[#1F2937] dark:text-gray-200 font-display">
-      
-      <header className="
-        h-14 flex items-center justify-between
-        whitespace-nowrap
-        border-b border-gray-200 dark:border-gray-700
-        px-6 sm:px-10 py-2
-        bg-white/80 dark:bg-background-dark/80
-        backdrop-blur-sm sticky top-0 z-20
-      ">   
-        {/* Logo → Home */}
-        <NavLink
-          to="/"
-          className="flex items-center gap-3 text-[#100d1c] dark:text-white hover:opacity-90 transition-opacity"
-        >
-          <img 
-            src="/logo.png" 
-            alt="Talk2System Logo" 
-            className="h-12 w-auto object-contain"
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.style.display = 'none';
-            }}
-          />
-        </NavLink>
 
-        {/* Auth Links */}
-        <nav className="flex items-center gap-6">
-          <NavLink to="/login" className={linkClasses}>
-            Login
-          </NavLink>
-          {/* Log Out uses the same text style as the links */}
-          <button 
-            onClick={logout} 
-            className="text-sm font-semibold transition-colors text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-white bg-transparent border-none cursor-pointer"
-          >
-            Log Out
-          </button>
-        </nav>
-      </header>
+      <Header />
       <main className="flex-1 max-w-[1200px] w-full mx-auto px-4 md:px-10 lg:px-20 py-8 space-y-6">
 
         {/* Title */}

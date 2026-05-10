@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { fetchAllUsers, adminSuspendUser, adminTerminateUser, adminArchiveUser, adminActivateUser } from "../../api/authApi";
 
 export default function AllUsersPage() {
+  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
   const [message, setMessage] = useState("");
-  
+
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -78,19 +80,29 @@ export default function AllUsersPage() {
             <h1 className="text-4xl font-black text-[#100d1c] dark:text-white">All Users</h1>
             <p className="text-gray-500 mt-1">Manage user statuses and access.</p>
           </div>
-          
-          {/* Search Bar */}
-          <div className="relative w-full sm:w-80">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xl">
-              search
-            </span>
-            <input
-              type="text"
-              placeholder="Search by name or email..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#231e3d] text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
-            />
+
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            {/* Search Bar */}
+            <div className="relative flex-1 sm:flex-initial sm:w-80">
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xl">
+                search
+              </span>
+              <input
+                type="text"
+                placeholder="Search by name or email..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#231e3d] text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
+              />
+            </div>
+
+            {/* Pending Approvals Button */}
+            <button
+              onClick={() => navigate("/role-approval")}
+              className="h-10 px-4 bg-primary text-white rounded-lg font-semibold text-sm hover:bg-primary/90 transition-colors whitespace-nowrap"
+            >
+              Pending Approvals
+            </button>
           </div>
         </div>
 

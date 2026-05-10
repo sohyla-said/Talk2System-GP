@@ -135,7 +135,7 @@ function DonutChart({ segments, size = 180, thickness = 32, sublabel }) {
             <circle key={i} cx={cx} cy={cy} r={r} fill="none"
               stroke={arc.color}
               strokeWidth={thickness}
-              strokeDasharray={`${arc.dash} ${C}`}
+              strokeDasharray={`${arc.dash} ${C - arc.dash}`}
               strokeDashoffset={arc.offset}
               strokeLinecap="butt"
             />
@@ -378,18 +378,18 @@ export default function UserDashboardPage() {
                   size={160} thickness={28}
                   sublabel="projects"
                   segments={[
-                    { label: "Active",          value: stats.active_projects,                        color: "#22c55e" },
+                    { label: "In Progress",          value: stats.active_projects,                        color: "#22c55e" },
                     { label: "Completed",        value: stats.completed_projects,                     color: "#3b82f6" },
                     { label: "Pending Approval", value: stats.projects_pending_approval?.length ?? 0, color: "#f59e0b" },
-                    { label: "Archived",         value: stats.archived_projects ?? 0,                 color: "#9ca3af" },
+                    // { label: "Archived",         value: stats.archived_projects ?? 0,                 color: "#9ca3af" },
                   ]}
                 />
                 <div className="flex flex-col gap-3 flex-1 w-full">
                   {[
-                    { label: "Active",          value: stats.active_projects,                        dot: "bg-green-500" },
+                    { label: "In Progress",          value: stats.active_projects,                        dot: "bg-green-500" },
                     { label: "Completed",        value: stats.completed_projects,                     dot: "bg-blue-500"  },
                     { label: "Pending Approval", value: stats.projects_pending_approval?.length ?? 0, dot: "bg-amber-500" },
-                    { label: "Archived",         value: stats.archived_projects ?? 0,                 dot: "bg-gray-400"  },
+                    // { label: "Archived",         value: stats.archived_projects ?? 0,                 dot: "bg-gray-400"  },
                   ].map(({ label, value, dot }) => (
                     <div key={label} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -613,6 +613,68 @@ export default function UserDashboardPage() {
               ))}
 
             </div>
+          </div>
+        )}
+
+        {/* ── Task Type Distribution (Done vs Failed) ── */}
+        {!loading && (stats?.failed_vs_done_task_type_distribution?.done_labels?.length > 0 || stats?.failed_vs_done_task_type_distribution?.failed_labels?.length > 0) && (
+          <div className="mb-6 bg-white dark:bg-[#1C192B] rounded-2xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
+              Task Type Status · Done vs Failed
+            </p>
+            {(() => {
+              const allLabels = [...new Set([
+                ...(stats.failed_vs_done_task_type_distribution.done_labels ?? []),
+                ...(stats.failed_vs_done_task_type_distribution.failed_labels ?? [])
+              ])];
+              const doneMap = Object.fromEntries(
+                (stats.failed_vs_done_task_type_distribution.done_labels ?? []).map((label, i) =>
+                  [label, stats.failed_vs_done_task_type_distribution.done_values?.[i] ?? 0]
+                )
+              );
+              const failedMap = Object.fromEntries(
+                (stats.failed_vs_done_task_type_distribution.failed_labels ?? []).map((label, i) =>
+                  [label, stats.failed_vs_done_task_type_distribution.failed_values?.[i] ?? 0]
+                )
+              );
+              return (
+                <div className="flex flex-col gap-3">
+                  {allLabels.map((label) => {
+                    const done = doneMap[label] || 0;
+                    const failed = failedMap[label] || 0;
+                    const total = done + failed;
+                    const donePercent = total > 0 ? Math.round((done / total) * 100) : 0;
+                    return (
+                      <div key={label} className="flex items-center gap-3">
+                        <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 w-32 shrink-0 truncate">{label}</span>
+                        <div className="flex-1 flex items-center gap-2">
+                          <div className="flex-1 flex items-center gap-1">
+                            <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                              <div
+                                className="h-full bg-green-500 rounded-full transition-all duration-700"
+                                style={{ width: `${donePercent}%` }}
+                              />
+                            </div>
+                            <span className="text-[11px] text-green-600 dark:text-green-400 font-semibold w-8 text-right">{done}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[11px] text-red-600 dark:text-red-400 font-semibold w-8">{failed}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="flex items-center gap-4 mt-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+                    {[{ label: "Done", color: "bg-green-500" }, { label: "Failed", color: "bg-red-500" }].map(({ label, color }) => (
+                      <div key={label} className="flex items-center gap-1.5">
+                        <span className={`w-2.5 h-2.5 rounded-sm shrink-0 ${color}`} />
+                        <span className="text-[11px] text-gray-400">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 

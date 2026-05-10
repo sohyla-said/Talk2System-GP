@@ -1,7 +1,8 @@
 from collections import Counter
-from datetime import datetime, timedelta
-from fastapi import HTTPException
+from datetime import datetime, timedelta, timezone
+from fastapi import HTTPException, APIRouter, Depends, Query
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func, case
 from app.dependencies.auth import get_current_user, require_role
 from app.models.user import User
 
@@ -15,6 +16,8 @@ from app.models.artifact_type import ArtifactType
 from app.models.requirement_runs import RequirementRun
 from app.models.invitation import Invitation
 from app.models.background_task import BackgroundTask
+from app.models.audit_log import AuditLog
+from app.models.approval import Approval
 
 class DashboardService:
 
@@ -37,13 +40,15 @@ class DashboardService:
         user_projects = db.query(Project).filter(Project.id.in_(project_ids)).all()
 
         total_projects = len(user_projects)
-        active_projects = sum(1 for p in user_projects if p.project_status == "in_progress")
+
+        
+        active_projects = sum(1 for p in user_projects if p.project_status == "Active" or p.project_status == "in_progress")
         completed_projects = sum(1 for p in user_projects if p.project_status == "completed")
-        archived_projects = sum(1 for p in user_projects if p.project_status == "archived")
+        # archived_projects = sum(1 for p in user_projects if p.project_status == "Archived")
         projects_as_pm = len(pm_project_ids)
         projects_as_participant = len(participant_project_ids)
         domain_distribution = dict(Counter(
-            (p.domain or "Unspecified") for p in user_projects
+            (p.domain.lower() or "Unspecified") for p in user_projects
         ))
 
 
@@ -139,7 +144,8 @@ class DashboardService:
         recent_activity = _build_activity_feed(db, user, project_ids, session_ids)
 
         # 8) Stale sessions (PM only) — in-progress / pending for > 3 days
-        _STALE_STATUSES = ["in_progress", "pending_approval"]
+        _STALE_STATUSES = ["in_progress", "pending approval", "pending_approval", "processing"]
+        # _STALE_STATUSES = ["in_progress", "pending_approval"]
         _stale_cutoff   = datetime.utcnow() - timedelta(days=3)
         stale_sessions  = []
         if pm_project_ids:
@@ -171,14 +177,14 @@ class DashboardService:
         ]
         sessions_pending = [
             {"id": s.id, "name": s.title, "project_id": s.project_id}
-            for s in user_sesions if s.status == "pending_approval"
+            for s in user_sesions if s.status == "pending_approval" or s.status == "pending approval"
         ]
 
         return {
         "total_projects": total_projects,
         "active_projects": active_projects,
         "completed_projects": completed_projects,
-        "archived_projects": archived_projects,
+        # "archived_projects": archived_projects,
         "domain_distribution": domain_distribution,
         "project_manager_projects": projects_as_pm,
         "participant_projects": projects_as_participant,
@@ -218,10 +224,377 @@ class DashboardService:
         "recent_activity": recent_activity,
     }
 
+    @staticmethod
+    def get_admin_stats(db: Session, current_user: User):
+        if current_user.role != "admin":
+            raise HTTPException(403, "Users must use /api/dashboard/user-stats")
+
+        # 1) Platform growth — new users + new projects per month (last 12 months)
+        cutoff_12m = datetime.now(timezone.utc) - timedelta(days=12 * 30)
+        user_rows = (
+            db.query(
+                func.date_trunc("month", User.created_at).label("month"),
+                func.count(User.id).label("count"),
+            )
+            .filter(User.created_at >= cutoff_12m)
+            .group_by("month")
+            .order_by("month")
+            .all()
+        )
+        project_rows = (
+            db.query(
+                func.date_trunc("month", Project.created_at).label("month"),
+                func.count(Project.id).label("count"),
+            )
+            .filter(Project.created_at >= cutoff_12m)
+            .group_by("month")
+            .order_by("month")
+            .all()
+        )
+        user_map = _to_dict(user_rows)
+        project_map = _to_dict(project_rows)
+        all_months = sorted(set(user_map) | set(project_map))
+        platform_growth = {
+            "months": all_months,
+            "new_users": [user_map.get(m, 0) for m in all_months],
+            "new_projects": [project_map.get(m, 0) for m in all_months],
+        }
+
+        # 2) User status other than current logged in admin — active, pending, suspended, terminated, archived
+        active_count = (
+            db.query(func.count(User.id))
+            .filter(User.status == "active", User.id != current_user.id)
+            .scalar()
+        ) or 0
+
+        pending_count = (
+            db.query(func.count(User.id))
+            .filter(User.status == "pending", User.id != current_user.id)
+            .scalar()
+        ) or 0
+
+        suspended_count = (
+            db.query(func.count(User.id))
+            .filter(User.status == "suspended", User.id != current_user.id)
+            .scalar()
+        ) or 0
+
+        terminated_count = (
+            db.query(func.count(User.id))
+            .filter(User.status == "terminated", User.id != current_user.id)
+            .scalar()
+        ) or 0
+
+        archived_count = (
+            db.query(func.count(User.id))
+            .filter(User.status == "archived", User.id != current_user.id)
+            .scalar()
+        ) or 0
+        
+        user_status_distribution = {
+            "labels": ["Active", "Pending", "Suspended", "Terminated", "Archived"],
+            "values": [active_count, pending_count, suspended_count, terminated_count, archived_count],
+        }
+
+        # 3) Projects per PM
+        pm_rows = (
+            db.query(
+                User.id,
+                User.full_name,
+                User.email,
+                func.count(ProjectMembership.project_id).label("project_count"),
+            )
+            .join(ProjectMembership, ProjectMembership.user_id == User.id)
+            .filter(
+                ProjectMembership.role == "project_manager",
+                ProjectMembership.left_at.is_(None),
+            )
+            .group_by(User.id, User.full_name, User.email)
+            .order_by(func.count(ProjectMembership.project_id).desc())
+            .all()
+        )
+        projects_per_pm = [
+            {"user_id": r.id, "name": r.full_name, "email": r.email, "project_count": r.project_count}
+            for r in pm_rows
+        ]
+
+        # 4) Sessions per week (last 6 weeks)
+        cutoff_6w = datetime.now(timezone.utc) - timedelta(weeks=6)
+        sessions_week_rows = (
+            db.query(
+                func.date_trunc("week", SessionModel.created_at).label("week"),
+                func.count(SessionModel.id).label("count"),
+            )
+            .filter(SessionModel.created_at >= cutoff_6w)
+            .group_by("week")
+            .order_by("week")
+            .all()
+        )
+        sessions_per_week = {
+            "weeks": [r.week.strftime("%Y-%m-%d") for r in sessions_week_rows],
+            "counts": [r.count for r in sessions_week_rows],
+        }
+
+        # 5) Pending users queue
+        pending_users_rows = (
+            db.query(User)
+            .filter(User.status == "pending")
+            .order_by(User.created_at.asc())
+            .all()
+        )
+        pending_users = [
+            {
+                "id": u.id,
+                "full_name": u.full_name,
+                "email": u.email,
+                "role": u.role,
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+            }
+            for u in pending_users_rows
+        ]
+
+        # 6) Most active users (top 10) — sessions participated + approvals from approvals table
+        session_counts_subq = (
+            db.query(
+                SessionMembership.user_id,
+                func.count(SessionMembership.id).label("session_count"),
+            )
+            .group_by(SessionMembership.user_id)
+            .subquery()
+        )
+        approval_counts_subq = (
+            db.query(
+                Approval.user_id,
+                func.count(Approval.id).label("approval_count"),
+            )
+            .group_by(Approval.user_id)
+            .subquery()
+        )
+        active_user_rows = (
+            db.query(
+                User.id,
+                User.full_name,
+                User.email,
+                func.coalesce(session_counts_subq.c.session_count, 0).label("sessions"),
+                func.coalesce(approval_counts_subq.c.approval_count, 0).label("approvals"),
+                (
+                    func.coalesce(session_counts_subq.c.session_count, 0)
+                    + func.coalesce(approval_counts_subq.c.approval_count, 0)
+                ).label("total_activity"),
+            )
+            .outerjoin(session_counts_subq, session_counts_subq.c.user_id == User.id)
+            .outerjoin(approval_counts_subq, approval_counts_subq.c.user_id == User.id)
+            .filter(User.status == "active", User.role != "admin", session_counts_subq.c.session_count != 0, approval_counts_subq.c.approval_count != 0)
+            .order_by(
+                (
+                    func.coalesce(session_counts_subq.c.session_count, 0)
+                    + func.coalesce(approval_counts_subq.c.approval_count, 0)
+                ).desc()
+            )
+            .limit(10)
+            .all()
+        )
+        most_active_users = [
+            {
+                "user_id": r.id,
+                "name": r.full_name or r.email,
+                "email": r.email,
+                "sessions_participated": r.sessions,
+                "approvals_given": r.approvals,
+                "total_activity": r.total_activity,
+            }
+            for r in active_user_rows
+        ]
+
+        # 7) Inactive users — active users with no session in last 60 days
+        cutoff_60d = datetime.now(timezone.utc) - timedelta(days=60)
+        active_recently_subq = (
+            db.query(func.distinct(SessionMembership.user_id))
+            .filter(SessionMembership.joined_at >= cutoff_60d)
+            .subquery()
+        )
+        inactive_rows = (
+            db.query(User)
+            .filter(User.status == "active", ~User.id.in_(active_recently_subq), User.role != "admin")
+            .order_by(User.created_at.asc())
+            .all()
+        )
+        inactive_users = [
+            {
+                "user_id": u.id,
+                "name": u.full_name or u.email,
+                "email": u.email,
+                "role": u.role,
+                "member_since": u.created_at.isoformat() if u.created_at else None,
+            }
+            for u in inactive_rows
+        ]
+
+        # 8) Activity feed — last 50 audit log entries
+        audit_entries = (
+            db.query(AuditLog)
+            .order_by(AuditLog.created_at.desc())
+            .limit(50)
+            .all()
+        )
+        activity_feed = [
+            {
+                "id": e.id,
+                "action": e.action,
+                "entity": e.entity,
+                "entity_id": e.entity_id,
+                "user_id": e.user_id,
+                "user_name": (e.user.full_name) if e.user else None,
+                "user_email": (e.user.email) if e.user else None,
+                "project_id": e.project_id,
+                "project_name": e.project.name if e.project else None,
+                "details": e.details,
+                "created_at": e.created_at.isoformat() if e.created_at else None,
+            }
+            for e in audit_entries
+        ]
+
+        # 9) Action distribution
+        action_rows = (
+            db.query(AuditLog.action, func.count(AuditLog.id).label("count"))
+            .group_by(AuditLog.action)
+            .order_by(func.count(AuditLog.id).desc())
+            .all()
+        )
+        action_distribution = {
+            "actions": [r.action for r in action_rows],
+            "counts": [r.count for r in action_rows],
+        }
+
+        # 10) Successful Task type distribution
+        task_type_rows = (
+            db.query(BackgroundTask.task_type, func.count(BackgroundTask.id).label("count")).filter(BackgroundTask.status == "done")
+            .group_by(BackgroundTask.task_type)
+            .order_by(func.count(BackgroundTask.id).desc())
+            .all()
+        )
+        task_type_distribution = {
+            "labels": [r.task_type for r in task_type_rows],
+            "values": [r.count for r in task_type_rows],
+        }
+
+        # 11) Task completion time — avg seconds per task_type for done tasks
+        completion_rows = (
+            db.query(
+                BackgroundTask.task_type,
+                func.avg(
+                    func.extract("epoch", BackgroundTask.updated_at - BackgroundTask.created_at)
+                ).label("avg_seconds"),
+                func.count(BackgroundTask.id).label("sample_count"),
+            )
+            .filter(BackgroundTask.status == "done")
+            .group_by(BackgroundTask.task_type)
+            .order_by(BackgroundTask.task_type)
+            .all()
+        )
+        task_completion_time = [
+            {
+                "task_type": r.task_type,
+                "avg_seconds": round(r.avg_seconds, 2) if r.avg_seconds else None,
+                "avg_human": _format_duration(r.avg_seconds),
+                "sample_count": r.sample_count,
+            }
+            for r in completion_rows
+        ]
+
+        # 12) Session → requirements latency
+        first_req_subq = (
+            db.query(
+                SessionRequirement.session_id,
+                func.min(SessionRequirement.created_at).label("first_req_at"),
+            )
+            .filter(SessionRequirement.session_id.isnot(None))
+            .group_by(SessionRequirement.session_id)
+            .subquery()
+        )
+        latency_rows = (
+            db.query(
+                func.date_trunc("month", SessionModel.created_at).label("month"),
+                func.avg(
+                    func.extract("epoch", first_req_subq.c.first_req_at - SessionModel.created_at)
+                ).label("avg_latency_seconds"),
+                func.count(SessionModel.id).label("session_count"),
+            )
+            .join(first_req_subq, first_req_subq.c.session_id == SessionModel.id)
+            .group_by("month")
+            .order_by("month")
+            .all()
+        )
+        overall_latency = (
+            db.query(
+                func.avg(
+                    func.extract("epoch", first_req_subq.c.first_req_at - SessionModel.created_at)
+                )
+            )
+            .join(first_req_subq, first_req_subq.c.session_id == SessionModel.id)
+            .scalar()
+        )
+        session_requirements_latency = {
+            "overall_avg_seconds": round(overall_latency, 2) if overall_latency else None,
+            "overall_avg_human": _format_duration(overall_latency),
+            "monthly_trend": [
+                {
+                    "month": r.month.strftime("%Y-%m"),
+                    "avg_seconds": round(r.avg_latency_seconds, 2) if r.avg_latency_seconds else None,
+                    "avg_human": _format_duration(r.avg_latency_seconds),
+                    "session_count": r.session_count,
+                }
+                for r in latency_rows
+            ],
+        }
+
+        # 13) Successed vs Failed task types distribution
+        failed_task_type_rows = (
+            db.query(BackgroundTask.task_type, func.count(BackgroundTask.id).label("count")).filter(BackgroundTask.status == "failed")
+            .group_by(BackgroundTask.task_type)
+            .order_by(func.count(BackgroundTask.id).desc())
+            .all()
+        )
+        failed_vs_done_task_type_distribution = {
+            "done_labels": [r.task_type for r in task_type_rows],
+            "done_values": [r.count for r in task_type_rows],
+            "failed_labels": [r.task_type for r in failed_task_type_rows],
+            "failed_values": [r.count for r in failed_task_type_rows]
+        }
+
+        return {
+            "platform_growth": platform_growth,
+            "user_status_distribution": user_status_distribution,
+            "projects_per_pm": projects_per_pm,
+            "sessions_per_week": sessions_per_week,
+            "pending_users": pending_users,
+            "most_active_users": most_active_users,
+            "inactive_users": inactive_users,
+            "activity_feed": activity_feed,
+            "action_distribution": action_distribution,
+            "task_type_distribution": task_type_distribution,
+            "task_completion_time": task_completion_time,
+            "session_requirements_latency": session_requirements_latency,
+            "failed_vs_done_task_type_distribution": failed_vs_done_task_type_distribution
+        }
 
 
 
 
+
+
+def _to_dict(rows):
+    return {r.month.strftime("%Y-%m"): r.count for r in rows}
+
+
+def _format_duration(seconds) -> str:
+    if seconds is None:
+        return "N/A"
+    s = int(seconds)
+    m, s = divmod(s, 60)
+    if m:
+        return f"{m}m {s}s"
+    return f"{s}s"
 
 
 def _build_activity_feed(db: Session, user, project_ids: list, session_ids: list, limit: int = 10) -> list:
