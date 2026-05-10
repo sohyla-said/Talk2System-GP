@@ -37,9 +37,9 @@ class DashboardService:
         user_projects = db.query(Project).filter(Project.id.in_(project_ids)).all()
 
         total_projects = len(user_projects)
-        active_projects = sum(1 for p in user_projects if p.project_status == "Active")
-        completed_projects = sum(1 for p in user_projects if p.project_status == "Completed")
-        archived_projects = sum(1 for p in user_projects if p.project_status == "Archived")
+        active_projects = sum(1 for p in user_projects if p.project_status == "in_progress")
+        completed_projects = sum(1 for p in user_projects if p.project_status == "completed")
+        archived_projects = sum(1 for p in user_projects if p.project_status == "archived")
         projects_as_pm = len(pm_project_ids)
         projects_as_participant = len(participant_project_ids)
         domain_distribution = dict(Counter(
@@ -139,7 +139,7 @@ class DashboardService:
         recent_activity = _build_activity_feed(db, user, project_ids, session_ids)
 
         # 8) Stale sessions (PM only) — in-progress / pending for > 3 days
-        _STALE_STATUSES = ["In Progress", "pending approval", "pending_approval", "processing"]
+        _STALE_STATUSES = ["in_progress", "pending_approval"]
         _stale_cutoff   = datetime.utcnow() - timedelta(days=3)
         stale_sessions  = []
         if pm_project_ids:
@@ -171,7 +171,7 @@ class DashboardService:
         ]
         sessions_pending = [
             {"id": s.id, "name": s.title, "project_id": s.project_id}
-            for s in user_sesions if s.status == "pending approval" or s.status == "pending_approval"
+            for s in user_sesions if s.status == "pending_approval"
         ]
 
         return {

@@ -11,7 +11,7 @@ import ExtractionToast from "./components/ExtractionToast";
 import UmlToast from "./components/UmlToast";
 import SrsToast from "./components/SrsToast";
 import { getToken } from "./api/authApi";
-
+import { LanguageProvider } from "./context/LanguageContext";
 export const ExtractionContext = createContext();
 export const UmlContext = createContext();
 export const SrsContext = createContext();
@@ -268,8 +268,11 @@ function AppInner() {
 // ─── Root — BrowserRouter wraps everything so useNavigate works everywhere ────
 export default function App() {
   return (
-    <BrowserRouter>
-      <AppInner />
-    </BrowserRouter>
+    <LanguageProvider>
+      <BrowserRouter>
+        <AppInner />
+      </BrowserRouter>
+    </LanguageProvider>
+    
   );
 }

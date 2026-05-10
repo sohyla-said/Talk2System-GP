@@ -1,9 +1,12 @@
 import { Link } from "react-router-dom";
 import { isLoggedIn, getCurrentUser, isAdmin } from "../api/authApi";
 import Header from "../components/layout/Header";
+import LangToggle from "../components/layout/LangToggle";
+import { useTranslation } from "../hooks/useTranslation";
 export default function Home() {
   const loggedIn = isLoggedIn();
   const user = getCurrentUser();
+  const { t } = useTranslation();
 
   return (
     <div className="min-h-screen font-display bg-background-light dark:bg-background-dark">
@@ -47,11 +50,12 @@ export default function Home() {
           </Link>
 
           <nav className="flex items-center gap-6">
+            <LangToggle />
             <Link to="/login" className="text-sm font-semibold text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-white transition-colors">
-              Login
+              {t("login")}
             </Link>
             <Link to="/signup" className="text-sm font-semibold text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-white transition-colors">
-              Sign up
+              {t("signup")}
             </Link>
           </nav>
         </header>
@@ -67,7 +71,7 @@ export default function Home() {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 dark:bg-primary/20 rounded-full border border-primary/20 dark:border-primary/30">
               <span className="material-symbols-outlined text-primary text-[20px]">auto_awesome</span>
-              <span className="text-sm font-bold text-primary">Transform Conversations into Documentation</span>
+              <span className="text-sm font-bold text-primary">{t("homeTagline")}</span>
             </div>
 
             {/* Main Heading */}
@@ -77,7 +81,7 @@ export default function Home() {
             
             {/* Subheading */}
             <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto leading-relaxed">
-              AI-powered requirements engineering that converts your conversations into professional software artifacts
+              {t("homeSubtitle")}
             </p>
 
             {/* CTA Buttons */}
@@ -86,7 +90,7 @@ export default function Home() {
                 to="/login"
                 className="group flex items-center gap-2 px-8 py-4 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold text-lg transition-all shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30"
               >
-                Get Started
+                {t("getStarted")}
                 <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
               </Link>
               
@@ -99,10 +103,10 @@ export default function Home() {
       <div className="max-w-7xl mx-auto px-6 py-20">
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-4xl font-black text-gray-900 dark:text-white mb-4">
-            Everything You Need
+            {t("everythingYouNeed")}
           </h2>
           <p className="text-lg text-gray-600 dark:text-gray-400">
-            From recording to delivery, we've got you covered
+            {t("featuresSubtitle")}
           </p>
         </div>
 
@@ -117,10 +121,10 @@ export default function Home() {
               <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-[32px]">mic</span>
             </div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
-              Record Meeting Sessions
+              {t("featureRecordingTitle")}
             </h3>
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-              Capture stakeholder conversations with crystal-clear audio transcription powered by AI
+              {t("featureRecordingDesc")}
             </p>
           </Link>
 
@@ -133,10 +137,10 @@ export default function Home() {
               <span className="material-symbols-outlined text-purple-600 dark:text-purple-400 text-[32px]">checklist</span>
             </div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
-              Smart Requirements
+              {t("featureRequirementTitle")}
             </h3>
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-              Automatically extract and organize functional and non-functional requirements
+              {t("featureRequirementDesc")}
             </p>
           </Link>
 
@@ -149,10 +153,10 @@ export default function Home() {
               <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-[32px]">description</span>
             </div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
-              SRS Documents
+              {t("featureSrsTitle")}
             </h3>
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-              Generate IEEE-standard Software Requirements Specifications automatically
+              {t("featureSrsDesc")}
             </p>
           </Link>
 
@@ -165,10 +169,10 @@ export default function Home() {
               <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-[32px]">account_tree</span>
             </div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
-              UML Diagrams
+             {t("featureUmlTitle")}
             </h3>
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-              Create use case, class, and sequence diagrams from your requirements
+              {t("featureUmlDesc")}
             </p>
           </Link>
 
@@ -181,10 +185,10 @@ export default function Home() {
               <span className="material-symbols-outlined text-pink-600 dark:text-pink-400 text-[32px]">folder_open</span>
             </div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
-              Project Management
+              {t("featureProjectsTitle")}
             </h3>
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-              Organize multiple projects with version control and team collaboration
+              {t("featureProjectsDesc")}
             </p>
           </Link>
 
@@ -197,10 +201,10 @@ export default function Home() {
               <span className="material-symbols-outlined text-indigo-600 dark:text-indigo-400 text-[32px]">dashboard</span>
             </div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
-              Analytics Dashboard
+             {t("featureDashboardTitle")}
             </h3>
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-              Track progress, monitor statistics, and visualize project insights
+              {t("featureDashboardDesc")}
             </p>
           </Link>
 
@@ -214,17 +218,17 @@ export default function Home() {
             
             <div className="space-y-2">
               <div className="text-5xl font-black">10x</div>
-              <div className="text-lg font-medium opacity-90">Faster Documentation</div>
+              <div className="text-lg font-medium opacity-90">{t("statFaster")}</div>
             </div>
 
             <div className="space-y-2">
               <div className="text-5xl font-black">98%</div>
-              <div className="text-lg font-medium opacity-90">Accuracy Rate</div>
+              <div className="text-lg font-medium opacity-90">{t("statAccuracy")}</div>
             </div>
 
             <div className="space-y-2">
               <div className="text-5xl font-black">500+</div>
-              <div className="text-lg font-medium opacity-90">Hours Saved</div>
+              <div className="text-lg font-medium opacity-90">{t("statHours")}</div>
             </div>
 
           </div>
@@ -235,16 +239,16 @@ export default function Home() {
       <div className="max-w-7xl mx-auto px-6 py-20">
         <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-3xl p-12 md:p-16 text-center border border-gray-200 dark:border-gray-700">
           <h2 className="text-3xl md:text-4xl font-black text-gray-900 dark:text-white mb-6">
-            Ready to Transform Your Workflow?
+            {t("ctaTitle")}
           </h2>
           <p className="text-lg text-gray-600 dark:text-gray-400 mb-8 max-w-2xl mx-auto">
-            Join teams who are already saving hundreds of hours on requirements documentation
+            {t("ctaSubtitle")}
           </p>
           <Link
             to="/login"
             className="inline-flex items-center gap-2 px-8 py-4 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold text-lg transition-all shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30"
           >
-            Start Your First Project
+            {t("startFirstProject")}
             <span className="material-symbols-outlined">arrow_forward</span>
           </Link>
         </div>

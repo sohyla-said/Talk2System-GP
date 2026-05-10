@@ -12,7 +12,7 @@ class Project(Base):
     description = Column(String)
     domain = Column(String(50))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    project_status = Column(String, default="In Progress")
+    project_status = Column(String, default="in_progress")
 
     # relationships
     sessions = relationship("Session", back_populates="project")

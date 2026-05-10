@@ -270,7 +270,7 @@ def generate_uml_pipeline(
         if session_id:
             db = next(get_db())
             try:
-                SessionService.update_session_status(db, session_id, "pending approval")
+                SessionService.update_session_status(db, session_id, "pending_approval")
             finally:
                 db.close()
 

@@ -12,7 +12,7 @@ class SessionService:
         session = SessionModel(
             title=title,
             project_id=project_id,
-            status="processing",
+            status="in_progress",
             created_at=datetime.utcnow()
         )
         db.add(session)

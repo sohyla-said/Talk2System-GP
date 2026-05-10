@@ -68,7 +68,7 @@ async def transcribe(
     session = SessionModel(
         title=title if title else file.filename,
         audio_file_path=file_path,
-        status="processing",
+        status="in_progress",
         project_id=project_id,
     )
     db.add(session)
@@ -121,7 +121,7 @@ async def transcribe(
 
         transcript_text = save_transcription(db, session.id, diarization)
         session.transcript_text = transcript_text
-        session.status = "pending approval"
+        session.status = "pending_approval"
 
         # Persist the language detected by AssemblyAI immediately
         if detected_language:
@@ -185,7 +185,7 @@ def upload_transcript_text(
 
     session = SessionModel(
         title=payload.title or "Uploaded Transcript",
-        status="pending approval",
+        status="pending_approval",
         project_id=project_id,
     )
     db.add(session)

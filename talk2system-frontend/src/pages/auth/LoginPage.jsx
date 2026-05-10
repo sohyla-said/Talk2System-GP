@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { loginApi, loginWithGoogle, loginWithGitHub } from "../../api/authApi";
+import { useTranslation } from "../../hooks/useTranslation";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -9,6 +10,7 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false); 
   const [error, setError]     = useState("");
   const [loading, setLoading] = useState(false);
+  const { t } = useTranslation();
   
   useEffect(() => {
     const oauthError = searchParams.get("error");
@@ -23,7 +25,7 @@ export default function LoginPage() {
     setError("");
 
     if (!form.email || !form.password) {
-      setError("Please enter both email and password");
+      setError(t("loginEmailPasswordRequired"));
       return;
     }
 
@@ -37,7 +39,7 @@ export default function LoginPage() {
         navigate("/dashboard");
       }
     } catch (err) {
-      setError(err.message || "Login failed");
+      setError(err.message || t("loginFailed"));
     } finally {
       setLoading(false);
     }
@@ -59,10 +61,10 @@ export default function LoginPage() {
                   style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuD0NIMW4MWdDil-LHDEL3XatVr5eSsIfuw1M8cIEbCy-VYKh-u77pUvuIYE8TNkqKvUlxLNhSNHc5_98AFyEank96nRHON9mFkvaQb7wom4ef9pZ-tvBYq0dZCtEZDl_RqJHAegC0DtdjF9rBhRpWq59nB0SKoC1bbk6PHpRGmsIYq6VE3dbP5XNLI0cYpaUVX5JxMuiNxUP-IuixHg9I4M_bciW-OJq1jVwjAPvwDNohie3mqm0rVecNtLgBqnftEVNjK-H6YVUwoT")' }}
                 />
                 <h1 className="text-4xl font-bold text-[#100d1c] dark:text-white mb-3">
-                  From Voice to Vision
+                  {t("fromVoiceToVision")}
                 </h1>
                 <p className="text-[#100d1c]/80 dark:text-white/80">
-                  Log in to instantly transform your ideas into tangible designs and documents.
+                  {t("loginSubtitle")}
                 </p>
               </div>
             </div>
@@ -71,7 +73,7 @@ export default function LoginPage() {
             <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
               <div className="w-full max-w-md bg-white dark:bg-background-dark/50 p-8 rounded-xl shadow-lg">
                 <h2 className="text-2xl font-bold text-[#100d1c] dark:text-white mb-6">
-                  Welcome Back
+                  {t("welcomeBack")}
                 </h2>
 
                 {/* Social Buttons */}
@@ -98,7 +100,7 @@ export default function LoginPage() {
 
                 <div className="relative flex items-center mb-6">
                   <div className="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
-                  <span className="flex-shrink mx-4 text-sm text-gray-400 dark:text-gray-500">or continue with email</span>
+                  <span className="flex-shrink mx-4 text-sm text-gray-400 dark:text-gray-500">{t("orContinueWithEmail")}</span>
                   <div className="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
                 </div>
                 <form className="space-y-6" onSubmit={handleSubmit}>
@@ -110,12 +112,12 @@ export default function LoginPage() {
 
                   <div>
                     <label className="text-sm font-medium text-[#100d1c] dark:text-white">
-                      Email Address
+                      {t("emailAddress")}
                     </label>
                     <input
                       type="email"
                       name="email"
-                      placeholder="you@example.com"
+                      placeholder={t("emailPlaceholder")}
                       value={form.email}
                       onChange={handleChange}
                       required
@@ -125,12 +127,12 @@ export default function LoginPage() {
 
                   <div>
                     <label className="text-sm font-medium text-[#100d1c] dark:text-white">
-                      Password
+                      {t("password")}
                     </label>
                     <input
                       type="password"
                       name="password"
-                      placeholder="Enter your password"
+                      placeholder={t("passwordPlaceholder")}
                       value={form.password}
                       onChange={handleChange}
                       required
@@ -151,7 +153,7 @@ export default function LoginPage() {
                       htmlFor="rememberMe"
                       className="text-sm text-[#100d1c] dark:text-white cursor-pointer select-none"
                     >
-                      Remember me
+                      {t("rememberMe")}
                     </label>
                   </div>
 
@@ -160,14 +162,14 @@ export default function LoginPage() {
                     disabled={loading}
                     className="w-full h-12 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
                   >
-                    {loading ? "Logging in…" : "Log In"}
+                    {loading ? t("loggingIn") : t("logIn")}
                   </button>
                 </form>
 
                 <p className="mt-6 text-center text-sm">
-                  Don't have an account?{" "}
+                  {t("noAccount")}{" "}
                   <Link to="/signup" className="text-primary font-semibold hover:underline">
-                    Sign Up
+                    {t("signUpLink")}
                   </Link>
                 </p>
               </div>

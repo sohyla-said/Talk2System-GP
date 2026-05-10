@@ -10,7 +10,7 @@ class Session(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     title = Column(String, nullable=False)
     project_id = Column(Integer, ForeignKey("projects.id"))
-    status = Column(String, default="In Progress")
+    status = Column(String, default="in_progress")
     audio_file_path = Column(String, nullable=True)
     transcript_text = Column(Text, nullable=True)
     translation_notified = Column(Boolean, default=False, nullable=False, server_default="false")

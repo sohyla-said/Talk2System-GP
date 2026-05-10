@@ -4,6 +4,8 @@ import { logout, getCurrentUser, isAdmin } from "../../api/authApi";
 import { fetchMyRole } from "../../api/projectApi";
 import NotificationBell from "./NotificationBell";
 import ThemeToggle from "./ThemeToggle";
+import LangToggle from "./LangToggle";
+import { useTranslation } from "../../hooks/useTranslation";
 
 export default function Header() {
   const navigate = useNavigate();
@@ -13,7 +15,7 @@ export default function Header() {
 
   const [projectRole, setProjectRole] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
-
+  const { t, dir } = useTranslation();
   // Close menu on route change
   useEffect(() => {
     setMenuOpen(false);
@@ -53,7 +55,7 @@ export default function Header() {
   }
 
   return (
-    <header className="
+    <header dir={dir} className="
       h-14 flex items-center justify-between
       border-b border-gray-200 dark:border-gray-700
       px-4 sm:px-6 lg:px-10 py-2
@@ -83,29 +85,29 @@ export default function Header() {
       </NavLink>
 
       {/* RIGHT: Desktop nav (hidden on mobile, visible from md/tablet up) */}
-      <div className="hidden md:flex items-center gap-1 lg:gap-2 ml-auto">
+      <div className="hidden md:flex items-center gap-1 lg:gap-2 ms-auto">
         <NavLink to="/dashboard" className={navLinkClasses}>
           <span className="material-symbols-outlined text-xl">grid_view</span>
-          <span className={navLabel}>Dashboard</span>
+          <span className={navLabel}>{t("dashboard")}</span>
         </NavLink>
         <NavLink to={projectPath} className={navLinkClasses}>
           <span className="material-symbols-outlined text-xl">folder</span>
-          <span className={navLabel}>Projects</span>
+          <span className={navLabel}>{t("projects")}</span>
         </NavLink>
         {isAdmin() && (
           <NavLink to="/admin/all-users" className={navLinkClasses}>
             <span className="material-symbols-outlined text-xl">manage_accounts</span>
-            <span className={navLabel}>Users</span>
+            <span className={navLabel}>{t("users")}</span>
           </NavLink>
         )}
         {!isAdmin() && <NotificationBell />}
         
         {/* ── Theme Toggle ── */}
         <ThemeToggle />
-        
+        <LangToggle />
         {/* User info */}
         {user?.email && (
-          <div className="flex flex-col items-end ml-2">
+          <div className="flex flex-col items-end ms-2">
             <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">
               {user.full_name}
             </span>
@@ -117,7 +119,7 @@ export default function Header() {
 
         {/* Avatar */}
         <div
-          className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 ring-2 ring-white dark:ring-white/10 ml-2"
+          className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 ring-2 ring-white dark:ring-white/10 ms-2"
           style={{
             backgroundImage:
               'url("https://lh3.googleusercontent.com/aida-public/AB6AXuAYI0aZKZE-VvkXhyWW_VwkFYcUyP5A363tXUVEJZI9IQnWLJZSWjkFjtum-9r3XSE2aVD8q0YI0GfCRdJIxBSKtp1Pfg7Zry0Fg84eK_N5mwr1GqwzCX5COa-xlc7aG6bGFjmklNozxNTGIxUGljxMdlZpIqIXGUGLRmHxXS6AL7I-lCz2VrQSTwq5dhA_r_SWqg4nvlg-lRdrXoX43iLvC3H9IyvL34_D9I_8Tj5CeSXFfNTeXhfQNhKm9MM-1TFcXFSXs8dmwWAe")',
@@ -131,16 +133,16 @@ export default function Header() {
             text-gray-500 dark:text-gray-400
             hover:text-red-500 dark:hover:text-red-400
             hover:bg-red-50 dark:hover:bg-red-900/20
-            transition-colors ml-1"
+            transition-colors ms-1"
           title="Logout"
         >
           <span className="material-symbols-outlined text-xl">logout</span>
-          <span className="hidden xl:inline">Logout</span>
+          <span className="hidden xl:inline">{t("logout")}</span>
         </button>
       </div>
 
       {/* RIGHT: Mobile controls (visible only below md) */}
-      <div className="flex md:hidden items-center gap-2 ml-auto">
+      <div className="flex md:hidden items-center gap-2 ms-auto">
         {!isAdmin() && <NotificationBell />}
 
         {/* Avatar (always visible) */}
@@ -200,16 +202,16 @@ export default function Header() {
           {/* Nav links */}
           <NavLink to="/dashboard" className={navLinkClasses}>
             <span className="material-symbols-outlined text-xl">grid_view</span>
-            Dashboard
+            {t("dashboard")}
           </NavLink>
           <NavLink to={projectPath} className={navLinkClasses}>
             <span className="material-symbols-outlined text-xl">folder</span>
-            Projects
+            {t("projects")}
           </NavLink>
           {isAdmin() && (
             <NavLink to="/admin/all-users" className={navLinkClasses}>
               <span className="material-symbols-outlined text-xl">manage_accounts</span>
-              Users
+              {t("users")}
             </NavLink>
           )}
 
@@ -223,7 +225,7 @@ export default function Header() {
               transition-colors mt-1"
           >
             <span className="material-symbols-outlined text-xl">logout</span>
-            Logout
+            {t("logout")}
           </button>
         </div>
       )}

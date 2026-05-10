@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { fetchMyProjects, sendJoinRequest, fetchProjects } from "../../api/projectApi";
 import { isAdmin } from "../../api/authApi";
+import { useTranslation } from "../../hooks/useTranslation";
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
@@ -9,7 +10,7 @@ export default function ProjectsPage() {
   const [allProjects, setAllProjects] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState("");
-
+  const { t } = useTranslation();
   // Join modal
   const [showJoinModal, setShowJoinModal]           = useState(false);
   const [joinProjectId, setJoinProjectId]           = useState("");
@@ -37,14 +38,14 @@ export default function ProjectsPage() {
     e.preventDefault();
     setJoinError("");
     setJoinSuccess("");
-    if (!joinProjectId) { setJoinError("Please select a project"); return; }
+    if (!joinProjectId) { setJoinError(t("pleaseSelectProject")); return; }
     setJoinLoading(true);
     try {
       // Send the domain directly from the selectedProject object
       const domainToSend = selectedProject?.domain || "";
       await sendJoinRequest(Number(joinProjectId), domainToSend);
       
-      setJoinSuccess("Join request sent! The project manager will review it.");
+      setJoinSuccess(t("joinRequestSent"));
       setJoinProjectId("");
       setTimeout(() => { setShowJoinModal(false); setJoinSuccess(""); }, 2000);
     } catch (err) {
@@ -67,7 +68,7 @@ export default function ProjectsPage() {
           {/* HEADER */}
           <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
             <h2 className="text-4xl font-black text-[#1F2937] dark:text-white">
-              My Projects
+              {t("myProjects")}
             </h2>
             <div className="flex gap-3">
               {/* Removed joinableProjects.length > 0 so button ALWAYS shows */}
@@ -76,7 +77,7 @@ export default function ProjectsPage() {
                 className="flex items-center gap-2 h-10 px-5 rounded-lg border border-primary text-primary font-bold hover:bg-primary/5 transition"
               >
                 <span className="material-symbols-outlined">login</span>
-                Join Project
+                {t("joinProject")}
               </button>
               
               <button
@@ -84,7 +85,7 @@ export default function ProjectsPage() {
                 className="flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-white font-bold"
               >
                 <span className="material-symbols-outlined">add</span>
-                Create New Project
+                 {t("createNewProject")}
               </button>
             </div>
           </div>
@@ -92,15 +93,15 @@ export default function ProjectsPage() {
           {error && <p className="text-red-500 mb-4">{error}</p>}
 
           {loading ? (
-            <p className="text-gray-400">Loading...</p>
+            <p className="text-gray-400">{t("loading")}</p>
           ) : myProjects.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-center">
               <span className="material-symbols-outlined text-7xl text-primary mb-4">
                 add_circle
               </span>
-              <h3 className="text-3xl font-black mb-3">No Projects Yet</h3>
+              <h3 className="text-3xl font-black mb-3">{t("noProjectsYet")}</h3>
               <p className="text-gray-500 mb-6">
-                Create a project or join an existing one.
+                {t("createOrJoinDesc")}
               </p>
               <div className="flex gap-4">
                 <button
@@ -108,12 +109,12 @@ export default function ProjectsPage() {
                   className="flex items-center gap-2 px-8 py-4 rounded-xl bg-primary text-white font-bold shadow-lg hover:bg-primary/90 transition"
                 >
                   <span className="material-symbols-outlined">add</span>
-                  Create Project
+                  {t("createProject")}
                 </button>
 
                 <button onClick={() => setShowJoinModal(true)} className="flex items-center gap-2 h-10 px-5 rounded-lg border border-primary text-primary font-bold hover:bg-primary/5 transition">
                   <span className="material-symbols-outlined">login</span>
-                  Join Project
+                  {t("joinProject")}
                 </button>
               </div>
             </div>
@@ -129,6 +130,7 @@ export default function ProjectsPage() {
                     e.stopPropagation();
                     navigate(`/projects/${project.id}/add-participant`);
                   }}
+                  t={t}
                 />
               ))}
             </div>
@@ -142,10 +144,10 @@ export default function ProjectsPage() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-[#1a162e] rounded-xl p-6 w-full max-w-md shadow-xl">
             <h2 className="text-xl font-black mb-1 text-[#100d1c] dark:text-white">
-              Request to Join a Project
+              {t("requestToJoin")}
             </h2>
             <p className="text-sm text-gray-500 mb-5">
-              Select the project to send a join request.
+              {t("selectProjectToJoin")}
             </p>
 
             <form onSubmit={handleJoinSubmit} className="space-y-4">
@@ -161,14 +163,14 @@ export default function ProjectsPage() {
               )}
 
               <div>
-                <label className="block text-sm font-bold mb-1">Project</label>
+                <label className="block text-sm font-bold mb-1">{t("project")}</label>
                 <select
                   value={joinProjectId}
                   onChange={(e) => setJoinProjectId(e.target.value)}
                   required
                   className="w-full h-11 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 text-sm"
                 >
-                  <option value="">Select a project…</option>
+                  <option value="">{t("selectAProject")}</option>
                   {joinableProjects.map((p) => (
                     <option key={p.id} value={p.id}>
                       {/* Only show project name now */}
@@ -180,15 +182,14 @@ export default function ProjectsPage() {
 
               <div>
                 <label className="block text-sm font-bold mb-1">
-                  Confirm Domain{" "}
-                  <span className="text-gray-400 font-normal">(auto-filled from database)</span>
+                  {t("confirmDomain")}{" "}
+                  <span className="text-gray-400 font-normal">{t("autoFilledFromDB")}</span>
                 </label>
-                {/* Input is now read-only and pulls from selectedProject */}
                 <input
                   type="text"
                   value={selectedProject?.domain || ""}
                   readOnly
-                  placeholder="Select a project above..."
+                  placeholder={t("selectProjectAbove")}
                   className="w-full h-11 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 text-sm opacity-70 cursor-not-allowed"
                 />
               </div>
@@ -199,14 +200,14 @@ export default function ProjectsPage() {
                   onClick={() => { setShowJoinModal(false); setJoinError(""); }}
                   className="px-4 py-2 rounded-lg border dark:border-gray-600 text-sm font-semibold"
                 >
-                  Cancel
+                  {t("cancel")}
                 </button>
                 <button
                   type="submit"
                   disabled={joinLoading}
                   className="px-5 py-2 rounded-lg bg-primary text-white text-sm font-bold disabled:opacity-60"
                 >
-                  {joinLoading ? "Sending…" : "Send Request"}
+                  {joinLoading ? t("sending") : t("sendRequest")}
                 </button>
               </div>
             </form>
@@ -217,7 +218,7 @@ export default function ProjectsPage() {
   );
 }
 
-function ProjectCard({ project, canAddParticipants, onNavigate, onAddParticipant }) {
+function ProjectCard({ project, canAddParticipants, onNavigate, onAddParticipant, t }) {
   return (
     <div
       onClick={onNavigate}
@@ -230,12 +231,14 @@ function ProjectCard({ project, canAddParticipants, onNavigate, onAddParticipant
             {project.domain}
           </span>
         )}
-        <p className="text-sm text-gray-500">
-          Created {new Date(project.created_at).toLocaleDateString()}
-        </p>
         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 w-fit">
           {project.project_status}
         </span>
+        <p className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+          <span className="material-symbols-outlined text-sm">calendar_today</span>
+          {t("created")} {new Date(project.created_at).toLocaleDateString()}
+        </p>
+        
 
         {/* ADD PARTICIPANT BUTTON - Only for Admin/PM */}
         {canAddParticipants && (
@@ -244,7 +247,7 @@ function ProjectCard({ project, canAddParticipants, onNavigate, onAddParticipant
             className="mt-2 flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-sm font-bold hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
           >
             <span className="material-symbols-outlined text-lg">person_add</span>
-            Add Participant
+            {t("addParticipant")}
           </button>
         )}
       </div>

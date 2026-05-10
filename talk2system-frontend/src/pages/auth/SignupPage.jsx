@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { signupApi, loginWithGoogle, loginWithGitHub } from "../../api/authApi";
+import { useTranslation } from "../../hooks/useTranslation";
 
 export default function SignupPage() {
   const navigate = useNavigate();
   const [form, setForm]       = useState({ name: "", email: "", password: "", confirmPassword: "" });
   const [error, setError]     = useState("");
   const [loading, setLoading] = useState(false);
+  const { t } = useTranslation();
 
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -16,11 +18,11 @@ export default function SignupPage() {
     setError("");
 
     if (form.password.length < 8) {
-      setError("Password must be at least 8 characters");
+      setError(t("passwordTooShort"));
       return;
     }
     if (form.password !== form.confirmPassword) {
-      setError("Passwords do not match");
+      setError(t("passwordsMismatch"));
       return;
     }
 
@@ -31,7 +33,7 @@ export default function SignupPage() {
       // always goes to pending page; backend never auto approves regular signups
       navigate("/pending-approval");
     } catch (err) {
-      setError(err.message || "Signup failed");
+      setError(err.message || t("signupFailed"));
     } finally {
       setLoading(false);
     }
@@ -51,10 +53,10 @@ export default function SignupPage() {
           />
           <div className="flex flex-col gap-3 mt-8">
             <p className="text-primary dark:text-white text-4xl font-black">
-              From Voice to Vision, Instantly.
+              {t("fromVoiceToVisionInstantly")}
             </p>
             <p className="text-primary/70 dark:text-white/70">
-              Your ideas, structured and brought to life.
+              {t("signupTagline")}
             </p>
           </div>
         </div>
@@ -65,10 +67,10 @@ export default function SignupPage() {
         <div className="w-full max-w-md flex flex-col gap-6">
           <div className="text-center lg:text-left">
             <h1 className="text-slate-800 dark:text-slate-200 text-[32px] font-bold">
-              Create Your Account
+              {t("createYourAccount")}
             </h1>
             <p className="text-slate-500 dark:text-slate-400 mt-2">
-              Fill in your details to get started.
+              {t("fillInDetails")}
             </p>
           </div>
 
@@ -95,7 +97,7 @@ export default function SignupPage() {
           </div>
           <div className="relative flex items-center">
             <div className="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
-            <span className="flex-shrink mx-4 text-sm text-gray-400 dark:text-gray-500">or use your email for registration</span>
+            <span className="flex-shrink mx-4 text-sm text-gray-400 dark:text-gray-500">{t("orUseEmail")}</span>
             <div className="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
           </div>
 
@@ -109,7 +111,7 @@ export default function SignupPage() {
             <input
               type="text"
               name="name"
-              placeholder="Full Name"
+              placeholder={t("fullName")}
               value={form.name}
               onChange={handleChange}
               required
@@ -118,7 +120,7 @@ export default function SignupPage() {
             <input
               type="email"
               name="email"
-              placeholder="Email"
+              placeholder={t("emailAddress")}
               value={form.email}
               onChange={handleChange}
               required
@@ -127,7 +129,7 @@ export default function SignupPage() {
             <input
               type="password"
               name="password"
-              placeholder="Password (min 8 characters)"
+              placeholder={t("passwordMinHint")}
               value={form.password}
               onChange={handleChange}
               required
@@ -136,7 +138,7 @@ export default function SignupPage() {
             <input
               type="password"
               name="confirmPassword"
-              placeholder="Confirm Password"
+              placeholder={t("confirmPassword")}
               value={form.confirmPassword}
               onChange={handleChange}
               required
@@ -150,13 +152,13 @@ export default function SignupPage() {
               disabled={loading}
               className="h-12 bg-primary text-white rounded-lg font-bold disabled:opacity-60 disabled:cursor-not-allowed transition-all"
             >
-              {loading ? "Creating…" : "Create Free Account"}
+              {loading ? t("creating") : t("createFreeAccount")}
             </button>
           </form>
 
           <p className="text-center text-sm text-slate-500">
-            Already have an account?{" "}
-            <Link to="/login" className="text-primary font-bold">Log In</Link>
+            {t("haveAccount")}{" "}
+            <Link to="/login" className="text-primary font-bold">{t("logInLink")}</Link>
           </p>
         </div>
       </div>
