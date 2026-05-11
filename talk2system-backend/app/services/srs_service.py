@@ -13,6 +13,7 @@ from app.models.project import Project
 from app.models.session_membership import SessionMembership
 from app.services import notification_service
 import logging
+from app.services.audit_service import log_action
 logger = logging.getLogger(__name__)
 # ==========================
 # CONFIG
@@ -791,6 +792,20 @@ def run_async_srs_task(
             "artifact_id": artifact["id"],
         }
         task.status = "done"
+        db.commit()
+        source_label = f"Session #{session_id}" if source == "session" else "Project-level"
+        log_action(
+            db=db,
+            user_id=user_id,
+            project_id=project_id,
+            action="generated",
+            entity="srs_document",
+            entity_id=artifact["id"],
+            details={
+                "label": f"SRS Document {artifact['version']}",
+                "extra": f"{format_version} format ({source_label})"
+            }
+        )
         db.commit()
 
         # ── 5. Notify ──────────────────────────────────────────────────────

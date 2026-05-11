@@ -13,6 +13,7 @@ from app.models.project import Project
 from app.models.session_membership import SessionMembership
 from app.services import notification_service   # adjust to your actual import path
 import logging
+# from app.services.audit_service import log_action
 logger = logging.getLogger(__name__)
 
 
@@ -47,10 +48,12 @@ def simplify_requirements(frs: list):
 
     for fr in frs:
         actor = fr.get("actor", "user")
+        # actor = fr.get("actor") or "user"
         # Skip entirely if actor is "system"
         if actor.strip().lower() == "system":
             continue
         feature = fr.get("feature") or fr.get("text")
+        # feature = fr.get("feature") or fr.get("text") or ""
 
         simplified.append({
             "actor": actor,
@@ -353,7 +356,20 @@ def run_async_uml_task(
         }
         task.status = "done"
         db.commit()
-
+        # source_label = f"Session #{session_id}" if source == "session" else "Project-level"
+        # log_action(
+        #     db=db,
+        #     user_id=user_id,
+        #     project_id=project_id,
+        #     action="generated",
+        #     entity="uml_diagram",
+        #     entity_id=artifact["id"],
+        #     details={
+        #         "label": f"{diagram_type.capitalize()} Diagram {artifact['version']}",
+        #         "extra": f"{diagram_type} ({source_label})"
+        #     }
+        # )
+        db.commit()
         # ── 4. Notify ──────────────────────────────────────────────────────
         _notify_uml_members(
             db=db, project_id=project_id, session_id=session_id,

@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from fastapi import BackgroundTasks
 from app.dependencies.auth import get_current_user
 from app.models.user import User
+from app.services.audit_service import log_action
 
 router = APIRouter()
 
@@ -33,7 +34,8 @@ def generate_uml(
     session_id: int,
     diagram_type: str,
     source: str = "session",  # "session" or "project"
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     try:
         # ===============================
@@ -75,6 +77,19 @@ def generate_uml(
             file_path=result["file_path"]
         )
 
+        source_label = f"Session #{session_id}" if source == "session" else "Project-level"
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            project_id=project_id,
+            action="generated",
+            entity="uml_diagram",
+            entity_id=artifact["id"],
+            details={
+                "label": f"{diagram_type.capitalize()} Diagram {artifact['version']}",
+                "extra": f"{diagram_type} ({source_label})"
+            }
+        )
         return {
             "message": "UML generated successfully",
             "diagram_type": diagram_type,
@@ -90,7 +105,8 @@ def generate_uml(
 def generate_project_uml(
     project_id: int,
     diagram_type: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     try:
         # 1. get latest project requirement
@@ -111,6 +127,18 @@ def generate_project_uml(
             artifact_type_name=f"UML_{diagram_type.upper()}",
             file_path=result["file_path"]
         )
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            project_id=project_id,
+            action="generated",
+            entity="uml_diagram",
+            entity_id=artifact["id"],
+            details={
+                "label": f"SRS Document {artifact['version']}",
+                "extra": f"{format_version} format (Project #{project_id})"
+            }
+        )
 
         return {
             "file_path": result["file_path"],
@@ -125,7 +153,7 @@ def generate_project_uml(
 # APPROVE ARTIFACT
 # =========================================================
 @router.post("/artifacts/{artifact_id}/approve")
-def approve_artifact(artifact_id: int, db: Session = Depends(get_db)):
+def approve_artifact(artifact_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
 
     artifact = db.query(Artifact).filter(Artifact.id == artifact_id).first()
 
@@ -136,7 +164,37 @@ def approve_artifact(artifact_id: int, db: Session = Depends(get_db)):
 
     db.commit()
     db.refresh(artifact)
+    artifact_type = artifact.artifact_type.name if artifact.artifact_type else "Artifact"
+    is_srs = "SRS" in artifact_type
+    is_uml = "UML" in artifact_type
+    
+    if is_srs:
+        entity_type = "srs_document"
+        label = f"SRS Document {artifact.version}"
+    elif is_uml:
+        diagram_name = artifact_type.replace("UML_", "").replace("_", " ").capitalize()
+        entity_type = "uml_diagram"
+        label = f"{diagram_name} Diagram {artifact.version}"
+    else:
+        entity_type = "artifact"
+        label = f"{artifact_type} {artifact.version}"
 
+    scope = f"Session #{artifact.session_id}" if artifact.session_id else "Project-level"
+
+    log_action(
+        db=db,
+        user_id=current_user.id,
+        project_id=artifact.project_id,
+        action="approved",
+        entity=entity_type,
+        entity_id=artifact.id,
+        details={
+            "label": label,
+            "before": old_status,
+            "after": "approved",
+            "extra": scope
+        }
+    )
     return {
         "message": "Artifact approved",
         "artifact_id": artifact.id,

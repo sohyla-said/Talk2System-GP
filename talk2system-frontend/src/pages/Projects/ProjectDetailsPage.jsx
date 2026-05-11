@@ -349,6 +349,78 @@ export default function ProjectDetailsPage() {
                             </ul>
                           </div>
                         )}
+                        {/* SRS Generation Log */}
+                        {log.entity === "srs_document" && log.action === "generated" && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800/30 text-xs">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="material-symbols-outlined text-blue-500 text-base">auto_stories</span>
+                              <p className="text-xs font-bold text-blue-600">SRS Document Generated</p>
+                            </div>
+                            {log.details?.label && (
+                              <p className="text-blue-500 break-words">{log.details.label}</p>
+                            )}
+                            {log.details?.extra && (
+                              <p className="text-blue-400 break-words mt-0.5">Format: {log.details.extra}</p>
+                            )}
+                          </div>
+                        )}
+                        {/* SRS Approval Log */}
+                        {log.entity === "srs_document" && log.action === "approved" && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30 text-xs">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="material-symbols-outlined text-green-500 text-base">verified</span>
+                              <p className="text-xs font-bold text-green-600">SRS Document Approved</p>
+                            </div>
+                            {log.details?.label && (
+                              <p className="text-green-500 break-words">{log.details.label}</p>
+                            )}
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-green-600 font-bold min-w-[55px]">Status:</span>
+                              <span className="text-red-400 line-through">{log.details?.before || "pending"}</span>
+                              <span className="text-gray-400 mx-1">→</span>
+                              <span className="text-green-600 font-semibold">{log.details?.after || "approved"}</span>
+                            </div>
+                            {log.details?.extra && (
+                              <p className="text-green-400 break-words mt-0.5">Scope: {log.details.extra}</p>
+                            )}
+                          </div>
+                        )}
+                        {/* UML Generation Log */}
+                        {log.entity === "uml_diagram" && log.action === "generated" && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-purple-50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800/30 text-xs">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="material-symbols-outlined text-purple-500 text-base">account_tree</span>
+                              <p className="text-xs font-bold text-purple-600">UML Diagram Generated</p>
+                            </div>
+                            {log.details?.label && (
+                              <p className="text-purple-500 break-words">{log.details.label}</p>
+                            )}
+                            {log.details?.extra && (
+                              <p className="text-purple-400 break-words mt-0.5">Type: {log.details.extra}</p>
+                            )}
+                          </div>
+                        )}
+                        {/* UML Approval Log */}
+                        {log.entity === "uml_diagram" && log.action === "approved" && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30 text-xs">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="material-symbols-outlined text-green-500 text-base">verified</span>
+                              <p className="text-xs font-bold text-green-600">UML Diagram Approved</p>
+                            </div>
+                            {log.details?.label && (
+                              <p className="text-green-500 break-words">{log.details.label}</p>
+                            )}
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-green-600 font-bold min-w-[55px]">Status:</span>
+                              <span className="text-red-400 line-through">{log.details?.before || "pending"}</span>
+                              <span className="text-gray-400 mx-1">→</span>
+                              <span className="text-green-600 font-semibold">{log.details?.after || "approved"}</span>
+                            </div>
+                            {log.details?.extra && (
+                              <p className="text-green-400 break-words mt-0.5">Scope: {log.details.extra}</p>
+                            )}
+                          </div>
+                        )}
                         <p className="text-xs text-gray-400 mt-1">{new Date(log.created_at).toLocaleString()} • {log.user_email}</p>
                       </div>
                     </div>
