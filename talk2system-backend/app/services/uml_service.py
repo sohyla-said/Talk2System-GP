@@ -1,5 +1,6 @@
 import os
 import time
+import zlib
 import requests
 from google import genai
 from google.genai import types
@@ -13,7 +14,7 @@ from app.models.project import Project
 from app.models.session_membership import SessionMembership
 from app.services import notification_service   # adjust to your actual import path
 import logging
-# from app.services.audit_service import log_action
+from app.services.audit_service import log_action
 logger = logging.getLogger(__name__)
 
 
@@ -217,15 +218,48 @@ def clean_uml_output(text: str):
 # ==========================
 # KROKI RENDERING
 # ==========================
+_PLANTUML_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"
+
+def _encode_plantuml(uml_code: str) -> str:
+    compressed = zlib.compress(uml_code.encode("utf-8"))[2:-4]  # strip zlib header/checksum
+    result = []
+    for i in range(0, len(compressed), 3):
+        b0 = compressed[i]
+        b1 = compressed[i + 1] if i + 1 < len(compressed) else 0
+        b2 = compressed[i + 2] if i + 2 < len(compressed) else 0
+        result.append(_PLANTUML_CHARS[(b0 >> 2) & 0x3F])
+        result.append(_PLANTUML_CHARS[((b0 & 0x3) << 4) | ((b1 >> 4) & 0xF)])
+        result.append(_PLANTUML_CHARS[((b1 & 0xF) << 2) | ((b2 >> 6) & 0x3)])
+        result.append(_PLANTUML_CHARS[b2 & 0x3F])
+    return "".join(result)
+
+
+def _try_render(url: str, *, post_data: bytes = None, timeout: int = 20) -> bytes:
+    if post_data is not None:
+        response = requests.post(url, data=post_data, timeout=timeout)
+    else:
+        response = requests.get(url, timeout=timeout)
+    if response.status_code == 200:
+        return response.content
+    raise Exception(f"Render error {response.status_code}: {response.text[:200]}")
+
+
 def render_diagram_with_kroki(uml_code: str):
-    url = f"{KROKI_URL}/plantuml/png"
+    encoded = _encode_plantuml(uml_code)
+    plantuml_url = f"https://www.plantuml.com/plantuml/png/{encoded}"
+    kroki_url = f"{KROKI_URL}/plantuml/png"
 
-    response = requests.post(url, data=uml_code.encode("utf-8"))
+    # Try kroki first (1 attempt, short timeout); fall back to plantuml.com
+    for label, fn in [
+        ("kroki",    lambda: _try_render(kroki_url, post_data=uml_code.encode("utf-8"), timeout=15)),
+        ("plantuml", lambda: _try_render(plantuml_url, timeout=20)),
+    ]:
+        try:
+            return fn()
+        except Exception as e:
+            logger.warning(f"{label} render failed, trying next: {e}")
 
-    if response.status_code != 200:
-        raise Exception(f"Kroki error: {response.text}")
-
-    return response.content
+    raise Exception("All UML render services failed (kroki + plantuml.com)")
 
 
 # ==========================
@@ -356,19 +390,19 @@ def run_async_uml_task(
         }
         task.status = "done"
         db.commit()
-        # source_label = f"Session #{session_id}" if source == "session" else "Project-level"
-        # log_action(
-        #     db=db,
-        #     user_id=user_id,
-        #     project_id=project_id,
-        #     action="generated",
-        #     entity="uml_diagram",
-        #     entity_id=artifact["id"],
-        #     details={
-        #         "label": f"{diagram_type.capitalize()} Diagram {artifact['version']}",
-        #         "extra": f"{diagram_type} ({source_label})"
-        #     }
-        # )
+        source_label = f"Session #{session_id}" if source == "session" else "Project-level"
+        log_action(
+            db=db,
+            user_id=user_id,
+            project_id=project_id,
+            action="generated",
+            entity="uml_diagram",
+            entity_id=artifact["id"],
+            details={
+                "label": f"{diagram_type.capitalize()} Diagram {artifact['version']}",
+                "extra": f"{diagram_type} ({source_label})"
+            }
+        )
         db.commit()
         # ── 4. Notify ──────────────────────────────────────────────────────
         _notify_uml_members(

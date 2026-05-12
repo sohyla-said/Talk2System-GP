@@ -322,7 +322,7 @@ def extract_requirements(transcript: str) -> list:
     )
 
     write_requirements_to_file(all_requirements)
-    write_extraction_metrics_to_csv(total_words, len(chunks, elapsed))
+    write_extraction_metrics_to_csv(total_words, len(chunks), elapsed)
 
     return all_requirements
 

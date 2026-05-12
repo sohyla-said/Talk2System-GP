@@ -19,9 +19,13 @@ export default function UmlToast({
 
   const handleView = () => {
     if (sessionId) {
-      navigate(`/projects/${projectId}/sessions/${sessionId}/artifacts/uml`);
+      navigate(`/projects/${projectId}/artifacts/uml`, {
+        state: { source: "session", sessionId },
+      });
     } else {
-      navigate(`/projects/${projectId}/artifacts/uml`);
+      navigate(`/projects/${projectId}/artifacts/uml`, {
+        state: { source: "project" },
+      });
     }
     onDismiss();
   };

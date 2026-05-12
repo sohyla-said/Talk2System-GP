@@ -98,7 +98,9 @@ export default function SessionDetailsPage() {
     } else if (feature === "requirements") {
       navigate(`/transcript/${sessionId}/requirements`);
      } else if (feature === "uml") {
-      navigate(`/projects/${resolvedProjectId}/artifacts/uml`);
+      navigate(`/projects/${resolvedProjectId}/artifacts/uml`, {
+        state: { source: "session", sessionId },
+      });
     } else if (feature === "srs"){
       navigate(`/projects/${resolvedProjectId}/sessions/${sessionId}/srs/generate`);
     }
