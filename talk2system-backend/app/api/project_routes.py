@@ -14,6 +14,7 @@ from app.models.audit_log import AuditLog
 from app.models.artifact import Artifact
 from app.models.session import Session as SessionModel
 from app.models.session_requirement import SessionRequirement
+from app.models.notification import Notification
 from app.services.audit_service import log_action
 from app.services import notification_service
 router = APIRouter(prefix="/api/projects", tags=["Projects"])
@@ -126,6 +127,14 @@ def delete_project(
     ).all()
     member_user_ids = [m.user_id for m in active_members]
     
+    session_ids = [
+        s.id for s in db.query(SessionModel.id).filter(SessionModel.project_id == project_id)
+    ]
+    if session_ids:
+        db.query(Notification).filter(Notification.session_id.in_(session_ids)).update(
+            {"session_id": None}, synchronize_session=False
+        )
+
     db.query(Artifact).filter(Artifact.project_id == project_id).delete(synchronize_session=False)
     db.query(AuditLog).filter(AuditLog.project_id == project_id).delete(synchronize_session=False)
     db.query(Invitation).filter(Invitation.project_id == project_id).delete(synchronize_session=False)

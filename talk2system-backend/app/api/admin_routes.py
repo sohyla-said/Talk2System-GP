@@ -7,7 +7,9 @@ from app.models.project import Project
 from app.models.project_membership import ProjectMembership    
 from app.models.invitation import Invitation  
 from app.services import notification_service
-from app.models.audit_log import AuditLog 
+from app.models.audit_log import AuditLog
+from app.models.session import Session as SessionModel
+from app.models.notification import Notification
 from app.services.audit_service import log_action
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
@@ -234,3 +236,38 @@ def change_project_manager(
 
     db.commit()
     return {"message": f"{new_pm_user.email} is now the Project Manager of {project.name}"}
+
+
+@router.delete("/system-projects/{project_id}")
+def delete_system_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    """Admin permanently deletes a project and all its associated data."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    project_name = project.name
+
+    # Null out session_id on notifications before sessions are deleted,
+    # because the DB FK has no ON DELETE SET NULL clause.
+    session_ids = [s.id for s in db.query(SessionModel.id).filter(SessionModel.project_id == project_id)]
+    if session_ids:
+        db.query(Notification).filter(Notification.session_id.in_(session_ids)).update(
+            {"session_id": None}, synchronize_session=False
+        )
+
+    log_action(
+        db,
+        current_user.id,
+        "deleted_project",
+        "project",
+        project_id=project_id,
+        details={"label": f"Project: {project_name}"}
+    )
+
+    db.delete(project)
+    db.commit()
+    return {"message": f"Project '{project_name}' has been permanently deleted"}
