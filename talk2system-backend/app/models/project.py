@@ -15,9 +15,9 @@ class Project(Base):
     project_status = Column(String, default="in_progress")
 
     # relationships
-    sessions = relationship("Session", back_populates="project")
+    sessions = relationship("Session", back_populates="project", cascade="all, delete-orphan")
     session_requirements = relationship( "SessionRequirement", back_populates="project",cascade="all, delete-orphan")
-    artifacts = relationship("Artifact",back_populates="project")
+    artifacts = relationship("Artifact",back_populates="project", cascade="all, delete-orphan")
 
     requirement_runs = relationship(
         "RequirementRun",

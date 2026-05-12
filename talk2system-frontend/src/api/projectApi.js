@@ -132,7 +132,7 @@ export async function fetchAdminProjects() {
 }
 
 export async function adminDeleteProject(projectId) {
-  const res = await fetch(`${BASE_URL}/api/admin/system-projects/${projectId}`, {
+  const res = await fetch(`${BASE_URL}/api/projects/deleteproject/${projectId}`, {
     method: "DELETE",
     headers: authHeaders(),
   });
