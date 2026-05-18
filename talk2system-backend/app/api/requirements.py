@@ -14,15 +14,41 @@ from app.models.session import Session as SessionModel
 router = APIRouter()
 
 ################################################# Helper functions For Requirement Logging ################################################
-# Get text from item (checks multiple possible keys)
+from difflib import SequenceMatcher
+
 def get_item_text(item):
     if not item:
         return ""
-    return str(item.get("text") or item.get("description") or item.get("name") or item.get("tag") or item.get("label") or "")
+    # If the item is a plain string, return it directly
+    if isinstance(item, str):
+        return item.strip()
+    if not isinstance(item, dict):
+        return str(item).strip()
+    # Check common keys in priority order
+    for key in [
+        "text", "description", "name", "tag", "label",
+        "requirement", "content", "value", "title",
+        "non_functional_requirement", "nonFunctionalRequirement",
+        "functional_requirement", "functionalRequirement",
+        "requirement_text", "req_text", "body",
+    ]:
+        val = item.get(key)
+        if val and isinstance(val, str) and val.strip():
+            return val.strip()
 
-# Get ID from item (checks multiple possible keys)
+    # Last resort: return the first string value found in the dict
+    for val in item.values():
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return ""
+
+
 def get_item_id(item):
     if not item:
+        return None
+    if isinstance(item, str):
+        return None
+    if not isinstance(item, dict):
         return None
     return item.get("id") or item.get("req_id") or item.get("requirement_id")
 
@@ -32,22 +58,45 @@ def get_req_snippets(data, key, max_items=2):
     return [get_item_text(item)[:60] + ("..." if len(get_item_text(item)) > 60 else "") for item in items[:max_items]]
 
 # Compare lists using ID first, then text as fallback
+def _smart_similarity(s1, s2):
+    s1 = s1.strip().lower()
+    s2 = s2.strip().lower()
+    if not s1 or not s2:
+        return 0.0
+    if s1 == s2:
+        return 1.0
+    char_sim = SequenceMatcher(None, s1, s2).ratio()
+    # For multi word strings, also compute word overlap
+    words1 = set(s1.split())
+    words2 = set(s2.split())
+    if len(words1) > 1 and len(words2) > 1:
+        word_sim = len(words1 & words2) / len(words1 | words2)
+        return max(word_sim, char_sim)
+    return char_sim
+
+
 def diff_requirement_list(old_list, new_list):
     old_items = old_list or []
     new_items = new_list or []
-    
     old_by_id = {get_item_id(item): item for item in old_items if get_item_id(item)}
     new_by_id = {get_item_id(item): item for item in new_items if get_item_id(item)}
     has_ids = bool(old_by_id) and bool(new_by_id)
-    
     added = []
     deleted = []
-    
+    changed = []
     if has_ids:
         # Use ID based comparison
         for item in new_items:
             item_id = get_item_id(item)
-            if item_id and item_id not in old_by_id:
+            if item_id and item_id in old_by_id:
+                old_text = get_item_text(old_by_id[item_id])
+                new_text = get_item_text(item)
+                if old_text and new_text and old_text.strip().lower() != new_text.strip().lower():
+                    changed.append({
+                        "before": old_text[:100] + ("..." if len(old_text) > 100 else ""),
+                        "after": new_text[:100] + ("..." if len(new_text) > 100 else "")
+                    })
+            elif item_id and item_id not in old_by_id:
                 text = get_item_text(item)
                 if text:
                     added.append(text[:60] + ("..." if len(text) > 60 else ""))
@@ -58,62 +107,131 @@ def diff_requirement_list(old_list, new_list):
                 if text:
                     deleted.append(text[:60] + ("..." if len(text) > 60 else ""))
     else:
-        # Fall back to text based comparison
-        old_texts = {get_item_text(item)[:50] for item in old_items if get_item_text(item)}
-        new_texts = {get_item_text(item)[:50] for item in new_items if get_item_text(item)}
-        
+        old_texts = {get_item_text(item)[:50]: item for item in old_items if get_item_text(item)}
+        unmatched_new = []
+
         for item in new_items:
             text = get_item_text(item)
-            if text and text[:50] not in old_texts:
-                added.append(text[:60] + ("..." if len(text) > 60 else ""))
-        for item in old_items:
-            text = get_item_text(item)
-            if text and text[:50] not in new_texts:
-                deleted.append(text[:60] + ("..." if len(text) > 60 else ""))
-    
-    return added[:3], deleted[:3]
+            if text and text[:50] in old_texts:
+                del old_texts[text[:50]]
+            elif text:
+                unmatched_new.append(item)
+        unmatched_old = list(old_texts.values())
+        for new_item in unmatched_new:
+            new_text = get_item_text(new_item)
+            if not new_text:
+                continue
+            best_match = None
+            best_score = 0
+            for old_item in unmatched_old:
+                old_text = get_item_text(old_item)
+                if not old_text:
+                    continue
+                score = _smart_similarity(old_text, new_text)
+                if score > best_score:
+                    best_score = score
+                    best_match = old_item
+            if best_match and best_score > 0.6:
+                unmatched_old.remove(best_match)
+                old_text = get_item_text(best_match)
+                changed.append({
+                    "before": old_text[:100] + ("..." if len(old_text) > 100 else ""),
+                    "after": new_text[:100] + ("..." if len(new_text) > 100 else "")
+                })
+            else:
+                added.append(new_text[:60] + ("..." if len(new_text) > 60 else ""))
 
-# Compare simple string lists (for Actors/Features)
+        for old_item in unmatched_old:
+            text = get_item_text(old_item)
+            if text:
+                deleted.append(text[:60] + ("..." if len(text) > 60 else ""))
+    return added[:3], deleted[:3], changed[:3]
+
 def diff_simple_list(old_list, new_list):
-    old_set = set(str(s).strip().lower()[:50] for s in (old_list or []) if s)
-    new_set = set(str(s).strip().lower()[:50] for s in (new_list or []) if s)
-    
-    added = [str(s)[:60] + "..." for s in (new_list or []) if s and str(s).strip().lower()[:50] not in old_set]
-    deleted = [str(s)[:60] + "..." for s in (old_list or []) if s and str(s).strip().lower()[:50] not in new_set]
-    
-    return added[:3], deleted[:3]
+    old_items = [str(s) for s in (old_list or []) if s]
+    new_items = [str(s) for s in (new_list or []) if s]
+    added = []
+    deleted = []
+    changed = []
+    old_norm = {s.strip().lower(): s for s in old_items}
+    unmatched_new = []
+    for s in new_items:
+        key = s.strip().lower()
+        if key in old_norm:
+            del old_norm[key]
+        else:
+            unmatched_new.append(s)
+    unmatched_old = list(old_norm.values())
+    for new_s in unmatched_new:
+        best_match = None
+        best_score = 0
+        for old_s in unmatched_old:
+            score = _smart_similarity(old_s, new_s)
+            if score > best_score:
+                best_score = score
+                best_match = old_s
+        if best_match and best_score > 0.6:
+            unmatched_old.remove(best_match)
+            changed.append({"before": best_match[:60], "after": new_s[:60]})
+        else:
+            added.append(new_s[:60] + ("..." if len(new_s) > 60 else ""))
+    for old_s in unmatched_old:
+        deleted.append(old_s[:60] + ("..." if len(old_s) > 60 else ""))
+    return added[:3], deleted[:3], changed[:3]
+
+def _safe_extract_list(data, possible_keys):
+    if not data or not isinstance(data, dict):
+        return []
+    for key in possible_keys:
+        val = data.get(key)
+        if val and isinstance(val, list):
+            return val
+    return []
 
 # Build full diff details for logging
 def build_requirement_diff_details(old_data, new_data, label_prefix=""):
     details = {"label": label_prefix}
     # Functional Requirements
-    old_frs = old_data.get("functional_requirements", []) if old_data else []
-    new_frs = new_data.get("functional_requirements", []) if new_data else []
+    fr_keys = ["functional_requirements", "functionalRequirements", "functional",
+               "frs", "FRs", "functional_reqs"]
+    old_frs = _safe_extract_list(old_data, fr_keys)
+    new_frs = _safe_extract_list(new_data, fr_keys)
     if old_frs or new_frs:
-        added_frs, deleted_frs = diff_requirement_list(old_frs, new_frs)
-        if added_frs: details["added_FRs"] = added_frs
+        added_frs, deleted_frs, changed_frs = diff_requirement_list(old_frs, new_frs)
+        if added_frs:   details["added_FRs"]   = added_frs
         if deleted_frs: details["deleted_FRs"] = deleted_frs
+        if changed_frs: details["changed_FRs"] = changed_frs
     # Non-Functional Requirements
-    old_nfrs = old_data.get("non_functional_requirements", []) if old_data else []
-    new_nfrs = new_data.get("non_functional_requirements", []) if new_data else []
+    nfr_keys = ["nonfunctional_requirements", "non_functional_requirements",
+                "nonFunctionalRequirements", "non_functional", "nfrs",
+                "nonFunctional", "non-functional-requirements"]
+    old_nfrs = _safe_extract_list(old_data, nfr_keys)
+    new_nfrs = _safe_extract_list(new_data, nfr_keys)   
     if old_nfrs or new_nfrs:
-        added_nfrs, deleted_nfrs = diff_requirement_list(old_nfrs, new_nfrs)
-        if added_nfrs: details["added_NFRs"] = added_nfrs
+        added_nfrs, deleted_nfrs, changed_nfrs = diff_requirement_list(old_nfrs, new_nfrs)
+        if added_nfrs:   details["added_NFRs"]   = added_nfrs
         if deleted_nfrs: details["deleted_NFRs"] = deleted_nfrs
+        if changed_nfrs: details["changed_NFRs"] = changed_nfrs
+
     # Actors
-    old_actors = old_data.get("actors", []) if old_data else []
-    new_actors = new_data.get("actors", []) if new_data else []
+    actor_keys = ["actors", "actor", "stakeholders", "roles"]
+    old_actors = _safe_extract_list(old_data, actor_keys)
+    new_actors = _safe_extract_list(new_data, actor_keys)
     if old_actors or new_actors:
-        added_actors, deleted_actors = diff_simple_list(old_actors, new_actors)
-        if added_actors: details["added_Actors"] = added_actors
+        added_actors, deleted_actors, changed_actors = diff_simple_list(old_actors, new_actors)
+        if added_actors:   details["added_Actors"]   = added_actors
         if deleted_actors: details["deleted_Actors"] = deleted_actors
+        if changed_actors: details["changed_Actors"] = changed_actors
+
     # Features
-    old_features = old_data.get("features", []) if old_data else []
-    new_features = new_data.get("features", []) if new_data else []
+    feat_keys = ["features", "feature", "capabilities"]
+    old_features = _safe_extract_list(old_data, feat_keys)
+    new_features = _safe_extract_list(new_data, feat_keys)
     if old_features or new_features:
-        added_features, deleted_features = diff_simple_list(old_features, new_features)
-        if added_features: details["added_Features"] = added_features
+        added_features, deleted_features, changed_features = diff_simple_list(old_features, new_features)
+        if added_features:   details["added_Features"]   = added_features
         if deleted_features: details["deleted_Features"] = deleted_features
+        if changed_features: details["changed_Features"] = changed_features
     return details
 
 ################################################# Request schemas ################################################
