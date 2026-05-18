@@ -14,8 +14,6 @@ export default function ProjectDetailsPage() {
   const [myRole, setMyRole]       = useState(null);
   const [loading, setLoading]     = useState(true);
   const [pmName, setPmName]       = useState(null);
-  
-
 
   const [pendingRequests, setPendingRequests]   = useState([]);
   const [showRequestsPanel, setShowRequestsPanel] = useState(false);
@@ -23,6 +21,7 @@ export default function ProjectDetailsPage() {
 
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [logSearchQuery, setLogSearchQuery] = useState(""); 
   const [reqVersions, setReqVersions] = useState([]);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [members, setMembers] = useState([]);
@@ -67,7 +66,7 @@ export default function ProjectDetailsPage() {
     try {
       const logData = await fetchProjectAuditLogs(projectId);
       setAuditLogs(logData);
-      
+      setLogSearchQuery(""); 
       setShowLogsModal(true);
     } catch (err) {
       console.error(err);
@@ -106,26 +105,142 @@ export default function ProjectDetailsPage() {
     setTimeout(() => setNotification(null), 3000);
   }
   const handleCompleteProject = async () => {
-  setIsCompleting(true);
-  try {
-    const res = await fetch(
-      `${BASE_URL}/api/projects/${projectId}/complete`,
-      { method: "PATCH", headers: { Authorization: `Bearer ${getToken()}` } }
+    setIsCompleting(true);
+    try {
+      const res = await fetch(
+        `${BASE_URL}/api/projects/${projectId}/complete`,
+        { method: "PATCH", headers: { Authorization: `Bearer ${getToken()}` } }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to complete project");
+
+      setProject((prev) => ({ ...prev, project_status: "completed" }));
+      setShowCompleteModal(false);
+      showToast("Project marked as completed.", "success");
+    } catch (err) {
+      console.error(err);
+      showToast(err.message, "error");
+    } finally {
+      setIsCompleting(false);
+    }
+  };
+  const filteredLogs = auditLogs.filter((log) => {
+    if (!logSearchQuery.trim()) return true;
+    const query = logSearchQuery.toLowerCase();
+    return (
+      (log.user_name && log.user_name.toLowerCase().includes(query)) ||
+      (log.user_email && log.user_email.toLowerCase().includes(query))
     );
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Failed to complete project");
+  });
 
-    setProject((prev) => ({ ...prev, project_status: "completed" }));
-    setShowCompleteModal(false);
-    showToast("Project marked as completed.", "success");
-  } catch (err) {
-    console.error(err);
-    showToast(err.message, "error");
-  } finally {
-    setIsCompleting(false);
-  }
- };
+  const handleExportLogs = () => {
+    const logsToExport = logSearchQuery.trim() ? filteredLogs : auditLogs;
+    if (logsToExport.length === 0) {
+      showToast("No logs to export.", "error");
+      return;
+    }
 
+    const formatChangeSummary = (details) => {
+      if (!details) return "—";
+      const lines = [];
+      const typeLabels = {
+        FRs: "Functional Req.",
+        NFRs: "Non-Functional Req.",
+        Actors: "Actor",
+        Features: "Feature",
+      };
+
+      // Changed items
+      for (const [key, label] of Object.entries(typeLabels)) {
+        const items = details[`changed_${key}`];
+        if (items?.length) {
+          items.forEach((item) => {
+            lines.push(`${label}: "${item.before}" → "${item.after}"`);
+          });
+        }
+      }
+
+      // Added items
+      for (const [key, label] of Object.entries(typeLabels)) {
+        const items = details[`added_${key}`];
+        if (items?.length) {
+          lines.push(`Added ${label}(s): ${items.map((a) => `"${a}"`).join(", ")}`);
+        }
+      }
+
+      // Deleted items
+      for (const [key, label] of Object.entries(typeLabels)) {
+        const items = details[`deleted_${key}`];
+        if (items?.length) {
+          lines.push(`Deleted ${label}(s): ${items.map((d) => `"${d}"`).join(", ")}`);
+        }
+      }
+      if (details.before && details.after && !lines.length) {
+        lines.push(`"${details.before}" → "${details.after}"`);
+      }
+      if (details.deleted_texts?.length) {
+        lines.push(`Deleted: ${details.deleted_texts.map((t) => `"${t}"`).join(", ")}`);
+      }
+      if (details.extra) {
+        lines.push(`${details.extra}`);
+      }
+      return lines.length > 0 ? lines.join("\n") : "—";
+    };
+
+    const formatAction = (action) => {
+      return action.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    };
+
+    const esc = (val) => {
+      const s = String(val == null ? "" : val);
+      if (s.includes(",") || s.includes('"') || s.includes("\n") || s.includes("\r")) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+
+    const rows = [];
+    const exportDate = new Date().toLocaleString();
+    const projectName = project?.name || "Project";
+    // rows.push([`Activity Log — ${projectName}`, `Exported: ${exportDate}`, `Total Records: ${logsToExport.length}`].join(","));
+    // rows.push("");
+    // Header row
+    const headers = ["ID", "Date & Time", "User", "Email", "Role", "Action", "Target", "Change Summary"];
+    rows.push(headers.map(esc).join(","));
+    
+    // Data rows
+    logsToExport.forEach((log, index) => {
+      const roleName = getActingRole(log.user_email);
+      const action = formatAction(log.action);
+      const target = log.details?.label || `${log.entity} #${log.entity_id}`;
+      const summary = formatChangeSummary(log.details);
+      rows.push([
+        esc(index + 1),
+        esc(new Date(log.created_at).toLocaleString()),
+        esc(log.user_name || "Unknown"),
+        esc(log.user_email || ""),
+        esc(roleName || "—"),
+        esc(action),
+        esc(target),
+        esc(summary),
+      ].join(","));
+    });
+
+    const BOM = "\uFEFF";
+    const csvContent = BOM + rows.join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const safeName = (projectName || "project").replace(/[^a-zA-Z0-9_-]/g, "_");
+    link.download = `${safeName}_activity_log.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast(`Exported ${logsToExport.length} record(s) successfully.`, "success");
+  };
 
   if (loading) return <p className="p-8 text-gray-400">Loading...</p>;
 
@@ -171,16 +286,45 @@ export default function ProjectDetailsPage() {
 
       {showLogsModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-[#1a162e] rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-xl m-4">
+          <div className="bg-white dark:bg-[#1a162e] rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-xl m-4">
+            
+            {/* Modal Header */}
             <div className="flex justify-between items-center p-6 border-b dark:border-gray-700">
               <h2 className="text-lg font-black text-[#100d1c] dark:text-white">Project Activity Log</h2>
-              <button onClick={() => setShowLogsModal(false)} className="text-gray-400 hover:text-gray-600"><span className="material-symbols-outlined">close</span></button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleExportLogs} 
+                  className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+                >
+                  <span className="material-symbols-outlined text-sm">download</span>
+                  Export CSV
+                </button>
+                <button onClick={() => { setShowLogsModal(false); setLogSearchQuery(""); }} className="text-gray-400 hover:text-gray-600">
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
             </div>
-            <div className="p-6 overflow-y-auto space-y-3">
-              {auditLogs.length === 0 ? (
-                <p className="text-gray-400 text-center py-10">No actions recorded yet.</p>
+
+            {/* Search Bar */}
+            <div className="px-6 pt-4 pb-2">
+              <div className="relative">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">search</span>
+                <input
+                  type="text"
+                  placeholder="Search by name or email..."
+                  value={logSearchQuery}
+                  onChange={(e) => setLogSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 text-sm rounded-lg bg-gray-50 dark:bg-[#231e3d] border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                />
+              </div>
+            </div>
+            <div className="p-6 pt-2 overflow-y-auto space-y-3">
+              {filteredLogs.length === 0 ? (
+                <p className="text-gray-400 text-center py-10">
+                  {logSearchQuery ? "No matching logs found." : "No actions recorded yet."}
+                </p>
               ) : (
-                auditLogs.map((log) => {
+                filteredLogs.map((log) => {
                   const roleName = getActingRole(log.user_email);
                   const targetName = log.details?.label || `${log.entity} #${log.entity_id}`;
                   const extraInfo = log.details?.extra || "";
@@ -349,6 +493,79 @@ export default function ProjectDetailsPage() {
                             </ul>
                           </div>
                         )}
+                        
+                        {log.details?.changed_FRs && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800/30 text-xs font-mono space-y-1.5">
+                            <p className="text-xs font-bold text-yellow-600 mb-1">✏️ Changed Functional Requirements:</p>
+                            {log.details.changed_FRs.map((item, i) => (
+                              <div key={i} className="space-y-0.5">
+                                <div className="flex items-start gap-2">
+                                  <span className="text-red-500 font-bold min-w-[55px]">Before:</span>
+                                  <span className="text-red-400 line-through break-words">{item.before}</span>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <span className="text-green-600 font-bold min-w-[55px]">After:</span>
+                                  <span className="text-green-600 break-words">{item.after}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {log.details?.changed_NFRs && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800/30 text-xs font-mono space-y-1.5">
+                            <p className="text-xs font-bold text-yellow-600 mb-1">✏️ Changed Non-Functional Requirements:</p>
+                            {log.details.changed_NFRs.map((item, i) => (
+                              <div key={i} className="space-y-0.5">
+                                <div className="flex items-start gap-2">
+                                  <span className="text-red-500 font-bold min-w-[55px]">Before:</span>
+                                  <span className="text-red-400 line-through break-words">{item.before}</span>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <span className="text-green-600 font-bold min-w-[55px]">After:</span>
+                                  <span className="text-green-600 break-words">{item.after}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {log.details?.changed_Actors && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800/30 text-xs font-mono space-y-1.5">
+                            <p className="text-xs font-bold text-yellow-600 mb-1">✏️ Changed Actors:</p>
+                            {log.details.changed_Actors.map((item, i) => (
+                              <div key={i} className="space-y-0.5">
+                                <div className="flex items-start gap-2">
+                                  <span className="text-red-500 font-bold min-w-[55px]">Before:</span>
+                                  <span className="text-red-400 line-through break-words">{item.before}</span>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <span className="text-green-600 font-bold min-w-[55px]">After:</span>
+                                  <span className="text-green-600 break-words">{item.after}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {log.details?.changed_Features && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800/30 text-xs font-mono space-y-1.5">
+                            <p className="text-xs font-bold text-yellow-600 mb-1">✏️ Changed Features:</p>
+                            {log.details.changed_Features.map((item, i) => (
+                              <div key={i} className="space-y-0.5">
+                                <div className="flex items-start gap-2">
+                                  <span className="text-red-500 font-bold min-w-[55px]">Before:</span>
+                                  <span className="text-red-400 line-through break-words">{item.before}</span>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <span className="text-green-600 font-bold min-w-[55px]">After:</span>
+                                  <span className="text-green-600 break-words">{item.after}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
                         {/* SRS Generation Log */}
                         {log.entity === "srs_document" && log.action === "generated" && (
                           <div className="mt-2 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800/30 text-xs">
@@ -356,14 +573,11 @@ export default function ProjectDetailsPage() {
                               <span className="material-symbols-outlined text-blue-500 text-base">auto_stories</span>
                               <p className="text-xs font-bold text-blue-600">SRS Document Generated</p>
                             </div>
-                            {log.details?.label && (
-                              <p className="text-blue-500 break-words">{log.details.label}</p>
-                            )}
-                            {log.details?.extra && (
-                              <p className="text-blue-400 break-words mt-0.5">Format: {log.details.extra}</p>
-                            )}
+                            {log.details?.label && (<p className="text-blue-500 break-words">{log.details.label}</p>)}
+                            {log.details?.extra && (<p className="text-blue-400 break-words mt-0.5">Format: {log.details.extra}</p>)}
                           </div>
                         )}
+
                         {/* SRS Approval Log */}
                         {log.entity === "srs_document" && log.action === "approved" && (
                           <div className="mt-2 p-2.5 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30 text-xs">
@@ -371,20 +585,17 @@ export default function ProjectDetailsPage() {
                               <span className="material-symbols-outlined text-green-500 text-base">verified</span>
                               <p className="text-xs font-bold text-green-600">SRS Document Approved</p>
                             </div>
-                            {log.details?.label && (
-                              <p className="text-green-500 break-words">{log.details.label}</p>
-                            )}
+                            {log.details?.label && (<p className="text-green-500 break-words">{log.details.label}</p>)}
                             <div className="flex items-center gap-2 mt-1">
                               <span className="text-green-600 font-bold min-w-[55px]">Status:</span>
                               <span className="text-red-400 line-through">{log.details?.before || "pending"}</span>
                               <span className="text-gray-400 mx-1">→</span>
                               <span className="text-green-600 font-semibold">{log.details?.after || "approved"}</span>
                             </div>
-                            {log.details?.extra && (
-                              <p className="text-green-400 break-words mt-0.5">Scope: {log.details.extra}</p>
-                            )}
+                            {log.details?.extra && (<p className="text-green-400 break-words mt-0.5">Scope: {log.details.extra}</p>)}
                           </div>
                         )}
+
                         {/* UML Generation Log */}
                         {log.entity === "uml_diagram" && log.action === "generated" && (
                           <div className="mt-2 p-2.5 rounded-lg bg-purple-50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800/30 text-xs">
@@ -392,14 +603,11 @@ export default function ProjectDetailsPage() {
                               <span className="material-symbols-outlined text-purple-500 text-base">account_tree</span>
                               <p className="text-xs font-bold text-purple-600">UML Diagram Generated</p>
                             </div>
-                            {log.details?.label && (
-                              <p className="text-purple-500 break-words">{log.details.label}</p>
-                            )}
-                            {log.details?.extra && (
-                              <p className="text-purple-400 break-words mt-0.5">Type: {log.details.extra}</p>
-                            )}
+                            {log.details?.label && (<p className="text-purple-500 break-words">{log.details.label}</p>)}
+                            {log.details?.extra && (<p className="text-purple-400 break-words mt-0.5">Type: {log.details.extra}</p>)}
                           </div>
                         )}
+
                         {/* UML Approval Log */}
                         {log.entity === "uml_diagram" && log.action === "approved" && (
                           <div className="mt-2 p-2.5 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30 text-xs">
@@ -407,18 +615,14 @@ export default function ProjectDetailsPage() {
                               <span className="material-symbols-outlined text-green-500 text-base">verified</span>
                               <p className="text-xs font-bold text-green-600">UML Diagram Approved</p>
                             </div>
-                            {log.details?.label && (
-                              <p className="text-green-500 break-words">{log.details.label}</p>
-                            )}
+                            {log.details?.label && (<p className="text-green-500 break-words">{log.details.label}</p>)}
                             <div className="flex items-center gap-2 mt-1">
                               <span className="text-green-600 font-bold min-w-[55px]">Status:</span>
                               <span className="text-red-400 line-through">{log.details?.before || "pending"}</span>
                               <span className="text-gray-400 mx-1">→</span>
                               <span className="text-green-600 font-semibold">{log.details?.after || "approved"}</span>
                             </div>
-                            {log.details?.extra && (
-                              <p className="text-green-400 break-words mt-0.5">Scope: {log.details.extra}</p>
-                            )}
+                            {log.details?.extra && (<p className="text-green-400 break-words mt-0.5">Scope: {log.details.extra}</p>)}
                           </div>
                         )}
                         <p className="text-xs text-gray-400 mt-1">{new Date(log.created_at).toLocaleString()} • {log.user_email}</p>
@@ -551,6 +755,7 @@ export default function ProjectDetailsPage() {
           </div>
         </div>
       </div>
+      
       {showCompleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
