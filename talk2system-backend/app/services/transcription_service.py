@@ -31,7 +31,7 @@ def _configure_assemblyai_key() -> None:
 # AUDIO TRANSCRIPTION  (returns diarization + detected language)
 # ---------------------------------------------------------------------------
 
-def transcribe_audio(file_path: str) -> tuple[list[dict], str | None]:
+def transcribe_audio(file_path: str, speakers: list[str] | None = None) -> tuple[list[dict], str | None]:
     """
     Transcribe an audio file using AssemblyAI Universal-2.
 
@@ -64,11 +64,23 @@ def transcribe_audio(file_path: str) -> tuple[list[dict], str | None]:
     # Keep the original working config — language_detection=True conflicts
     # with speaker_labels=True in AssemblyAI, so we detect language ourselves
     # via Ollama after transcription instead.
+    speech_understanding = None
+    if speakers:
+        speech_understanding = aai.SpeechUnderstandingRequest(
+            request=aai.SpeechUnderstandingFeatureRequests(
+                speaker_identification=aai.SpeakerIdentificationRequest(
+                    speaker_type="name",
+                    known_values=speakers,
+                )
+            )
+        )
+
     config = aai.TranscriptionConfig(
         speaker_labels=True,
         punctuate=True,
         format_text=True,
         speech_models=["universal-2"],
+        speech_understanding=speech_understanding,
     )
 
     transcriber = aai.Transcriber(config=config)
