@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getCurrentUser } from "../../api/authApi";
-import { fetchUserDashboardStats } from "../../api/dashboardApi";
+import { fetchUserDashboardStats, fetchUserActivityFeed } from "../../api/dashboardApi";
+import {
+  getRecentWeeks, getRecentMonths, formatWeekLabel, formatMonthLabel,
+  exportUserActivityAsCSV,
+} from "../../utils/feedFilterUtils";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function timeAgo(iso) {
@@ -162,6 +166,12 @@ export default function UserDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
 
+  const [feedFilterType,  setFeedFilterType]  = useState("all");
+  const [feedFilterValue, setFeedFilterValue] = useState("");
+  const [feedEntries,     setFeedEntries]     = useState(null);
+  const [feedLoading,     setFeedLoading]     = useState(false);
+  const [feedError,       setFeedError]       = useState(null);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -178,6 +188,29 @@ export default function UserDashboardPage() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (feedFilterType === "all") {
+      setFeedEntries(null);
+      setFeedError(null);
+      return;
+    }
+    if (!feedFilterValue) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setFeedLoading(true);
+        setFeedError(null);
+        const data = await fetchUserActivityFeed(feedFilterType, feedFilterValue);
+        if (!cancelled) setFeedEntries(data);
+      } catch (e) {
+        if (!cancelled) setFeedError(e.message);
+      } finally {
+        if (!cancelled) setFeedLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [feedFilterType, feedFilterValue]);
 
   // ── Derived percentages ────────────────────────────────────────────────────
   const pct = (num, denom) => (denom > 0 ? Math.round((num / denom) * 100) : 0);
@@ -680,79 +713,167 @@ export default function UserDashboardPage() {
 
         {/* ── Recent Activity Feed ── */}
         <div className="mb-6 bg-white dark:bg-[#1C192B] rounded-2xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
-            Recent Activity
-          </p>
 
-          {loading ? (
-            <div className="flex flex-col gap-4">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <Skeleton className="w-9 h-9 rounded-xl shrink-0" />
-                  <div className="flex-1 flex flex-col gap-1.5">
-                    <Skeleton className="h-3 w-40" />
-                    <Skeleton className="h-3 w-28" />
-                  </div>
-                  <Skeleton className="h-3 w-14 shrink-0" />
-                </div>
+          {/* Header row */}
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Recent Activity</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Filter type pills */}
+              {["all", "week", "month"].map(type => (
+                <button
+                  key={type}
+                  onClick={() => { setFeedFilterType(type); setFeedFilterValue(""); }}
+                  className={`text-[11px] font-semibold px-3 py-1 rounded-full border transition ${
+                    feedFilterType === type
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-transparent text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-indigo-400"
+                  }`}
+                >
+                  {type === "all" ? "Recent 10" : type === "week" ? "By Week" : "By Month"}
+                </button>
               ))}
+              {/* Value dropdown */}
+              {feedFilterType === "week" && (
+                <select
+                  value={feedFilterValue}
+                  onChange={e => setFeedFilterValue(e.target.value)}
+                  className="text-[11px] bg-white dark:bg-[#1C192B] border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1 text-gray-500 dark:text-gray-400 focus:outline-none focus:border-primary"
+                >
+                  <option value="">Pick a week…</option>
+                  {getRecentWeeks(12).map(w => (
+                    <option key={w} value={w}>{formatWeekLabel(w)}</option>
+                  ))}
+                </select>
+              )}
+              {feedFilterType === "month" && (
+                <select
+                  value={feedFilterValue}
+                  onChange={e => setFeedFilterValue(e.target.value)}
+                  className="text-[11px] bg-white dark:bg-[#1C192B] border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1 text-gray-500 dark:text-gray-400 focus:outline-none focus:border-primary"
+                >
+                  <option value="">Pick a month…</option>
+                  {getRecentMonths(12).map(m => (
+                    <option key={m} value={m}>{formatMonthLabel(m)}</option>
+                  ))}
+                </select>
+              )}
+              {/* Export button */}
+              {(() => {
+                const displayFeed = feedEntries ?? stats?.recent_activity ?? [];
+                return displayFeed.length > 0 && !loading && !feedLoading ? (
+                  <button
+                    onClick={() => exportUserActivityAsCSV(displayFeed)}
+                    className="flex items-center gap-1.5 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-700/40 px-2.5 py-1 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">download</span>
+                    Export CSV
+                  </button>
+                ) : null;
+              })()}
             </div>
-          ) : !stats?.recent_activity?.length ? (
-            <div className="flex flex-col items-center gap-2 py-8 text-gray-400 dark:text-gray-600">
-              <span className="material-symbols-outlined text-3xl">inbox</span>
-              <p className="text-xs font-medium">No activity yet</p>
-            </div>
-          ) : (
-            <ul className="flex flex-col divide-y divide-gray-100 dark:divide-gray-800">
-              {stats.recent_activity.map((item, i) => {
-                const meta = ACTIVITY_META[item.type] ?? ACTIVITY_META.project_joined;
-                const url  = getActivityUrl(item);
-                const Inner = (
-                  <>
-                    <div className={`p-2 rounded-xl shrink-0 ${meta.ring}`}>
-                      <span className={`material-symbols-outlined text-[18px] ${meta.iconColor}`}>
-                        {meta.icon}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 leading-snug">
-                        {item.title}
-                      </p>
-                      {item.subtitle && (
-                        <p className="text-xs text-gray-400 truncate mt-0.5">{item.subtitle}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0 mt-0.5">
-                      <span className="text-[11px] text-gray-400 whitespace-nowrap">
-                        {timeAgo(item.timestamp)}
-                      </span>
-                      {url && (
-                        <span className="material-symbols-outlined text-[14px] text-gray-300 dark:text-gray-600">
-                          chevron_right
-                        </span>
-                      )}
-                    </div>
-                  </>
-                );
-                return (
-                  <li key={i}>
-                    {url ? (
-                      <button
-                        onClick={() => navigate(url)}
-                        className="w-full flex items-start gap-3 py-3 first:pt-0 last:pb-0 text-left hover:bg-gray-50 dark:hover:bg-white/5 rounded-xl px-2 -mx-2 transition-colors"
-                      >
-                        {Inner}
-                      </button>
-                    ) : (
-                      <div className="flex items-start gap-3 py-3 first:pt-0 last:pb-0 px-2 -mx-2">
-                        {Inner}
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+          </div>
+
+          {/* Result count when filtered */}
+          {feedFilterType !== "all" && feedFilterValue && !feedLoading && feedEntries && (
+            <p className="text-[11px] text-gray-400 mb-3">
+              {feedEntries.length} event{feedEntries.length !== 1 ? "s" : ""} found
+            </p>
           )}
+
+          {/* Feed list */}
+          {(() => {
+            const showSkeleton = (loading && !stats) || feedLoading;
+            const needsValue   = feedFilterType !== "all" && !feedFilterValue;
+            const displayFeed  = feedEntries ?? stats?.recent_activity ?? [];
+
+            if (showSkeleton) return (
+              <div className="flex flex-col gap-4">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <Skeleton className="w-9 h-9 rounded-xl shrink-0" />
+                    <div className="flex-1 flex flex-col gap-1.5">
+                      <Skeleton className="h-3 w-40" />
+                      <Skeleton className="h-3 w-28" />
+                    </div>
+                    <Skeleton className="h-3 w-14 shrink-0" />
+                  </div>
+                ))}
+              </div>
+            );
+
+            if (needsValue) return (
+              <div className="flex flex-col items-center gap-2 py-8 text-gray-400 dark:text-gray-600">
+                <span className="material-symbols-outlined text-3xl">filter_list</span>
+                <p className="text-xs font-medium">Select a {feedFilterType} to load activity</p>
+              </div>
+            );
+
+            if (feedError) return (
+              <div className="flex flex-col items-center gap-2 py-8 text-red-400">
+                <span className="material-symbols-outlined text-3xl">error</span>
+                <p className="text-xs font-medium">{feedError}</p>
+              </div>
+            );
+
+            if (!displayFeed.length) return (
+              <div className="flex flex-col items-center gap-2 py-8 text-gray-400 dark:text-gray-600">
+                <span className="material-symbols-outlined text-3xl">inbox</span>
+                <p className="text-xs font-medium">No activity for this period</p>
+              </div>
+            );
+
+            return (
+              <ul className="flex flex-col divide-y divide-gray-100 dark:divide-gray-800 max-h-[420px] overflow-y-auto pr-1">
+                {displayFeed.map((item, i) => {
+                  const meta = ACTIVITY_META[item.type] ?? ACTIVITY_META.project_joined;
+                  const url  = getActivityUrl(item);
+                  const Inner = (
+                    <>
+                      <div className={`p-2 rounded-xl shrink-0 ${meta.ring}`}>
+                        <span className={`material-symbols-outlined text-[18px] ${meta.iconColor}`}>
+                          {meta.icon}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 leading-snug">
+                          {item.title}
+                        </p>
+                        {item.subtitle && (
+                          <p className="text-xs text-gray-400 truncate mt-0.5">{item.subtitle}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                        <span className="text-[11px] text-gray-400 whitespace-nowrap">
+                          {timeAgo(item.timestamp)}
+                        </span>
+                        {url && (
+                          <span className="material-symbols-outlined text-[14px] text-gray-300 dark:text-gray-600">
+                            chevron_right
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  );
+                  return (
+                    <li key={i}>
+                      {url ? (
+                        <button
+                          onClick={() => navigate(url)}
+                          className="w-full flex items-start gap-3 py-3 first:pt-0 last:pb-0 text-left hover:bg-gray-50 dark:hover:bg-white/5 rounded-xl px-2 -mx-2 transition-colors"
+                        >
+                          {Inner}
+                        </button>
+                      ) : (
+                        <div className="flex items-start gap-3 py-3 first:pt-0 last:pb-0 px-2 -mx-2">
+                          {Inner}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            );
+          })()}
         </div>
 
       </main>

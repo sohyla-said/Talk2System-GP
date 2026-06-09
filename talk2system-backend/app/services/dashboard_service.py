@@ -578,9 +578,97 @@ class DashboardService:
             "failed_vs_done_task_type_distribution": failed_vs_done_task_type_distribution
         }
 
+    @staticmethod
+    def get_activity_feed_filtered(db: Session, filter_by: str = "all", filter_value: str = None):
+        query = db.query(AuditLog)
+        limit = 50
 
+        if filter_by == "week" and filter_value:
+            try:
+                week_start = datetime.strptime(filter_value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                week_end   = week_start + timedelta(days=7)
+                query = query.filter(AuditLog.created_at >= week_start, AuditLog.created_at < week_end)
+                limit = 1000
+            except ValueError:
+                pass
+        elif filter_by == "month" and filter_value:
+            try:
+                year, month = map(int, filter_value.split("-"))
+                month_start = datetime(year, month, 1, tzinfo=timezone.utc)
+                month_end   = (
+                    datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+                    if month == 12
+                    else datetime(year, month + 1, 1, tzinfo=timezone.utc)
+                )
+                query = query.filter(AuditLog.created_at >= month_start, AuditLog.created_at < month_end)
+                limit = 1000
+            except (ValueError, AttributeError):
+                pass
 
+        entries = query.order_by(AuditLog.created_at.desc()).limit(limit).all()
 
+        return [
+            {
+                "id":           e.id,
+                "action":       e.action,
+                "entity":       e.entity,
+                "entity_id":    e.entity_id,
+                "user_id":      e.user_id,
+                "user_name":    e.user.full_name if e.user else None,
+                "user_email":   e.user.email    if e.user else None,
+                "project_id":   e.project_id,
+                "project_name": e.project.name  if e.project else None,
+                "details":      e.details,
+                "created_at":   e.created_at.isoformat() if e.created_at else None,
+            }
+            for e in entries
+        ]
+
+    @staticmethod
+    def get_user_activity_feed_filtered(db: Session, user: User, filter_by: str = "all", filter_value: str = None):
+        if user.role == "admin":
+            raise HTTPException(403, "Admins must use /api/dashboard/admin-stats")
+
+        memberships = db.query(ProjectMembership).filter(ProjectMembership.user_id == user.id).all()
+        project_ids = [m.project_id for m in memberships]
+
+        session_memberships = db.query(SessionMembership).filter(SessionMembership.user_id == user.id).all()
+        session_ids = [s.session_id for s in session_memberships]
+
+        if not project_ids and not session_ids:
+            return []
+
+        activities = _build_activity_feed(db, user, project_ids, session_ids, limit=None)
+
+        if filter_by in ("week", "month") and filter_value:
+            try:
+                if filter_by == "week":
+                    start = datetime.strptime(filter_value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                    end   = start + timedelta(days=7)
+                else:
+                    year, month = map(int, filter_value.split("-"))
+                    start = datetime(year, month, 1, tzinfo=timezone.utc)
+                    end   = (datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+                             if month == 12 else datetime(year, month + 1, 1, tzinfo=timezone.utc))
+
+                filtered = []
+                for a in activities:
+                    ts = a.get("timestamp")
+                    if not ts:
+                        continue
+                    try:
+                        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        if start <= dt < end:
+                            filtered.append(a)
+                    except ValueError:
+                        pass
+                return filtered
+            except (ValueError, AttributeError):
+                pass
+
+        return activities[:50]
 
 
 def _to_dict(rows):
@@ -681,7 +769,7 @@ def _build_activity_feed(db: Session, user, project_ids: list, session_ids: list
             activities.append({"type": "requirements_extracted",  "title": "Requirements extracted", "subtitle": session_title or project_name or "", "project_id": task.project_id, "session_id": task.session_id, "timestamp": ts})
 
     activities.sort(key=lambda a: a.get("timestamp") or "", reverse=True)
-    return activities[:limit]
+    return activities if limit is None else activities[:limit]
 
 
 def _empty_user_stats():

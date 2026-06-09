@@ -24,3 +24,25 @@ export async function fetchAdminDashboardStats() {
   if (!res.ok) throw new Error(data.detail || "Failed to fetch dashboard stats");
   return data;
 }
+
+export async function fetchActivityFeed(filterBy = "all", filterValue = "") {
+  const params = new URLSearchParams({ filter_by: filterBy });
+  if (filterValue) params.set("filter_value", filterValue);
+  const res = await fetch(`${BASE_URL}/api/dashboard/activity-feed?${params}`, {
+    headers: authHeaders(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to fetch activity feed");
+  return data;
+}
+
+export async function fetchUserActivityFeed(filterBy = "all", filterValue = "") {
+  const params = new URLSearchParams({ filter_by: filterBy });
+  if (filterValue) params.set("filter_value", filterValue);
+  const res = await fetch(`${BASE_URL}/api/dashboard/user-activity-feed?${params}`, {
+    headers: authHeaders(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to fetch activity feed");
+  return data;
+}

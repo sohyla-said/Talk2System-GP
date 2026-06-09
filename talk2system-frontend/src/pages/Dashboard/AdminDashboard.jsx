@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getCurrentUser } from "../../api/authApi";
-import { fetchAdminDashboardStats } from "../../api/dashboardApi";
+import { fetchAdminDashboardStats, fetchActivityFeed } from "../../api/dashboardApi";
+import {
+  getRecentWeeks, getRecentMonths, formatWeekLabel, formatMonthLabel,
+  exportAuditFeedAsCSV,
+} from "../../utils/feedFilterUtils";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function timeAgo(iso) {
@@ -102,13 +106,17 @@ function DonutChart({ segments, size = 160, thickness = 28, sublabel }) {
 }
 
 // ─── BarChart (grouped) ───────────────────────────────────────────────────────
-function BarChart({ labels, datasets, height = 120 }) {
+function BarChart({ labels, datasets, height = 120, highlightIndex = null }) {
   const maxVal = Math.max(...datasets.flatMap(d => d.values), 1);
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-end gap-1 relative" style={{ height }}>
         {labels.map((label, i) => (
-          <div key={i} className="flex-1 flex items-end gap-0.5 min-w-0 relative group">
+          <div
+            key={i}
+            className="flex-1 flex items-end gap-0.5 min-w-0 relative group transition-opacity duration-300"
+            style={{ opacity: highlightIndex !== null && i !== highlightIndex ? 0.25 : 1 }}
+          >
             {datasets.map((ds, di) => {
               const val = ds.values[i] || 0;
               const barHeight = (val / maxVal) * height;
@@ -139,7 +147,15 @@ function BarChart({ labels, datasets, height = 120 }) {
       <div className="flex gap-1">
         {labels.map((label, i) => (
           <div key={i} className="flex-1 text-center min-w-0">
-            <span className="text-[9px] text-gray-400 truncate block">{label.slice(-5)}</span>
+            <span
+              className={`text-[9px] truncate block transition-colors duration-300 ${
+                highlightIndex !== null && i === highlightIndex
+                  ? "text-gray-700 dark:text-gray-200 font-semibold"
+                  : "text-gray-400"
+              }`}
+            >
+              {label.slice(-5)}
+            </span>
           </div>
         ))}
       </div>
@@ -172,6 +188,15 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
 
+  const [selectedGrowthMonth,  setSelectedGrowthMonth]  = useState("");
+  const [selectedSessionWeek,  setSelectedSessionWeek]  = useState("");
+
+  const [feedFilterType,  setFeedFilterType]  = useState("all");
+  const [feedFilterValue, setFeedFilterValue] = useState("");
+  const [feedEntries,     setFeedEntries]     = useState(null);
+  const [feedLoading,     setFeedLoading]     = useState(false);
+  const [feedError,       setFeedError]       = useState(null);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -188,6 +213,29 @@ export default function AdminDashboard() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (feedFilterType === "all") {
+      setFeedEntries(null);
+      setFeedError(null);
+      return;
+    }
+    if (!feedFilterValue) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setFeedLoading(true);
+        setFeedError(null);
+        const data = await fetchActivityFeed(feedFilterType, feedFilterValue);
+        if (!cancelled) setFeedEntries(data);
+      } catch (e) {
+        if (!cancelled) setFeedError(e.message);
+      } finally {
+        if (!cancelled) setFeedLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [feedFilterType, feedFilterValue]);
 
   if (error) {
     return (
@@ -285,15 +333,48 @@ export default function AdminDashboard() {
         <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
 
           <Card>
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Platform Growth</p>
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Platform Growth</p>
+              {!loading && stats?.platform_growth?.months?.length > 0 && (
+                <select
+                  value={selectedGrowthMonth}
+                  onChange={e => setSelectedGrowthMonth(e.target.value)}
+                  className="text-[11px] bg-white dark:bg-[#1C192B] border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-0.5 text-gray-500 dark:text-gray-400 focus:outline-none focus:border-primary shrink-0"
+                >
+                  <option value="">All months</option>
+                  {stats.platform_growth.months.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              )}
+            </div>
             <p className="text-[11px] text-gray-400 mb-4">New users &amp; projects per month (last 12 months)</p>
             {loading ? (
               <Skeleton className="h-32 w-full" />
             ) : stats?.platform_growth?.months?.length > 0 ? (
               <>
+                {selectedGrowthMonth && (() => {
+                  const idx   = stats.platform_growth.months.indexOf(selectedGrowthMonth);
+                  const users = stats.platform_growth.new_users[idx]    ?? 0;
+                  const projs = stats.platform_growth.new_projects[idx] ?? 0;
+                  return (
+                    <div className="flex items-center gap-6 mb-4 px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
+                      <div className="flex flex-col items-center">
+                        <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400 tabular-nums">{users}</span>
+                        <span className="text-[10px] text-gray-400 mt-0.5">New Users</span>
+                      </div>
+                      <div className="w-px h-10 bg-gray-200 dark:bg-gray-700" />
+                      <div className="flex flex-col items-center">
+                        <span className="text-2xl font-black text-emerald-500 dark:text-emerald-400 tabular-nums">{projs}</span>
+                        <span className="text-[10px] text-gray-400 mt-0.5">New Projects</span>
+                      </div>
+                    </div>
+                  );
+                })()}
                 <BarChart
                   labels={stats.platform_growth.months}
                   height={120}
+                  highlightIndex={selectedGrowthMonth ? stats.platform_growth.months.indexOf(selectedGrowthMonth) : null}
                   datasets={[
                     { label: "New Users",    values: stats.platform_growth.new_users,    color: "#6366f1" },
                     { label: "New Projects", values: stats.platform_growth.new_projects, color: "#10b981" },
@@ -314,16 +395,45 @@ export default function AdminDashboard() {
           </Card>
 
           <Card>
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Sessions Created per Week</p>
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Sessions Created per Week</p>
+              {!loading && stats?.sessions_per_week?.weeks?.length > 0 && (
+                <select
+                  value={selectedSessionWeek}
+                  onChange={e => setSelectedSessionWeek(e.target.value)}
+                  className="text-[11px] bg-white dark:bg-[#1C192B] border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-0.5 text-gray-500 dark:text-gray-400 focus:outline-none focus:border-primary shrink-0"
+                >
+                  <option value="">All weeks</option>
+                  {stats.sessions_per_week.weeks.map(w => (
+                    <option key={w} value={w}>{w}</option>
+                  ))}
+                </select>
+              )}
+            </div>
             <p className="text-[11px] text-gray-400 mb-4">Last 6 weeks</p>
             {loading ? (
               <Skeleton className="h-32 w-full" />
             ) : stats?.sessions_per_week?.weeks?.length > 0 ? (
-              <BarChart
-                labels={stats.sessions_per_week.weeks}
-                height={120}
-                datasets={[{ label: "Sessions", values: stats.sessions_per_week.counts, color: "#8b5cf6" }]}
-              />
+              <>
+                {selectedSessionWeek && (() => {
+                  const idx   = stats.sessions_per_week.weeks.indexOf(selectedSessionWeek);
+                  const count = stats.sessions_per_week.counts[idx] ?? 0;
+                  return (
+                    <div className="flex items-center gap-4 mb-4 px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
+                      <div className="flex flex-col items-center">
+                        <span className="text-2xl font-black text-purple-600 dark:text-purple-400 tabular-nums">{count}</span>
+                        <span className="text-[10px] text-gray-400 mt-0.5">Sessions this week</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+                <BarChart
+                  labels={stats.sessions_per_week.weeks}
+                  height={120}
+                  highlightIndex={selectedSessionWeek ? stats.sessions_per_week.weeks.indexOf(selectedSessionWeek) : null}
+                  datasets={[{ label: "Sessions", values: stats.sessions_per_week.counts, color: "#8b5cf6" }]}
+                />
+              </>
             ) : (
               <EmptyState icon="mic" label="No sessions this period" />
             )}
@@ -573,7 +683,7 @@ export default function AdminDashboard() {
 
         </div>
 
-        {/* ── Task Completion Time + Session Requirements Latency ── */}
+        {/* ── Task Completion Time ── */}
         <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
 
           <Card>
@@ -601,85 +711,142 @@ export default function AdminDashboard() {
             )}
           </Card>
 
-          <Card>
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Requirements Latency</p>
-            <p className="text-[11px] text-gray-400 mb-4">Avg time from session creation to first extraction</p>
-            {loading ? (
-              <Skeleton className="h-32 w-full" />
-            ) : stats?.session_requirements_latency?.overall_avg_human ? (
-              <>
-                <div className="flex items-baseline gap-2 mb-5">
-                  <span className="text-3xl font-black text-gray-900 dark:text-white">
-                    {stats.session_requirements_latency.overall_avg_human}
-                  </span>
-                  <span className="text-xs text-gray-400">overall average</span>
-                </div>
-                {stats.session_requirements_latency.monthly_trend?.length > 0 && (
-                  <div className="flex flex-col gap-2.5">
-                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Monthly trend</p>
-                    {stats.session_requirements_latency.monthly_trend.slice(-6).map((m) => (
-                      <div key={m.month} className="flex items-center justify-between">
-                        <span className="text-[11px] text-gray-500 dark:text-gray-400 w-16 shrink-0 tabular-nums">{m.month}</span>
-                        <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200 tabular-nums">{m.avg_human}</span>
-                        <span className="text-[10px] text-gray-400 tabular-nums">
-                          {m.session_count} session{m.session_count !== 1 ? "s" : ""}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              <EmptyState icon="speed" label="No extraction data yet" />
-            )}
-          </Card>
-
         </div>
 
         {/* ── Live Activity Feed (Audit Log) ── */}
         <div className="mb-6">
           <Card>
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Live Activity Feed (recent 50 activities)</p>
-            {loading ? (
-              <div className="flex flex-col gap-4">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <Skeleton className="w-9 h-9 rounded-xl shrink-0" />
-                    <div className="flex-1 flex flex-col gap-1.5">
-                      <Skeleton className="h-3 w-40" />
-                      <Skeleton className="h-3 w-28" />
-                    </div>
-                    <Skeleton className="h-3 w-14 shrink-0" />
-                  </div>
+            {/* Header row */}
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Live Activity Feed</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Filter type pills */}
+                {["all", "week", "month"].map(type => (
+                  <button
+                    key={type}
+                    onClick={() => { setFeedFilterType(type); setFeedFilterValue(""); }}
+                    className={`text-[11px] font-semibold px-3 py-1 rounded-full border transition ${
+                      feedFilterType === type
+                        ? "bg-indigo-600 text-white border-indigo-600"
+                        : "bg-transparent text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-indigo-400"
+                    }`}
+                  >
+                    {type === "all" ? "Recent 50" : type === "week" ? "By Week" : "By Month"}
+                  </button>
                 ))}
+                {/* Value dropdown */}
+                {feedFilterType === "week" && (
+                  <select
+                    value={feedFilterValue}
+                    onChange={e => setFeedFilterValue(e.target.value)}
+                    className="text-[11px] bg-white dark:bg-[#1C192B] border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1 text-gray-500 dark:text-gray-400 focus:outline-none focus:border-primary"
+                  >
+                    <option value="">Pick a week…</option>
+                    {getRecentWeeks(12).map(w => (
+                      <option key={w} value={w}>{formatWeekLabel(w)}</option>
+                    ))}
+                  </select>
+                )}
+                {feedFilterType === "month" && (
+                  <select
+                    value={feedFilterValue}
+                    onChange={e => setFeedFilterValue(e.target.value)}
+                    className="text-[11px] bg-white dark:bg-[#1C192B] border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1 text-gray-500 dark:text-gray-400 focus:outline-none focus:border-primary"
+                  >
+                    <option value="">Pick a month…</option>
+                    {getRecentMonths(12).map(m => (
+                      <option key={m} value={m}>{formatMonthLabel(m)}</option>
+                    ))}
+                  </select>
+                )}
+                {/* Export button */}
+                {(() => {
+                  const displayFeed = feedEntries ?? stats?.activity_feed ?? [];
+                  return displayFeed.length > 0 && !loading && !feedLoading ? (
+                    <button
+                      onClick={() => exportFeedAsCSV(displayFeed)}
+                      className="flex items-center gap-1.5 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-700/40 px-2.5 py-1 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">download</span>
+                      Export CSV
+                    </button>
+                  ) : null;
+                })()}
               </div>
-            ) : stats?.activity_feed?.length > 0 ? (
-              <ul className="flex flex-col divide-y divide-gray-100 dark:divide-gray-800 max-h-[360px] overflow-y-auto pr-1">
-                {stats.activity_feed.map((e) => (
-                  <li key={e.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-                    <div className="p-2 rounded-xl shrink-0 bg-indigo-50 dark:bg-indigo-900/20">
-                      <span className="material-symbols-outlined text-[16px] text-indigo-500">history</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{e.action}</span>
-                        <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
-                          {e.entity}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-gray-400 mt-0.5 truncate">
-                        {e.user_name ?? `User #${e.user_id}`}
-                        {` · ${e.user_email}` ?? `User #${e.user_id}`}
-                        {e.project_name ? ` · ${e.project_name}` : ""}
-                      </p>
-                    </div>
-                    <span className="text-[11px] text-gray-400 shrink-0 whitespace-nowrap">{timeAgo(e.created_at)}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <EmptyState icon="inbox" label="No audit events yet" />
+            </div>
+
+            {/* Result count badge when filtered */}
+            {feedFilterType !== "all" && feedFilterValue && !feedLoading && feedEntries && (
+              <p className="text-[11px] text-gray-400 mb-3">
+                {feedEntries.length} event{feedEntries.length !== 1 ? "s" : ""} found
+              </p>
             )}
+
+            {/* Feed list */}
+            {(() => {
+              const isInitialLoad  = loading && !stats;
+              const isFilteredLoad = feedLoading;
+              const showSkeleton   = isInitialLoad || isFilteredLoad;
+              const needsValue     = feedFilterType !== "all" && !feedFilterValue;
+              const displayFeed    = feedEntries ?? stats?.activity_feed ?? [];
+
+              if (showSkeleton) return (
+                <div className="flex flex-col gap-4">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="flex items-start gap-3">
+                      <Skeleton className="w-9 h-9 rounded-xl shrink-0" />
+                      <div className="flex-1 flex flex-col gap-1.5">
+                        <Skeleton className="h-3 w-40" />
+                        <Skeleton className="h-3 w-28" />
+                      </div>
+                      <Skeleton className="h-3 w-14 shrink-0" />
+                    </div>
+                  ))}
+                </div>
+              );
+
+              if (needsValue) return (
+                <div className="flex flex-col items-center gap-2 py-8 text-gray-400 dark:text-gray-600">
+                  <span className="material-symbols-outlined text-3xl">filter_list</span>
+                  <p className="text-xs font-medium">Select a {feedFilterType} to load activity</p>
+                </div>
+              );
+
+              if (feedError) return (
+                <div className="flex flex-col items-center gap-2 py-8 text-red-400">
+                  <span className="material-symbols-outlined text-3xl">error</span>
+                  <p className="text-xs font-medium">{feedError}</p>
+                </div>
+              );
+
+              if (displayFeed.length === 0) return <EmptyState icon="inbox" label="No audit events for this period" />;
+
+              return (
+                <ul className="flex flex-col divide-y divide-gray-100 dark:divide-gray-800 max-h-[420px] overflow-y-auto pr-1">
+                  {displayFeed.map((e) => (
+                    <li key={e.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                      <div className="p-2 rounded-xl shrink-0 bg-indigo-50 dark:bg-indigo-900/20">
+                        <span className="material-symbols-outlined text-[16px] text-indigo-500">history</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{e.action}</span>
+                          <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                            {e.entity}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+                          {e.user_name ?? `User #${e.user_id}`}
+                          {e.user_email ? ` · ${e.user_email}` : ""}
+                          {e.project_name ? ` · ${e.project_name}` : ""}
+                        </p>
+                      </div>
+                      <span className="text-[11px] text-gray-400 shrink-0 whitespace-nowrap">{timeAgo(e.created_at)}</span>
+                    </li>
+                  ))}
+                </ul>
+              );
+            })()}
           </Card>
         </div>
 
@@ -687,6 +854,10 @@ export default function AdminDashboard() {
       </main>
     </div>
   );
+}
+
+function exportFeedAsCSV(feed) {
+  exportAuditFeedAsCSV(feed);
 }
 
 function EmptyState({ icon, label }) {
