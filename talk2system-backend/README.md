@@ -1,395 +1,366 @@
-# Talk2System Backend - Intelligent Requirements Extraction System
+# Talk2System Backend
+
+> AI-powered requirements engineering platform — FastAPI backend for audio transcription, intelligent requirement extraction, document generation, and collaborative project management.
 
 ## Overview
 
-This project implements a comprehensive NLP-based requirements extraction system that processes conversational transcripts and identifies functional and non-functional requirements. The system combines three powerful approaches:
+Talk2System's backend is a layered FastAPI application that processes stakeholder conversations end-to-end: from raw audio to professional SRS documents and UML diagrams. It supports three requirement extraction engines, multi-level approval workflows, async task tracking, and a full notification/audit system.
 
-1. **Advanced Preprocessing Pipeline** - Transforms raw meeting transcripts into clean, atomic sentence objects
-2. **Rule-Based Extraction** - Deterministic pattern matching using linguistic features and domain knowledge
-3. **Machine Learning Models** - SVM-based classifiers trained on labeled requirement datasets
-4. **Hybrid Engine** - Confidence-based ensemble combining rule-based and ML predictions
+**Three Extraction Engines**
+| Engine | Approach | When to Use |
+|--------|----------|------------|
+| **Hybrid** | SVM classifiers + rule-based scoring combined by confidence | Default — acceptable accuracy and transparency |
+| **LLM** | LangChain + Ollama (local LLM) | Context-heavy or ambiguous transcripts |
+| **Gemini** | Google Gemini API | High accuracy, cloud-based alternative |
 
-The system can classify requirements as Functional (FR) or Non-Functional (NFR) and further categorize NFRs into specific quality attributes (Security, Performance, Usability, etc.).
+---
 
 ## Project Structure
 
 ```
 talk2system-backend/
 ├── app/
-│   ├── __init__.py
-│   ├── main.py                       # FastAPI app entry point
-│   ├── .env                          # configuration file for environment variables and keys
-│   ├── api/
-│   │   ├── requirements.py           # API endpoints for requirement extraction
-│   │   ├── document.py               # API endpoints for uml diagrams and documentation generation
+│   ├── main.py                       # FastAPI entry point, router registration, CORS
+│   ├── .env                          # Environment variables (not committed)
+│   │
+│   ├── api/                          # HTTP route handlers
+│   │   ├── auth_routes.py            # Signup, login, /me
+│   │   ├── oauth_routes.py           # Google & GitHub OAuth
+│   │   ├── admin_routes.py           # User management (admin only)
+│   │   ├── project_routes.py         # Project CRUD, membership, invitations
+│   │   ├── session_routes.py         # Session CRUD
+│   │   ├── requirements.py           # Requirement extraction & management
+│   │   ├── approval.py               # Session-level feature approvals
+│   │   ├── project_approval.py       # Project-level feature approvals
+│   │   ├── transcription_router.py   # Audio upload & transcription
+│   │   ├── translation_router.py     # Transcript translation
+│   │   ├── summary.py                # Session summarization
+│   │   ├── document.py               # UML & SRS generation
+│   │   ├── notification_routes.py    # User notifications
+│   │   └── dashboard_routes.py       # User & admin statistics
+│   │
 │   ├── db/
-│   │   ├── base.py                   # Database base model
-│   │   ├── session.py                # Database session management
-│   ├── models/                       # Database models
-│   │   ├── requirement.py            # Requirement model
-│   │   ├── project.py                # Project model
-│   │   ├── artifact_type.py          # artifact type model
-│   │   ├── artifact.py               # artifact model
-│   ├── services/
-│   │   ├── requirement_service.py      # Business logic for requirements
-│   │   ├── project_service.py          # Business logic for projects
-│   │   ├── artifact_service.py         # Business logic for artifacts
-│   │   ├── uml_service.py              # Business logic for uml diagram generation
-│   └── nlp/
-│       ├── preprocessing.py          # Core preprocessing pipeline
-│       ├── rule_engine.py            # Rule-based requirement extraction
-│       ├── inference.py              # ML-based inference pipeline
-│       ├── hybrid_engine.py          # Hybrid ML + Rule-based engine
+│   │   ├── base.py                   # SQLAlchemy declarative base
+│   │   └── session.py                # Database session factory
+│   │
+│   ├── dependencies/
+│   │   └── auth.py                   # JWT bearer auth, role guards
+│   │
+│   ├── models/                       # SQLAlchemy ORM models
+│   │   ├── user.py
+│   │   ├── project.py
+│   │   ├── project_membership.py
+│   │   ├── invitation.py
+│   │   ├── session.py
+│   │   ├── session_membership.py
+│   │   ├── transcript.py             # Diarized transcript segments
+│   │   ├── summaries.py
+│   │   ├── requirement_runs.py       # Extraction job records
+│   │   ├── requirement_raw.py        # Raw extraction output
+│   │   ├── session_requirement.py    # Versioned session requirements
+│   │   ├── project_requirments.py    # Versioned project requirements
+│   │   ├── artifact.py
+│   │   ├── artifact_type.py
+│   │   ├── approval.py               # Session feature approvals
+│   │   ├── project_approval.py       # Project feature approvals
+│   │   ├── background_task.py        # Async task tracking
+│   │   ├── notification.py
+│   │   └── audit_log.py
+│   │
+│   ├── services/                     # Business logic layer
+│   │   ├── auth_service.py           # JWT, BCrypt, registration, login
+│   │   ├── oauth_service.py          # Google & GitHub OAuth flows
+│   │   ├── project_service.py        # Projects, membership, invitations
+│   │   ├── session_service.py        # Sessions CRUD
+│   │   ├── transcription_service.py  # AssemblyAI audio → transcript
+│   │   ├── translation_service.py    # Ollama multilingual translation
+│   │   ├── summary_service.py        # Transcript summarization
+│   │   ├── requirement_service.py    # Extraction, versioning, approval
+│   │   ├── llm_service.py            # LLM extraction engine (Ollama)
+│   │   ├── gemini_service.py         # Gemini extraction engine
+│   │   ├── approval_service.py       # Session approval workflow
+│   │   ├── project_approval_service.py # Project approval workflow
+│   │   ├── artifact_service.py       # Artifact CRUD
+│   │   ├── uml_service.py            # UML diagram generation
+│   │   ├── srs_service.py            # SRS document generation
+│   │   ├── notification_service.py   # Notification creation & retrieval
+│   │   ├── audit_service.py          # Audit log writes
+│   │   └── dashboard_service.py      # Stats & activity feeds
+│   │
+│   └── nlp/                          # NLP & ML pipeline
+│       ├── preprocessing.py          # Text normalization, noise removal, tokenization
+│       ├── rule_engine.py            # Rule-based FR/NFR scoring
+│       ├── inference.py              # SVM model inference
+│       ├── hybrid_engine.py          # Hybrid rule + ML engine
+│       └── llm_preprocessing.py     # LLM-specific preprocessing
+│
 ├── ML/
-│   ├── dataset/
-│   │   ├── binary_classifier_dataset.csv        # FR/NFR binary classification dataset
-│   │   ├── NFR_categories_dataset.csv          # NFR category classification dataset
-│   │   ├── NFR_categories_dataset_balanced.xlsx # Balanced NFR dataset
-│   │   ├── PROMISE.csv                         # PROMISE requirements dataset
-│   │   ├── testData.csv                        # Test data for FR/NFR classifier 
-│   │   └── testData_nfr.csv                    # Test data for NFR category classifier
+│   ├── dataset/                      # Training & test datasets (CSV/XLSX)
 │   ├── training/
-│   │   ├── train_fr_nfr_svm.py      # Train FR/NFR binary classifier
+│   │   ├── train_fr_nfr_svm.py       # Train FR/NFR binary classifier
 │   │   └── train_nfr_svm.py          # Train NFR category classifier
 │   ├── evaluation/
-│   │   ├── evaluate_fr_nfr.py        # Evaluate FR/NFR classifier
-│   │   ├── evaluate_nfr.py           # Evaluate NFR category classifier
-│   ├── models/
-│   │   ├── fr_nfr_classifier.pkl              # Trained FR/NFR SVM classifier
-│   │   ├── fr_nfr_selector.pkl                # Feature selector for FR/NFR
-│   │   ├── fr_nfr_tfidf_vectorizer.pkl        # TF-IDF vectorizer for FR/NFR
-│   │   ├── nfr_category_classifier.pkl        # Trained NFR category SVM classifier
-│   │   ├── nfr_selector.pkl                   # Feature selector for NFR categories
-│   │   └── nfr_vectorizer.pkl                 # TF-IDF vectorizer for NFR categories
-│   └── analysis/
-│       └── datasets_EDA.ipynb        # Exploratory data analysis notebook
-├── data/
-│   ├── sample_transcript.txt                # Sample input transcript
-│   ├── preprocessing_output.json            # Output from preprocessing pipeline (ignored)
-│   ├── rule_engine_output.json              # Output from rule-based engine (ignored)
-│   ├── test_transcript_ml_inference.csv     # ML inference results (ignored)
-│   └── hybrid_inference_results.csv         # Hybrid inference results (ignored)
+│   │   ├── evaluate_fr_nfr.py        # FR/NFR classifier evaluation
+│   │   └── evaluate_nfr.py           # NFR category classifier evaluation
+│   └── models/                       # Serialized .pkl model files
+│       ├── fr_nfr_classifier.pkl
+│       ├── fr_nfr_selector.pkl
+│       ├── fr_nfr_tfidf_vectorizer.pkl
+│       ├── nfr_category_classifier.pkl
+│       ├── nfr_selector.pkl
+│       └── nfr_vectorizer.pkl
+│
 ├── tests/
-│   ├── test_preprocessing.py         # Tests for preprocessing pipeline
-│   └── test_rule_engine.py           # Tests for rule-based engine
-├── venv/                             # Virtual environment (ignored)
-├── .gitignore                        # Git ignore rules
-├── requirements.txt                  # Python dependencies
-└── README.md                         # Project documentation
+│   ├── test_preprocessing.py
+│   └── test_rule_engine.py
+│
+├── data/                             # Sample transcripts & pipeline outputs
+├── uploads/                          # Uploaded audio files
+├── chunks/                           # Temporary audio chunks
+├── storage/                          # Generated artifacts (UML, SRS)
+├── requirements.txt
+└── README.md
 ```
 
-## Preprocessing Pipeline
-The pipeline transforms raw meeting transcripts into atomic, analysis-ready sentence objects suitable for downstream requirement extraction and analysis.
+---
 
-The `RequirementPreprocessingPipeline` performs the following transformations on conversation transcripts:
+## API Reference
 
-1. **Text Normalization** - Standardizes spacing, quotes, and punctuation
-2. **Noise Removal** - Removes timestamps and non-verbal annotations
-3. **Filler Removal** - Eliminates filler words while preserving modal verbs
-4. **Coreference Resolution** - Replaces pronouns with their referenced entities
-5. **Sentence Segmentation** - Splits transcript into individual sentences
-6. **Conjunction Splitting** - Breaks compound sentences into atomic statements
-7. **Tokenization** - Creates both spaCy and transformer-ready tokens
-8. **Lemmatization** - Reduces tokens to their base forms
-9. **Negation Detection** - Identifies and flags negation patterns
-10. **Domain Term Normalization** - Standardizes domain-specific synonyms
-11. **Irrelevant Sentence Filtering** - Removes greetings and social talk
-12. **Deduplication** - Removes semantically similar sentences
+All endpoints require a JWT Bearer token unless marked **public**.
 
-### Output Format
+### Authentication — `/api/auth`
 
-Each processed sentence is returned as a structured object containing:
-- `id` - Unique sentence identifier
-- `original_sentence` - The original text from the transcript
-- `cleaned_sentence` - The processed atomic statement
-- `tokens` - SpaCy tokenization
-- `lemmas` - Lemmatized forms
-- `speaker` - Speaker identifier
-- `negation` - Boolean flag for negation presence
-- `negation_token` - The negation word if present
-- `coref_resolved` - Coreference resolution status
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| POST | `/api/auth/signup` | Register new user | Public |
+| POST | `/api/auth/login` | Login, returns JWT token | Public |
+| GET | `/api/auth/me` | Get current user info | Required |
+| GET | `/api/auth/google/login` | Start Google OAuth flow | Public |
+| GET | `/api/auth/google/callback` | Google OAuth callback | Public |
+| GET | `/api/auth/github/login` | Start GitHub OAuth flow | Public |
+| GET | `/api/auth/github/callback` | GitHub OAuth callback | Public |
 
-## Rule Based Extraction Pipeline
+### Admin — `/api/admin`
 
-The rule extraction pipeline processes the output from the preprocessing pipeline and applies a set of heuristic rules to identify and extract functional and non-functional requirements.
-
-### Steps
-
-1. **Modal Contribution Detection** - Identify modal verbs (must, should) and their scope.
-2. **Functional Verbs Scoring** - Score verbs based on their functional relevance.
-3. **NFR Keywords Scoring** - Score keywords related to non-functional requirements.
-4. **Time Pattern Detection** - Identify and boost time-related patterns.
-5. **Score Normalization** - Normalize scores for functional and non-functional requirements.
-6. **NFR Category Determination** - Assign NFR categories based on scores.
-
-### Output Format
-Each extracted requirement is returned as a structured object containing:
-- `sentence_id` - Unique sentence identifier
-- `speaker` - Speaker identifier
-- `cleaned_sentence` - The processed atomic statement
-- `req_confidence` - Model confidence score for whether the sentence is a requirement.
-- `req_type_confidence` - Confidence score for the predicted requirement type.
-
-- `req_type` - Predicted requirement type (e.g., Functional, Non-Functional).
-
-- `quality_category` - Non-functional or quality-related category (e.g., Security, Performance).
-
-- `quality_category_confidence` - Confidence score for the predicted NFR category.
-
-- `actor` - The entity performing the action in the sentence.
-
-- `action` - The verb or action described in the sentence.
-
-- `direct_object` - The direct object associated with the action, if any.
-
-- `prepositional_objects` - List of objects connected via prepositions, if any.
-
-- `is_negative` - Boolean flag indicating whether the sentence expresses negation.
-
-## Machine Learning Models
-
-The project includes two trained Support Vector Machine (SVM) models for automated requirement classification:
-
-### 1. FR/NFR Binary Classifier
-
-**Purpose**: Classifies requirements as either Functional Requirements (FR) or Non-Functional Requirements (NFR).
-
-**Architecture**:
-- **Train/Test Split**: split data into 80% training and 20% testing
-- **Preprocess text**: Lowercase, remove punctuation, lemmatize
-- **Feature Extraction**: TF-IDF Vectorization with unigrams, bigrams and trigrams (max 15,000 features)
-- **Feature Selection**: Chi-Square feature selection (top 8,000 features)
-- **Classifier**: Linear SVM (with C tuned using GridSerach with StratifiedKFold(5)) with balanced class weights
-- **Evaluation**: classification report + confusion matrix + CV stability check
-- **Training Dataset**: `binary_classifier_dataset.csv`
-
-**Training Process**:
-- 80/20 train-test split with stratified sampling
-- 5-fold cross-validation for robust evaluation
-- F1-macro scoring for balanced performance assessment
-
-**Model Files**:
-- `fr_nfr_tfidf_vectorizer.pkl` - TF-IDF feature extractor
-- `fr_nfr_selector.pkl` - Chi-square feature selector
-- `fr_nfr_classifier.pkl` - Trained SVM classifier
-
-**Performance**: Evaluated using classification report and confusion matrix on held-out test set. Cross-validation F1-macro score provides reliable performance estimate across different data splits. Achieved 90% accuracy and F1-score on the test split. Achieveing 96% accuracy and f1-score on new unseen test dataset.
-
-### 2. NFR Category Classifier
-
-**Purpose**: Classifies Non-Functional Requirements into specific quality categories (e.g., Security, Performance, Usability,...).
-
-**Architecture**:
-- **Preprocess text**: Lowercase, remove punctuation, lemmatize
-- **Feature Extraction**: TF-IDF Vectorization with unigrams, bigrams, and trigrams (max 15,000 features)
-- **Feature Selection**: Chi-Square feature selection (top 2,000 features)
-- **Classifier**: Linear SVM (with C tuned using GridSerach with StratifiedKFold(10) ) with balanced class weights
-- **Cross-val predictions**: simulates a train/test split — 10 times. -> there is no need and it's better than making 1 train/test split
-- **Evaluation**: classification report + confusion matrix + CV stability check
-- **Training Dataset**: `NFR_categories_dataset.csv`
-
-**Training Process**:
-- 10-fold stratified cross-validation on full dataset
-- Cross-validation predictions for comprehensive evaluation
-- Final model trained on entire dataset for production use
-
-**Model Files**:
-- `nfr_vectorizer.pkl` - TF-IDF feature extractor
-- `nfr_selector.pkl` - Chi-square feature selector
-- `nfr_category_classifier.pkl` - Trained SVM classifier
-
-**Performance**: Evaluated using 10-fold cross-validation with classification report showing per-class precision, recall, and F1-scores. Confusion matrix reveals model performance across all NFR categories.
-
-### Model Evaluation
-
-Both models can be evaluated on test datasets:
-- **FR/NFR Classifier**: Run `ML/evaluation/evaluate_fr_nfr.py` with test data
-- **NFR Classifier**: Run `ML/evaluation/evaluate_nfr.py` with test data
-
-Evaluation outputs include:
-- Classification report (precision, recall, F1-score per class)
-- Confusion matrix (prediction vs. actual labels)
-- Predictions with confidence scores saved to CSV
-
-## ML Inference Pipeline
-
-The `inference.py` module provides a pure machine learning approach to requirement extraction from conversational transcripts.
-
-### Pipeline Steps
-
-1. **Preprocessing**: Transcript is processed through the `RequirementPreprocessingPipeline` to generate clean, atomic sentence objects
-2. **FR/NFR Classification**: Each sentence is classified as Functional or Non-Functional with a confidence score
-3. **NFR Category Prediction**: If classified as NFR, the sentence is further categorized into specific quality attributes
-4. **Confidence Scoring**: 
-   - FR/NFR confidence uses sigmoid transformation of SVM decision scores
-   - NFR category confidence uses softmax over multiclass decision scores
-
-### Usage
-
-```python
-from app.nlp.inference import infer_transcript_nfr_pipeline
-
-transcript = "User should be able to login securely. The system must respond within 2 seconds."
-results = infer_transcript_nfr_pipeline(transcript)
-```
-
-### Output Format
-
-Each result contains:
-- `sentence_id` - Unique identifier
-- `speaker` - Speaker name from transcript
-- `cleaned_sentence` - Preprocessed sentence text
-- `requirement_type` - FR or NFR
-- `requirement_confidence` - Confidence score (0-1)
-- `nfr_category` - Specific category if NFR (e.g., "Security", "Performance")
-- `nfr_category_confidence` - Category prediction confidence
-
-## Hybrid Inference Engine
-
-The `hybrid_engine.py` combines the strengths of both rule-based and machine learning approaches to achieve more robust requirement extraction.
-
-### Hybrid Strategy
-
-**Confidence-Based Selection**: For each sentence, both the rule-based engine and ML models make predictions. The final prediction is selected based on which approach has higher confidence.
-
-**Process Flow**:
-
-1. **Preprocessing**: Transcript passes through the `RequirementPreprocessingPipeline`
-2. **Parallel Prediction**:
-   - **ML Path**: FR/NFR classification → NFR category prediction (if applicable)
-   - **Rule Path**: Rule-based scoring → Type determination → NFR category extraction
-3. **Confidence Comparison**: Compare ML confidence vs. rule engine confidence
-4. **Selection**: Choose the prediction with higher confidence as the final result
-5. **Comprehensive Output**: Return both predictions for transparency and analysis
-
-### Why Hybrid?
-
-- **ML Strengths**: Generalizes well to unseen patterns, learns from labeled data
-- **Rule Strengths**: Highly precise on explicit patterns (modals, keywords, domain terms)
-- **Combined Power**: Achieves better coverage and accuracy by leveraging both approaches
-
-### Usage
-
-```python
-from app.nlp.hybrid_engine import hybrid_inference
-
-transcript = "The application must encrypt all user data. Users want a simple interface."
-results = hybrid_inference(transcript)
-```
-
-### Output Format
-
-Each result includes:
-- Standard fields: `sentence_id`, `speaker`, `cleaned_sentence`
-- **Final prediction**: `requirement_type`, `requirement_confidence`, `nfr_category`
-- **ML prediction**: `ml_prediction_type`, `ml_confidence`
-- **Rule prediction**: `rule_prediction_type`, `rule_confidence`
-
-This transparency allows analysis of when each approach performs better and facilitates continuous improvement.
-
-## Database Storage
-
-The system uses **PostgreSQL** as its primary database to persist extracted requirements and project metadata.
-
-### Prerequisites
-
-- **PostgreSQL** must be installed on your machine.
-  Download the installer here: [https://www.postgresql.org/download/](https://www.postgresql.org/download/)
-- During installation, set the following credentials:
-  - **Username**: `postgres` by default
-  - **Password**: `0000`
-  - **Port**: `5432`
-
-### Database Setup
-
-1. **After installing PostgreSQL, create the database:**
-
-   Right-click on the `Databases` section in pgAdmin and select `Create > Database...`. Name the database `talk2system` and save.
-
-Enter password `0000` when prompted.
-
-
-2. **The connection URL used by the app is:**
-```
-   postgresql://postgres:0000@localhost:5432/talk2system
-```
-   This is configured in `app/db/session.py`.
-
-3. **Tables are created automatically** when the FastAPI app starts — no manual migration needed. The app calls:
-```python
-   Base.metadata.create_all(bind=engine)
-```
-
-
-### Database Schema
-
-The system uses two tables:
-
-**`projects`** — Stores project metadata:
-| Column | Type | Description |
+| Method | Path | Description |
 |--------|------|-------------|
-| `id` | Integer (PK) | Auto-incremented project ID |
-| `name` | String | Project name |
+| GET | `/api/admin/pending-users` | List users pending approval |
+| GET | `/api/admin/all-users` | List all system users |
+| PATCH | `/api/admin/users/{user_id}/approve` | Approve user |
+| PATCH | `/api/admin/users/{user_id}/suspend` | Suspend user |
+| PATCH | `/api/admin/users/{user_id}/terminate` | Terminate user |
+| PATCH | `/api/admin/users/{user_id}/archive` | Archive user |
 
-**`requirements`** — Stores extracted requirements per project:
-| Column | Type | Description |
+### Projects — `/api/projects`
+
+| Method | Path | Description |
 |--------|------|-------------|
-| `id` | Integer (PK) | Auto-incremented requirement ID |
-| `project_id` | Integer (FK) | References `projects.id` |
-| `requirements_json` | JSON | Full structured extraction output |
-| `created_at` | DateTime | Timestamp of extraction |
-| `approval_status` | String | Approval status (pending, approved, rejected) |
-| `version` | String | Requirement version |
+| POST | `/api/projects/createproject` | Create project |
+| GET | `/api/projects/getprojects` | List all projects |
+| GET | `/api/projects/my-projects` | List user's projects |
+| GET | `/api/projects/getproject/{project_id}` | Get project details |
+| DELETE | `/api/projects/deleteproject/{project_id}` | Delete project |
+| PATCH | `/api/projects/{project_id}/complete` | Mark project complete |
+| POST | `/api/projects/join` | Request to join project |
+| GET | `/api/projects/my-requests` | Get user's join requests |
+| GET | `/api/projects/pending-requests` | Get pending requests (PM only) |
+| PATCH | `/api/projects/invitations/{id}/accept` | Accept join request |
+| PATCH | `/api/projects/invitations/{id}/reject` | Reject join request |
+| GET | `/api/projects/{project_id}/members` | List members with roles |
+| GET | `/api/projects/{project_id}/my-role` | Get current user's role |
+| POST | `/api/projects/{project_id}/participants` | Add participant directly (PM/admin) |
+| DELETE | `/api/projects/{project_id}/participants/{user_id}` | Remove participant |
+| GET | `/api/projects/{project_id}/audit-logs` | Get last 100 audit entries |
 
+### Sessions — `/api/sessions`
 
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/sessions/project/{project_id}` | Create session |
+| GET | `/api/sessions/project/{project_id}` | List sessions in project |
+| GET | `/api/sessions/{session_id}` | Get session details |
+| GET | `/api/sessions/{session_id}/members` | List session members |
+| DELETE | `/api/sessions/{session_id}` | Delete session |
+| PUT | `/api/sessions/{session_id}/status` | Update session status |
+| PATCH | `/api/sessions/{session_id}/complete` | Mark session complete |
 
-### Stored JSON Structure
+### Transcription
 
-Each row in the `requirements` table stores a `requirements_json` field with the following structure:
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/projects/{project_id}/transcribe` | Upload audio → create session → transcribe (AssemblyAI with speaker diarization) |
+
+### Translation — `/api`
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/sessions/{session_id}/translate` | Translate transcript to English (Ollama, cached) |
+| GET | `/api/sessions/{session_id}/translation` | Get cached translation |
+
+### Summarization — `/api`
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/summarize/{session_id}` | Generate transcript summary |
+| GET | `/api/summary/{session_id}` | Get existing summary |
+
+### Requirements Extraction — `/api`
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/projects/{project_id}/session/{session_id}/extract-requirements` | Sync extraction (engine: `hybrid`/`llm`/`gemini`) |
+| POST | `/projects/{project_id}/session/{session_id}/extract-requirements-async` | Async extraction → returns `task_id` |
+| GET | `/sessions/extraction-tasks/{task_id}/status` | Poll async task status |
+| GET | `/sessions/{session_id}/extraction-tasks/latest` | Get latest completed task |
+| GET | `/sessions/requirements/comparison` | Compare multiple extraction runs |
+| POST | `/projects/{project_id}/session/{session_id}/choose-requirements` | Save preferred requirements |
+| GET | `/projects/{project_id}/requirements` | Latest project requirements |
+| GET | `/projects/{project_id}/requirements/versions` | All requirement versions |
+| GET | `/projects/requirements/{requirement_id}` | Get specific requirement |
+| PUT | `/projects/requirements/{requirement_id}` | Edit requirement (auto-increments version) |
+| PATCH | `/projects/requirements/{requirement_id}/approve` | Approve requirement |
+| GET | `/projects/{project_id}/session/{session_id}/requirements` | Latest session requirements |
+| GET | `/projects/{project_id}/session/{session_id}/requirements/versions` | All session requirement versions |
+| GET | `/sessions/requirements/{requirement_id}` | Get session requirement |
+| PUT | `/sessions/requirements/{requirement_id}` | Edit session requirement |
+| PATCH | `/sessions/requirements/{requirement_id}/approve` | Approve session requirement |
+
+### Approval Workflows
+
+**Session-level features** (transcript / requirements / uml / srs):
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/sessions/{session_id}/features/approval-status` | Get all feature approval states |
+| POST | `/api/sessions/{session_id}/features/{feature}/approve` | Approve a feature |
+
+**Project-level features:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/projects/{project_id}/features/approval-status` | Get all feature approval states |
+| GET | `/api/projects/{project_id}/features/{feature}/approval-status/{version_id}` | Get version-specific approval |
+| POST | `/api/projects/{project_id}/features/{feature}/approve` | Approve a feature |
+
+### Document Generation — `/api`
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/projects/{project_id}/sessions/{session_id}/generate-uml` | Generate UML diagrams (async) |
+| POST | `/projects/{project_id}/generate-srs` | Generate SRS document (async) |
+
+### Notifications — `/api/notifications`
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/notifications` | Get notifications (`?unread_only=true`) |
+| GET | `/api/notifications/unread-count` | Get unread count |
+| PATCH | `/api/notifications/{id}/read` | Mark one as read |
+| PATCH | `/api/notifications/read-all` | Mark all as read |
+
+### Dashboard — `/api/dashboard`
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/dashboard/user-stats` | Personal stats (projects, sessions, artifacts) |
+| GET | `/api/dashboard/admin-stats` | System-wide stats |
+| GET | `/api/dashboard/activity-feed` | Filtered system activity |
+| GET | `/api/dashboard/user-activity-feed` | Filtered user activity |
+
+---
+
+## Database Schema
+
+PostgreSQL — tables are created automatically on startup via `Base.metadata.create_all()`.
+
+| Model | Key Fields |
+|-------|-----------|
+| **User** | `id`, `email`, `hashed_password`, `full_name`, `role` (user/admin), `status` (pending/active/suspended/terminated/archived) |
+| **Project** | `id`, `name`, `description`, `domain`, `project_status` (in_progress/completed) |
+| **ProjectMembership** | `project_id`, `user_id`, `role` (project_manager/participant), `joined_at`, `left_at` |
+| **Invitation** | `project_id`, `invitee_user_id`, `invited_by_user_id`, `status` (pending/accepted/rejected) |
+| **Session** | `id`, `title`, `project_id`, `status`, `audio_file_path`, `transcript_text`, `detected_language`, `translated_transcript_text` |
+| **TranscriptSegment** | `session_id`, `speaker`, `start_time`, `end_time`, `text`, `translated_text`, `approval_status` |
+| **RequirementRun** | `project_id`, `session_id`, `run_type` (hybrid/llm/gemini), `grouped_json` — records every extraction job |
+| **SessionRequirement** | `session_id`, `project_id`, `requirements_json`, `version`, `approval_status`, `src_run_id` |
+| **ProjectRequirement** | `project_id`, `aggregated_req_json`, `version`, `approval_status` — merged from all sessions |
+| **Artifact** | `project_id`, `session_id`, `artifact_type_id`, `file_path`, `version`, `approval_status` |
+| **Approval** | `session_id`, `user_id`, `feature` (transcript/requirements/uml/srs), `version_id` |
+| **ProjectApproval** | `project_id`, `user_id`, `feature`, `version_id` |
+| **BackgroundTask** | `task_type` (extract_requirements/generate_uml/generate_srs), `status` (pending/in_progress/done/failed), `task_input`, `task_output`, `error_message` |
+| **Notification** | `user_id`, `notification_type`, `title`, `message`, `actor_name`, `project_id`, `session_id`, `is_read` |
+| **AuditLog** | `user_id`, `project_id`, `action`, `entity`, `entity_id`, `details` (JSON diff/metadata) |
+
+### Requirements JSON Structure
+
+The `requirements_json` field stored in `SessionRequirement` and `ProjectRequirement`:
+
 ```json
 {
-  "total_requirements": 2,
-  "raw_requirements": [
+  "functional_requirements": [
+    { "text": "The system shall allow users to log in.", "actor": "system" }
+  ],
+  "nonfunctional_requirements": [
     {
-      "sentence_id": "sent_a1b2c3",
-      "speaker": "Speaker1",
-      "cleaned_sentence": "The system must encrypt all user data.",
-      "requirement_type": "NFR",
-      "nfr_category": "security",
-      "structure":{
-                "actor": "system",
-                "action": "encrypt",
-                "object": "user data",
-                "is_negative": false
-               },
-      "confidence":{
-         "final": 0.45, 
-         "ml_prediction_type": "NFR", 
-         "ml_confidence": 0.637, 
-         "ml_nfr_predidction": "US", 
-         "ml_nfr_confidence": 0.45, 
-         "rule_prediction_type": "NFR", 
-         "rule_confidence": 0.75, 
-         "rule_nfr_prediction": "security", 
-         "rule_nfr_confidence": 0.45}
+      "text": "The system must respond within 2 seconds.",
+      "category": "Performance",
+      "actor": "system"
     }
   ],
-  "grouped_requirements": {
-      "actors": ["system"], 
-      "functional_requirements": [
-         {"text": "the system shall allow users to login projects .", "actor": "system"}, 
-         {"text": "the system shall allow users to manage projects .", "actor": "system"}], 
-      "nonfunctional_requirements": []
-   }
+  "actors": ["system", "user", "admin"]
 }
-
 ```
+
+---
+
+## NLP & Extraction Pipelines
+
+### Preprocessing Pipeline
+
+Transforms raw conversation transcripts into clean, atomic sentence objects:
+
+1. **Text Normalization** — Standardize spacing, quotes, punctuation
+2. **Noise Removal** — Strip timestamps, `[laughter]`, filler words (`um`, `uh`, `basically`)
+3. **Coreference Resolution** — Replace pronouns with referenced entities (fastcoref)
+4. **Sentence Segmentation & Conjunction Splitting** — Break compound sentences into atomic statements
+5. **Tokenization & Lemmatization** — spaCy tokenization, base-form reduction
+6. **Negation Detection** — Flag negated sentences
+7. **Domain Term Normalization** — Standardize synonyms
+8. **Deduplication** — Remove semantically similar sentences (SentenceTransformers)
+
+### Rule-Based Engine
+
+Scores each sentence across weighted linguistic features:
+
+- **Modal verb detection** — `must`/`shall` (strong), `should`/`may` (medium)
+- **Functional verb scoring** — 40+ action verbs (create, delete, authenticate, notify…)
+- **NFR keyword categories** — Performance, Security, Usability, Availability, Scalability, Fault Tolerance, Legality, Maintainability, Portability, and more
+- **Time pattern detection** — Identifies SLA-style patterns ("within N seconds")
+
+### ML Models (SVM)
+
+**FR/NFR Binary Classifier**
+- TF-IDF (unigrams/bigrams/trigrams, 15k features) → Chi-Square selection (8k features) → Linear SVM
+- 80/20 split, 5-fold cross-validation
+- **90% accuracy** on held-out test set; **96% accuracy** on unseen test data
+
+**NFR Category Classifier**
+- TF-IDF (15k features) → Chi-Square selection (2k features) → Linear SVM
+- 10-fold stratified cross-validation, final model trained on full dataset
+- Categories: Security, Performance, Usability, Availability, Scalability, Fault Tolerance, Legality, Maintainability, Portability, Look & Feel, Operability
+
+### Hybrid Engine
+
+Runs both pipelines in parallel and selects the higher-confidence prediction per sentence. Returns the final result alongside individual ML and rule-based predictions for transparency.
+
+---
 
 ## Installation
 
 ### Prerequisites
+
 - Python 3.8+
-- Virtual environment (recommended)
+- PostgreSQL installed and running
 
 ### Setup
 
@@ -409,187 +380,87 @@ Each row in the `requirements` table stores a `requirements_json` field with the
    pip install -r requirements.txt
    ```
 
-4. **Download required spaCy model:**
+4. **Download the spaCy model:**
    ```powershell
    python -m spacy download en_core_web_trf
    ```
 
-## Running the Preprocessing Test
+5. **Create the database** — In pgAdmin, create a database named `talk2system` (password: `0000`).
 
-### Execute the test script:
+6. **Configure environment variables** — Create `app/.env`:
+   ```env
+   DATABASE_URL=postgresql://postgres:0000@localhost:5432/talk2system
+   SECRET_KEY=your_jwt_secret_key
+   ASSEMBLYAI_API_KEY=your_assemblyai_key
+   GOOGLE_CLIENT_ID=your_google_client_id
+   GOOGLE_CLIENT_SECRET=your_google_client_secret
+   GITHUB_CLIENT_ID=your_github_client_id
+   GITHUB_CLIENT_SECRET=your_github_client_secret
+   FRONTEND_URL=http://localhost:5173
+   ```
 
-```powershell
-python tests/test_preprocessing.py
-```
-
-### What it does:
-- Reads the sample transcript from `data/sample_transcript.txt`
-- Processes it through the complete preprocessing pipeline
-- Saves the final structured output to `data/preprocessing_output.json`
-
-### Expected Output:
-The script will save a JSON file containing the processed sentence objects.
-
-## Running the Rule Engine Test
-
-### Execute the test script:
-#### note: ensure you have run the python tests/test_preprocessing.py first to generate the required input for the rule engine test.
+### Start the Server
 
 ```powershell
-python tests/test_rule_engine.py
+uvicorn app.main:app --reload
 ```
 
-### What it does:
-- Reads the preprocessed output from `data/preprocessing_output.json`
-- Applies the rule-based extraction logic
-- Saves the final structured output to `data/rule_engine_output.json`
+- API: `http://127.0.0.1:8000`
+- Interactive docs: `http://127.0.0.1:8000/docs`
 
-### Expected Output:
-The script will save a JSON file containing the extracted requirements.
+Tables are created automatically on first startup.
 
-## Running the ML Inference Test
+---
 
-### Execute the inference script:
+## ML Model Training & Evaluation
+
+### Train
 
 ```powershell
-python app/nlp/inference.py
-```
-
-### What it does:
-- Reads the sample transcript from `data/sample_transcript.txt`
-- Processes it through the preprocessing pipeline
-- Applies ML models to classify each sentence as FR or NFR
-- Predicts NFR categories for non-functional requirements
-- Saves results to `data/test_transcript_ml_inference.csv`
-
-### Expected Output:
-A CSV file with columns: `sentence_id`, `speaker`, `cleaned_sentence`, `requirement_type`, `requirement_confidence`, `nfr_category`, `nfr_category_confidence`
-
-## Running the Hybrid Inference Test
-
-### Execute the hybrid engine script:
-
-```powershell
-python app/nlp/hybrid_engine.py
-```
-
-### What it does:
-- Reads the sample transcript from `data/sample_transcript.txt`
-- Processes it through the preprocessing pipeline
-- Runs both ML models and rule-based engine in parallel
-- Compares confidence scores and selects the best prediction
-- Saves comprehensive results to `data/hybrid_inference_results.csv`
-
-### Expected Output:
-A CSV file containing both the final predictions and individual ML/rule-based predictions for comparison and analysis.
-
-## Running the API
-1. **Start the FastAPI server:**
-```powershell
-   uvicorn app.main:app --reload
-```
-
-2. **The server will be available at:**
-```
-   http://127.0.0.1:8000
-```
-
-3. **Access the interactive Swagger UI to test all endpoints in the browser:**
-```
-   http://127.0.0.1:8000/docs
-```
-
-
-### Expected Output:
-You can test the API endpoints for project creation and requirement extraction using the Swagger UI. The responses will include structured JSON outputs with extracted requirements.
-
-
-## Training the ML Models
-
-### Train the FR/NFR Binary Classifier:
-
-```powershell
+# FR/NFR binary classifier
 python ML/training/train_fr_nfr_svm.py
-```
 
-**Outputs**:
-- Classification report on test set
-- Confusion matrix
-- 5-fold cross-validation F1-macro score
-- Trained models saved to `ML/models/`
-
-### Train the NFR Category Classifier:
-
-```powershell
+# NFR category classifier
 python ML/training/train_nfr_svm.py
 ```
 
-**Outputs**:
-- Classification report from 10-fold cross-validation
-- Confusion matrix
-- Trained models saved to `ML/models/`
-
-## Evaluating the ML Models
-
-### Evaluate FR/NFR Classifier on Test Data:
+### Evaluate
 
 ```powershell
 python ML/evaluation/evaluate_fr_nfr.py
-```
-
-**Outputs**:
-- Classification report
-- Confusion matrix
-- Predictions with confidence scores saved to `ML/evaluation/test_predictions.csv`
-
-### Evaluate NFR Category Classifier on Test Data:
-
-```powershell
 python ML/evaluation/evaluate_nfr.py
 ```
 
-**Outputs**:
-- Classification report
-- Confusion matrix  
-- Predictions with confidence scores saved to `ML/evaluation/test_predictions_nfr.csv`
+Outputs: classification report, confusion matrix, per-row predictions CSV in `ML/evaluation/`.
 
-## Dependencies
+### Test the NLP Pipelines Directly
 
-Key libraries used:
+```powershell
+# Preprocessing pipeline → data/preprocessing_output.json
+python tests/test_preprocessing.py
 
-**NLP & Language Processing**:
-- **spaCy** - Advanced NLP processing and linguistic analysis
-- **fastcoref** - Neural coreference resolution
-- **sentence-transformers** - Semantic similarity and deduplication
-- **transformers** - HuggingFace tokenizers
-- **nltk** - Natural language toolkit for tokenization and lemmatization
+# Rule engine (requires preprocessing output) → data/rule_engine_output.json
+python tests/test_rule_engine.py
 
-**Machine Learning**:
-- **scikit-learn** - SVM classifiers, TF-IDF vectorization, feature selection, evaluation metrics
-- **torch** - PyTorch deep learning framework (used by transformer models)
-- **joblib** - Model serialization and persistence
+# ML inference → data/test_transcript_ml_inference.csv
+python app/nlp/inference.py
 
-**Data Processing**:
-- **pandas** - Data manipulation and CSV handling
-- **numpy** - Numerical computing
-- **scipy** - Scientific computing (softmax for confidence scores)
+# Hybrid engine → data/hybrid_inference_results.csv
+python app/nlp/hybrid_engine.py
+```
 
-**Utilities**:
-- **matplotlib & seaborn** - Data visualization
-- **datasets** - HuggingFace datasets library
+---
 
-See `requirements.txt` for complete dependency list.
+## Key Dependencies
 
-## Notes
+| Category | Libraries |
+|----------|-----------|
+| **Web Framework** | FastAPI 0.115, Uvicorn 0.22, Pydantic 2.12 |
+| **Database** | SQLAlchemy 2.0, psycopg2-binary |
+| **Auth** | python-jose (JWT), bcrypt 4.3 |
+| **NLP / ML** | spaCy 3.8, sentence-transformers 3.4, scikit-learn 1.8, fastcoref, nltk |
+| **LLM** | LangChain 1.2, langchain-ollama, google-genai (Gemini) |
+| **Audio** | AssemblyAI 0.59, librosa 0.11, pydub |
+| **Utilities** | python-dotenv, pandas, numpy, joblib, requests |
 
-- The pipeline is optimized for requirement extraction from conversational speech
-- Processing time depends on transcript length and model complexity
-- First run may take longer due to model loading and downloading spaCy models
-- **Three extraction approaches available**:
-  - **Rule-based** (`rule_engine.py`): Fast, deterministic, pattern-based extraction
-  - **ML-based** (`inference.py`): Learned patterns from labeled data, better generalization
-  - **Hybrid** (`hybrid_engine.py`): Best of both worlds, confidence-based selection
-- ML models are pre-trained and stored in `ML/models/` directory
-- Model retraining can be done using scripts in `ML/training/`
-- All evaluation metrics and predictions are saved for analysis and improvement
-- The hybrid approach provides transparency by showing both ML and rule-based predictions
+See `requirements.txt` for the full dependency list.
