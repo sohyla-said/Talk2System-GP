@@ -48,6 +48,9 @@ class RequirementService:
         if engine in ['hybrid', 'both']:
         # Step 1: Run NLP pipeline
             hybrid_results = hybrid_inference(transcript)
+            if hybrid_results == [] and engine == "hybrid":
+                raise ValueError("Hybrid engine produced no results")
+
 
         if engine in ['llm', 'both']:
             try:
@@ -59,7 +62,9 @@ class RequirementService:
                 # silently continue in both-mode — raise so the error is
                 # visible and handled by the caller.
                 logger.exception("LLM extraction failed")
-                raise ValueError(f"LLM extraction failed: {exc}")
+                if engine == "llm":
+                 raise ValueError(f"LLM extraction failed: {exc}")
+                
             
         if engine == 'gemini':
             try:
@@ -70,9 +75,9 @@ class RequirementService:
                 raise ValueError(f"Gemini extraction failed: {exc}")
 
         # Step 2: Group/Transform resuts
-        grouped_hybrid = group_requirements(hybrid_results) if hybrid_results else None
-        grouped_llm = group_requirements(llm_results) if llm_results else None
-        grouped_gemini = group_requirements(gemini_results) if gemini_results else None
+        grouped_hybrid = group_requirements(hybrid_results) if hybrid_results is not None else None
+        grouped_llm = group_requirements(llm_results) if llm_results is not None else None
+        grouped_gemini = group_requirements(gemini_results) if gemini_results is not None else None
 
         # Keep grouped data deterministic and easier to review in UI/DB.
         grouped_hybrid = sort_grouped_requirements(grouped_hybrid) if grouped_hybrid else None

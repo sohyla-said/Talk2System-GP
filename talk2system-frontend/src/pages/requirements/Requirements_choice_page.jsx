@@ -39,8 +39,14 @@ export default function RequirementsChoicePage() {
 	const llmData = comparisonData?.llm_data ?? comparisonData?.llmData ?? null;
 	const llmOnlyData = comparisonData?.llm_only_data ?? comparisonData?.llmOnlyData ?? null;
 
-	const hasLLMResults = !!llmData;
-	const hasHybridResults = !!hybridData;
+	const hasLLMResults = !!llmData && (
+		(llmData.functional_requirements?.length > 0) ||
+		(llmData.nonfunctional_requirements?.length > 0)
+	);
+	const hasHybridResults = !!hybridData && (
+		(hybridData.functional_requirements?.length > 0) ||
+		(hybridData.nonfunctional_requirements?.length > 0)
+	);
 
 	const normalizedLlm = useMemo(() => normalizeGrouped(llmData), [llmData]);
 	const normalizedHybrid = useMemo(() => normalizeGrouped(hybridData), [hybridData]);
@@ -92,7 +98,7 @@ export default function RequirementsChoicePage() {
 	useEffect(() => {
 		if (!hybridRunId && !llmRunId) {
 			setLoadingComparison(false);
-			return;
+			// return;
 		}
 		const load = async () => {
 			try {
@@ -470,7 +476,7 @@ export default function RequirementsChoicePage() {
 								<span className="material-symbols-outlined">info</span>
 							</div>
 							<h3 className="text-slate-900 dark:text-white text-xl font-bold mb-2">No requirements extracted yet</h3>
-							<p className="text-slate-500 dark:text-slate-400 mb-4">
+							<p className="text-red-500 mb-4">
 								Hybrid requirement extraction failed.
 							</p>
 							<button

@@ -99,14 +99,20 @@ def predict_nfr_category(sentence: str):
 def hybrid_inference(transcript: str) -> List[dict]:
     # Step 1: Preprocess transcript
     # preprocessed_sentences = preprocessor.process(transcript)
+    preprocessed_sentences = []
     try:
         preprocessed_sentences = extract_sentences(transcript)
     except Exception as exc:
         logger.exception("Hybrid preprocessing failed while extracting sentences with Ollama")
-        raise ValueError(f"Hybrid preprocessing LLM extraction failed: {exc}") from exc
+      
+      # raise ValueError(f"Hybrid preprocessing LLM extraction failed: {exc}") from exc
+
+   # if not preprocessed_sentences:
+     #   raise ValueError("Hybrid preprocessing produced no sentences")
 
     if not preprocessed_sentences:
-        raise ValueError("Hybrid preprocessing produced no sentences")
+        logger.warning("Hybrid engine: preprocessing returned 0 sentences, returning empty results")
+        return []
 
     results = []
     # Step 2: for each sentence, predict its type using both ML models and Rule-based engine
