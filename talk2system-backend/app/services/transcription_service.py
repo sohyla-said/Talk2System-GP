@@ -88,6 +88,8 @@ def transcribe_audio(file_path: str, speakers: list[str] | None = None) -> tuple
     final_diarization: list[dict] = []
 
     for idx, chunk in enumerate(chunk_files):
+        chunk_offset_ms = idx * chunk_length_ms
+
         transcript = transcriber.transcribe(chunk)
 
         while transcript.status not in (
@@ -102,8 +104,8 @@ def transcribe_audio(file_path: str, speakers: list[str] | None = None) -> tuple
         for u in transcript.utterances:
             final_diarization.append({
                 "speaker": u.speaker,
-                "start":   u.start,
-                "end":     u.end,
+                "start":   u.start + chunk_offset_ms,
+                "end":     u.end + chunk_offset_ms,
                 "text":    u.text,
                 "chunk":   idx,
             })
@@ -155,10 +157,13 @@ def save_transcription(db: Session, session_id: int, diarization: list[dict]) ->
 # ---------------------------------------------------------------------------
 
 def _ms_to_mmss(ms: int) -> str:
-    """Convert milliseconds (AssemblyAI format) to mm:ss string."""
+    """Convert milliseconds (AssemblyAI format) to hh:mm:ss or mm:ss string."""
     total_seconds = int(ms) // 1000
-    minutes = total_seconds // 60
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
     seconds = total_seconds % 60
+    if hours:
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
     return f"{minutes:02d}:{seconds:02d}"
 
 
