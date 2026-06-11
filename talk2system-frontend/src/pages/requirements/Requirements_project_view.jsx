@@ -224,6 +224,23 @@ export default function RequirementsProjectView() {
     requirements.actors.length > 0 ||
     requirements.features.length > 0;
 
+  const getSourceSessionTags = (item) => {
+    const titles = Array.isArray(item.src_session_titles) && item.src_session_titles.length > 0
+      ? item.src_session_titles
+      : (item.src_session_title ? [item.src_session_title] : []);
+
+    return titles.map((title) => ({ label: `Source session: ${title}`, color: "orange" }));
+  };
+
+  // Carries src_session_id(s)/title(s) through edits without rendering them in the UI,
+  // so they aren't lost when the requirement is rebuilt from tags on save.
+  const getSourceMeta = (item) => ({
+    src_session_id: item.src_session_id ?? null,
+    src_session_title: item.src_session_title ?? null,
+    src_session_ids: Array.isArray(item.src_session_ids) ? item.src_session_ids : null,
+    src_session_titles: Array.isArray(item.src_session_titles) ? item.src_session_titles : null
+  });
+
   const mapBackendData = (grouped) => {
     if (!grouped || typeof grouped !== "object") {
       setRequirements({
@@ -264,8 +281,9 @@ export default function RequirementsProjectView() {
       tags: [
         ...(fr.actor ? [{ label: `Actor: ${fr.actor}`, color: "blue" }] : []),
         ...(fr.feature ? [{ label: `Feature: ${fr.feature}`, color: "purple" }] : []),
-        ...(fr.src_session_title ? [{ label: `Source session: ${fr.src_session_title}`, color: "orange" }] : [])
-      ]
+        ...getSourceSessionTags(fr)
+      ],
+      _sourceMeta: getSourceMeta(fr)
     }));
 
     const nonFunctional = nonFunctionalList.map((nfr, index) => ({
@@ -273,8 +291,9 @@ export default function RequirementsProjectView() {
       description: nfr.text,
       tags: [
         ...(nfr.category ? [{ label: `Category: ${nfr.category}`, color: "green" }] : []),
-        ...(nfr.src_session_title ? [{ label: `Source session: ${nfr.src_session_title}`, color: "orange" }] : [])
-      ]
+        ...getSourceSessionTags(nfr)
+      ],
+      _sourceMeta: getSourceMeta(nfr)
     }));
 
     const actors = actorsList.map((actor, index) => ({
@@ -318,11 +337,13 @@ export default function RequirementsProjectView() {
       functional_requirements: mergedRequirements.functional.map((fr) => ({
         text: fr.description,
         actor: extractActor(fr.tags),
-        feature: extractFeature(fr.tags)
+        feature: extractFeature(fr.tags),
+        ...buildSourceSessionFields(fr),
       })),
       non_functional_requirements: mergedRequirements.nonFunctional.map((nfr) => ({
         text: nfr.description,
-        category: extractCategory(nfr.tags)
+        category: extractCategory(nfr.tags),
+        ...buildSourceSessionFields(nfr),
       })),
       actors: mergedRequirements.actors.map((a) => a.description),
       features: mergedRequirements.features.map((f) => f.description)
@@ -343,6 +364,38 @@ export default function RequirementsProjectView() {
     const tag = (tags || []).find(t => t.label.startsWith("Category:"));
     return tag ? tag.label.replace("Category: ", "") : null;
   };
+
+  const extractSourceSessions = (tags) => {
+    return (tags || [])
+      .filter(t => t.label.startsWith("Source session:"))
+      .map(t => t.label.replace("Source session: ", ""));
+  }
+
+  const buildSourceSessionFields = (item) => {
+    const meta = item._sourceMeta;
+    const hasMeta = meta && (
+      meta.src_session_id !== null ||
+      meta.src_session_ids ||
+      meta.src_session_title !== null ||
+      meta.src_session_titles
+    );
+
+    if (hasMeta) {
+      const fields = {};
+      if (meta.src_session_id !== null) fields.src_session_id = meta.src_session_id;
+      if (meta.src_session_ids) fields.src_session_ids = meta.src_session_ids;
+      if (meta.src_session_title !== null) fields.src_session_title = meta.src_session_title;
+      if (meta.src_session_titles) fields.src_session_titles = meta.src_session_titles;
+      return fields;
+    }
+
+    // Fallback for items without preserved source metadata (e.g. newly added by the user)
+    const titles = extractSourceSessions(item.tags);
+    if (titles.length > 1) {
+      return { src_session_title: titles[0], src_session_titles: titles };
+    }
+    return { src_session_title: titles[0] || null };
+  }
 
 
 const toggleSelectionMode = (sectionType) => {

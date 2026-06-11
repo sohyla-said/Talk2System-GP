@@ -326,8 +326,12 @@ class RequirementService:
         if not old_req:
             raise ValueError("Requirement not found")
         
+        last_project_req = db.query(ProjectRequirement)\
+            .filter(ProjectRequirement.project_id == old_req.project_id)\
+                .order_by(ProjectRequirement.version.desc()).first()
+        
         # increment version
-        old_version = old_req.version
+        old_version = last_project_req.version
         new_version = old_version + 1
 
         new_req = ProjectRequirement(
@@ -451,8 +455,11 @@ class RequirementService:
         if not old_req:
             raise ValueError("Requirement not found")
         
+        last_session_req = db.query(SessionRequirement)\
+            .filter(SessionRequirement.session_id == old_req.session_id)\
+                .order_by(SessionRequirement.version.desc()).first()
         # increment version
-        old_version = old_req.version
+        old_version = last_session_req.version
         new_version = old_version + 1
 
         new_req = SessionRequirement(

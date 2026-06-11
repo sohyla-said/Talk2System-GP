@@ -14,7 +14,7 @@ class ProjectRequirement(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    approval_status = Column(String, default='pending')
+    approval_status = Column(String, default='pending approval')
 
     version = Column(Integer, default=1)
 
