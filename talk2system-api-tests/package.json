@@ -1,0 +1,42 @@
+{
+  "name": "talk2system-api-tests",
+  "version": "1.0.0",
+  "description": "API Testing Framework for Talk2System using POJO Design Pattern",
+  "scripts": {
+    "test": "jest --runInBand --verbose",
+    "test:auth": "jest tests/auth --runInBand --verbose",
+    "test:projects": "jest tests/projects --runInBand --verbose",
+    "test:sessions": "jest tests/sessions --runInBand --verbose",
+    "test:admin": "jest tests/admin --runInBand --verbose",
+    "test:transcription": "jest tests/transcription --runInBand --verbose",
+    "test:requirements": "jest tests/requirements --runInBand --verbose",
+    "test:uml": "jest tests/artifacts/uml --runInBand --verbose",
+    "test:srs": "jest tests/artifacts/srs --runInBand --verbose",
+    "test:artifacts": "jest tests/artifacts --runInBand --verbose"
+  },
+  "jest": {
+  "testEnvironment": "node",
+  "testTimeout": 15000,
+  "reporters": [
+    "default",
+    [
+      "jest-html-reporter",
+      {
+        "pageTitle": "Talk2System API Test Report",
+        "outputPath": "reports/test-report.html",
+        "includeFailureMsg": true,
+        "includeConsoleLog": true,
+        "theme": "lightTheme",
+        "dateFormat": "yyyy-mm-dd HH:MM:ss",
+        "sort": "status"
+      }
+    ]
+  ]
+},
+  "devDependencies": {
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "jest": "^29.7.0",
+    "jest-html-reporter": "^4.4.0"
+  }
+}
