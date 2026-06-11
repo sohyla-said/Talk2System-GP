@@ -90,7 +90,7 @@ export default function RequirementsChoicePage() {
 	}, [sessionId]);
 
 	useEffect(() => {
-		if (!hybridRunId || !llmRunId) {
+		if (!hybridRunId && !llmRunId) {
 			setLoadingComparison(false);
 			return;
 		}
@@ -134,8 +134,12 @@ export default function RequirementsChoicePage() {
 
 
 	const fetchRequirementComparison = async () => {
+		const params = new URLSearchParams();
+		if (hybridRunId) params.set("hybrid_run_id", hybridRunId);
+		if (llmRunId) params.set("llm_run_id", llmRunId);
+
 		const res = await fetch(
-			`http://localhost:8000/api/sessions/requirements/comparison?hybrid_run_id=${hybridRunId}&llm_run_id=${llmRunId}`,
+			`http://localhost:8000/api/sessions/requirements/comparison?${params.toString()}`,
 			{
 				headers: { 
 					Authorization: `Bearer ${getToken()}`,
@@ -319,7 +323,7 @@ export default function RequirementsChoicePage() {
 			// so this correctly uses English text even for non-English sessions.
 			const resolvedTranscriptText = await fetchTranscriptText();
 			const response = await fetch(
-				`http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/extract-requirements`,
+				`http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/extract-requirements-async`,
 				{
 					method: "POST",
 					headers: {

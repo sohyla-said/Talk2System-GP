@@ -214,14 +214,16 @@ class RequirementService:
     # Fetches grouped data for both runs and computes common/diff logic.
     # Called by Requirements_choice_page instead of relying on router state.
     @staticmethod
-    def get_requirements_for_comparison(db: Session, hybrid_run_id: int, llm_run_id: int):
-        hybrid_run = RequirementService.get_req_run_by_id(db, hybrid_run_id)
-        
-        grouped_hybrid = hybrid_run.grouped_json
-        
-        llm_run = RequirementService.get_req_run_by_id(db, llm_run_id)
-        
-        grouped_llm = llm_run.grouped_json
+    def get_requirements_for_comparison(db: Session, hybrid_run_id: int = None, llm_run_id: int = None):
+        grouped_hybrid = None
+        if hybrid_run_id is not None:
+            hybrid_run = RequirementService.get_req_run_by_id(db, hybrid_run_id)
+            grouped_hybrid = hybrid_run.grouped_json
+
+        grouped_llm = None
+        if llm_run_id is not None:
+            llm_run = RequirementService.get_req_run_by_id(db, llm_run_id)
+            grouped_llm = llm_run.grouped_json
 
         common_reqs = None
         diff_hybrid = None

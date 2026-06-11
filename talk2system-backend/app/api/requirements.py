@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
@@ -394,11 +395,13 @@ def get_latest_extraction_task(
 # get requirements data for comparison and choice
 @router.get("/sessions/requirements/comparison")
 def get_requirements_for_choice(
-    hybrid_run_id: int,
-    llm_run_id: int,
+    hybrid_run_id: Optional[int] = None,
+    llm_run_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    if hybrid_run_id is None and llm_run_id is None:
+        raise HTTPException(status_code=400, detail="At least one of hybrid_run_id or llm_run_id is required")
     try:
         return RequirementService.get_requirements_for_comparison(db, hybrid_run_id, llm_run_id)
     except ValueError as e:
