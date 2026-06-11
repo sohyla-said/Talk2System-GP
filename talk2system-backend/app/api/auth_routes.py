@@ -5,7 +5,7 @@ from app.db.session import get_db
 from app.dependencies.auth import get_current_user
 from app.models.user import User
 from app.services import auth_service
-
+from fastapi.security import OAuth2PasswordRequestForm
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
 
@@ -57,9 +57,9 @@ def signup(data: SignupRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=AuthResponse)
-def login(data: LoginRequest, db: Session = Depends(get_db)):
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     try:
-        return auth_service.login_user(db, data.email, data.password)
+        return auth_service.login_user(db, form_data.username, form_data.password)
     except ValueError as e:
         status_code = 403 if any(w in str(e) for w in ("pending", "suspended", "terminated", "archived")) else 401
         raise HTTPException(status_code=status_code, detail=str(e))
