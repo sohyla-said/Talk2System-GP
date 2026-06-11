@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException ,Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from app.db.session import get_db
@@ -57,9 +57,17 @@ def signup(data: SignupRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=AuthResponse)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+async def login(request: Request, db: Session = Depends(get_db)): 
     try:
-        return auth_service.login_user(db, form_data.username, form_data.password)
+        form_data = await request.form()
+        if form_data:
+            email = form_data.get("username")
+            password = form_data.get("password")
+        else:
+            body = await request.json()
+            email = body.get("email")
+            password = body.get("password")
+        return auth_service.login_user(db, email, password)
     except ValueError as e:
         status_code = 403 if any(w in str(e) for w in ("pending", "suspended", "terminated", "archived")) else 401
         raise HTTPException(status_code=status_code, detail=str(e))
