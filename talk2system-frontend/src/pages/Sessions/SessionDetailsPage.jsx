@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { getToken } from "../../api/authApi";
+import { getToken, getCurrentUser } from "../../api/authApi";
 
 const FEATURES = ["transcript", "requirements", "uml", "srs"];
 
@@ -163,6 +163,12 @@ export default function SessionDetailsPage() {
   const createdAt = session?.created_at;
   const resolvedProjectId = projectId || session?.project_id;
 
+  // "Mark as Completed" is only available to the project manager / session owner
+  const currentUser = getCurrentUser();
+  const myMembership = members.find((m) => String(m.user_id) === String(currentUser?.id));
+  const canCompleteSession =
+    myMembership?.role === "project_manager" || myMembership?.role === "owner";
+
   const avatarColors = [
     "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
     "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
@@ -230,7 +236,7 @@ export default function SessionDetailsPage() {
           </div>
 
           {/* Mark as Completed button — only shown when session is NOT already completed */}
-          {status !== "completed" && (
+          {status !== "completed" && canCompleteSession && (
             <button
               onClick={() => setShowCompleteModal(true)}
               className="flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-4 py-2.5 text-sm font-bold text-white transition-colors shadow-sm"
