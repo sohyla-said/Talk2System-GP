@@ -6,10 +6,46 @@ import { getToken } from "../../api/authApi";
 export default function CheckoutSummary() {
   const [summary, setSummary] = useState("");
   const [loading, setLoading] = useState(true);
-  const hasFetched = useRef(false);  
+  const [projectId, setProjectId] = useState(null);
+  const [projectName, setProjectName] = useState(null);
+  const [sessionTitle, setSessionTitle] = useState("");
+  const hasFetched = useRef(false);
 
   const navigate = useNavigate();
-  const { sessionId } = useParams(); // 👈 important
+  const { sessionId } = useParams();
+
+  // Fetch session details to populate breadcrumb
+  useEffect(() => {
+    const fetchSessionDetails = async () => {
+      try {
+        const res = await fetch(
+          `http://localhost:8000/api/sessions/${sessionId}/transcript`,
+          { headers: { Authorization: `Bearer ${getToken()}` } }
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        setSessionTitle(data.title || "");
+        if (data.project_id) {
+          setProjectId(data.project_id);
+          try {
+            const projRes = await fetch(
+              `http://127.0.0.1:8000/api/projects/getproject/${data.project_id}`,
+              { headers: { Authorization: `Bearer ${getToken()}` } }
+            );
+            if (projRes.ok) {
+              const projData = await projRes.json();
+              setProjectName(projData.name ?? null);
+            }
+          } catch (err) {
+            console.error("Failed to fetch project details:", err);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch session details:", err);
+      }
+    };
+    fetchSessionDetails();
+  }, [sessionId]);
 
   // 🔥 Fetch first if not found, then Generate Summary
   useEffect(() => {
@@ -63,16 +99,21 @@ export default function CheckoutSummary() {
       <div className="flex flex-col gap-6 text-center items-center mb-10">
         <div className="flex flex-wrap gap-2 text-sm w-full max-w-[1200px]">
             <button onClick={() => navigate("/projects")}
-                className="text-primary-accent dark:text-secondary-accent font-medium">
+                className="text-primary-accent dark:text-secondary-accent font-medium leading-normal">
                 Projects
             </button>
-            <span className="text-text-dark/50 dark:text-text-light/50">/</span>
-            <button onClick={() => navigate(`/projects/1`)}
-                className="text-primary-accent dark:text-secondary-accent font-medium">
-                Project
+            <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
+            <button onClick={() => navigate(`/projects/${projectId}`)}
+                className="text-primary-accent dark:text-secondary-accent font-medium leading-normal">
+                {projectName ?? `Project #${projectId}`}
             </button>
-            <span className="text-text-dark/50 dark:text-text-light/50">/</span>
-            <span className="text-text-dark dark:text-text-light font-medium">Summary</span>
+            <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
+            <button onClick={() => navigate(`/projects/${projectId}/sessions/${sessionId}/sessiondetails`)}
+                className="text-primary-accent dark:text-secondary-accent font-medium leading-normal">
+                {sessionTitle || "Session"}
+            </button>
+            <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
+            <span className="text-text-dark dark:text-text-light font-medium leading-normal">Summary</span>
         </div>
 
         <div className="flex flex-col gap-3 items-center">
