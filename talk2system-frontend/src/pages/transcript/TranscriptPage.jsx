@@ -831,7 +831,7 @@ export default function TranscriptPage() {
                 <button
                   onClick={() => handleGenerate("sum")}
                   disabled={sessionCompleted}
-                  className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-primary-accent/90"
+                  className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-primary-accent/90 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary-accent"
                 >
                   <span className="material-symbols-outlined text-xl">summarize</span>
                   Summarize Transcript
@@ -878,7 +878,7 @@ export default function TranscriptPage() {
                 ) : (
                   <button
                     onClick={() => handleGenerate("req")}
-                    disabled={isSubmittingReq || isTranslating || (shouldAutoTranslate && !translationData)}
+                    disabled={sessionCompleted || isSubmittingReq || isTranslating || (shouldAutoTranslate && !translationData)}
                     className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-primary-accent/90 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {isSubmittingReq || isCheckingReq ? (

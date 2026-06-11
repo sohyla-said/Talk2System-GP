@@ -711,10 +711,10 @@ const handleApprove = async () => {
             <div className="flex flex-col items-stretch sm:items-end gap-3 w-full sm:w-auto">
               <button
                 onClick={handleApprove}
-                className={`flex min-w-[220px] items-center justify-center gap-2 h-12 px-6 rounded-lg text-sm font-bold transition-all ${
+                className={`flex min-w-[220px] items-center justify-center gap-2 h-12 px-6 rounded-lg text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                   approved
                     ? 'bg-green-600 text-white cursor-default'
-                    : 'bg-primary text-white hover:bg-primary/90'
+                    : 'bg-primary text-white hover:bg-primary/90 disabled:hover:bg-primary'
                 }`}
                 disabled={approved || sessionCompleted || !(currentRequirementId ?? requirementId)}
               >
