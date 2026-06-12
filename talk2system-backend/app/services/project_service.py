@@ -250,6 +250,9 @@ class ProjectService:
         if not membership:
             raise ValueError("You are not a member of this project")
 
+        if membership.role != "project_manager":
+            raise ValueError("Only the project manager can complete this project")
+
         if project.project_status == "completed":
             raise ValueError("Project is already completed")
 

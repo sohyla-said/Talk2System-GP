@@ -98,11 +98,17 @@ def get_projects(
 def get_project(
     project_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     project = ProjectService.get_project(db, project_id)
     if not project:
         raise HTTPException(404, "Project not found")
+
+    if current_user.role != "admin":
+        membership = ProjectService.get_membership(db, project_id, current_user.id)
+        if not membership:
+            raise HTTPException(403, "You are not a member of this project")
+
     return project
 
 
@@ -588,6 +594,6 @@ def complete_project(
         msg = str(e)
         if "not found" in msg.lower():
             raise HTTPException(status_code=404, detail=msg)
-        if "not a member" in msg.lower():
+        if "not a member" in msg.lower() or "project manager" in msg.lower():
             raise HTTPException(status_code=403, detail=msg)
         raise HTTPException(status_code=400, detail=msg)

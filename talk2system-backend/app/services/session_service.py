@@ -113,7 +113,7 @@ class SessionService:
         if not session:
             raise ValueError("Session not found")
 
-        # Only session members can complete it
+        # Only the project manager / session owner can complete it
         membership = (
             db.query(SessionMembership)
             .filter_by(session_id=session_id, user_id=user_id)
@@ -121,6 +121,9 @@ class SessionService:
         )
         if not membership:
             raise ValueError("You are not a member of this session")
+
+        if membership.role not in ("project_manager", "owner"):
+            raise ValueError("Only the project manager or session owner can complete this session")
 
         # Prevent completing an already completed session
         if session.status == "completed":
