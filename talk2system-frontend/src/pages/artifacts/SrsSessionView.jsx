@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import SrsMarkdownRenderer from "../../components/modals/SrsMarkdownRenderer";
 import { getSessionSrsVersions, getSrsArtifact } from "../../api/srsAPI";
+import { getToken } from "../../api/authApi";
 
 const BASE_URL = "http://localhost:8000";
 
@@ -13,6 +14,31 @@ export default function SrsSessionView() {
   const [versions, setVersions] = useState([]);
   const [previewText, setPreviewText] = useState(null);
   const [approved, setApproved] = useState(false);
+  const [projectName, setProjectName] = useState(null);
+  const [sessionName, setSessionName] = useState(null);
+
+  // ===============================
+  // FETCH PROJECT / SESSION NAMES FOR BREADCRUMB
+  // ===============================
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`${BASE_URL}/api/projects/getproject/${projectId}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((r) => r.json())
+      .then((data) => setProjectName(data.name ?? null))
+      .catch(console.error);
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    fetch(`${BASE_URL}/api/sessions/${sessionId}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((r) => r.json())
+      .then((data) => setSessionName(data.title ?? null))
+      .catch(console.error);
+  }, [sessionId]);
 
   const fetchVersions = async () => {
     const res = await getSessionSrsVersions(projectId, sessionId);
@@ -56,13 +82,15 @@ export default function SrsSessionView() {
         <div className="flex gap-2 text-sm mb-6">
           <button onClick={() => navigate("/projects")} className="text-primary-accent dark:text-secondary-accent font-medium">Projects</button>
           <span>/</span>
-          <button onClick={() => navigate(`/projects/${projectId}`)} className="text-primary-accent dark:text-secondary-accent font-medium">Project</button>
-          <span>/</span>
-          <button onClick={() => navigate(`/projects/${projectId}/sessions/${sessionId}/artifacts`)} className="text-primary-accent dark:text-secondary-accent font-medium">
-            Session {sessionId}
+          <button onClick={() => navigate(`/projects/${projectId}`)} className="text-primary-accent dark:text-secondary-accent font-medium">
+            {projectName ?? `Project #${projectId}`}
           </button>
           <span>/</span>
-          <span>SRS</span>
+          <button onClick={() => navigate(`/projects/${projectId}/sessions/${sessionId}/sessiondetails`)} className="text-primary-accent dark:text-secondary-accent font-medium">
+            {sessionName ?? `Session #${sessionId}`}
+          </button>
+          <span>/</span>
+          <span>SRS Document</span>
         </div>
 
         <h1 className="text-4xl font-black mb-6">SRS Document</h1>
@@ -146,7 +174,7 @@ export default function SrsSessionView() {
                 <p className="text-xs font-semibold uppercase tracking-widest opacity-70 mb-1">IEEE Std 830</p>
                 <h1 className="text-2xl font-black">Software Requirements Specification</h1>
                 <p className="text-sm opacity-60 mt-1">
-                  Session #{sessionId} · {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+                  {sessionName ?? `Session #${sessionId}`} · {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
                 </p>
               </div>
 

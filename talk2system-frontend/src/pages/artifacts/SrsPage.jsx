@@ -279,6 +279,8 @@ export default function SrsPage() {
   // track whether we came from the project-level requirements page
   const [isProjectSource, setIsProjectSource] = useState(false);
   const [formatVersion, setFormatVersion] = useState("ieee_830");
+  const [projectName, setProjectName] = useState(null);
+  const [sessionName, setSessionName] = useState(null);
 
   const getAuthHeaders = () => {
     const token = getToken();
@@ -378,6 +380,30 @@ export default function SrsPage() {
     .then((data) => setSessionCompleted(data.status === "completed"))
     .catch(console.error);
   }, [sessionId, isProjectSource]);
+
+  // ===============================
+  // FETCH PROJECT / SESSION NAMES FOR BREADCRUMB
+  // ===============================
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`${BASE_URL}/api/projects/getproject/${projectId}`, {
+      headers: getAuthHeaders(),
+    })
+      .then((r) => r.json())
+      .then((data) => setProjectName(data.name ?? null))
+      .catch(console.error);
+  }, [projectId]);
+
+  useEffect(() => {
+    if (isProjectSource || !sessionId) return;
+    fetch(`${BASE_URL}/api/sessions/${sessionId}`, {
+      headers: getAuthHeaders(),
+    })
+      .then((r) => r.json())
+      .then((data) => setSessionName(data.title ?? null))
+      .catch(console.error);
+  }, [sessionId, isProjectSource]);
+
   // ===============================
   // FETCH VERSIONS
   // ===============================
@@ -650,7 +676,20 @@ export default function SrsPage() {
         <div className="flex flex-wrap gap-2 text-sm mb-6">
           <button onClick={() => navigate("/projects")} className="text-primary-accent dark:text-secondary-accent font-medium">Projects</button>
           <span>/</span>
-          <button onClick={() => navigate(`/projects/${projectId}`)} className="text-primary-accent dark:text-secondary-accent font-medium">Project</button>
+          <button onClick={() => navigate(`/projects/${projectId}`)} className="text-primary-accent dark:text-secondary-accent font-medium">
+            {projectName ?? `Project #${projectId}`}
+          </button>
+          {!isProjectSource && sessionId && (
+            <>
+              <span>/</span>
+              <button
+                onClick={() => navigate(`/projects/${projectId}/sessions/${sessionId}/sessiondetails`)}
+                className="text-primary-accent dark:text-secondary-accent font-medium"
+              >
+                {sessionName ?? `Session #${sessionId}`}
+              </button>
+            </>
+          )}
           <span>/</span>
           <span>SRS Document</span>
           {isProjectSource && (
@@ -665,7 +704,7 @@ export default function SrsPage() {
         <div className="mb-6">
           <h1 className="text-4xl font-black">SRS Document</h1>
           {!isProjectSource && sessionId && (
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Session #{sessionId}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{sessionName ?? `Session #${sessionId}`}</p>
           )}
           {isProjectSource && (
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">

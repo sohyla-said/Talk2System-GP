@@ -44,6 +44,8 @@ export default function UmlPage() {
   const [sessionId, setSessionId] = useState(null);
 
   const [isProjectSource, setIsProjectSource] = useState(false);
+  const [projectName, setProjectName] = useState(null);
+  const [sessionName, setSessionName] = useState(null);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -106,6 +108,29 @@ export default function UmlPage() {
     .then((r) => r.json())
     .then((data) => setSessionCompleted(data.status === "completed"))
     .catch(console.error);
+  }, [sessionId, isProjectSource]);
+
+  // ===============================
+  // FETCH PROJECT / SESSION NAMES FOR BREADCRUMB
+  // ===============================
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`${BASE_URL}/api/projects/getproject/${projectId}`, {
+      headers: getAuthHeaders(),
+    })
+      .then((r) => r.json())
+      .then((data) => setProjectName(data.name ?? null))
+      .catch(console.error);
+  }, [projectId]);
+
+  useEffect(() => {
+    if (isProjectSource || !sessionId) return;
+    fetch(`${BASE_URL}/api/sessions/${sessionId}`, {
+      headers: getAuthHeaders(),
+    })
+      .then((r) => r.json())
+      .then((data) => setSessionName(data.title ?? null))
+      .catch(console.error);
   }, [sessionId, isProjectSource]);
 
   const fetchVersions = async (resolvedSessionId = sessionId) => {
@@ -511,19 +536,30 @@ export default function UmlPage() {
 
         {/* Breadcrumb */}
         <div className="flex flex-wrap gap-2 text-sm">
-          <button 
+          <button
             onClick={() => navigate("/projects")}
             className="text-primary-accent dark:text-secondary-accent font-medium"
           >
             Projects
           </button>
           <span>/</span>
-          <button 
+          <button
             onClick={() => navigate(`/projects/${projectId}`)}
             className="text-primary-accent dark:text-secondary-accent font-medium"
           >
-            Project
+            {projectName ?? `Project #${projectId}`}
           </button>
+          {!isProjectSource && sessionId && (
+            <>
+              <span>/</span>
+              <button
+                onClick={() => navigate(`/projects/${projectId}/sessions/${sessionId}/sessiondetails`)}
+                className="text-primary-accent dark:text-secondary-accent font-medium"
+              >
+                {sessionName ?? `Session #${sessionId}`}
+              </button>
+            </>
+          )}
           <span>/</span>
           <span>UML Diagrams</span>
           {isProjectSource && (
@@ -538,7 +574,7 @@ export default function UmlPage() {
           <h1 className="text-4xl font-black">UML Diagrams</h1>
           {!isProjectSource && sessionId && (
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Session #{sessionId}
+              {sessionName ?? `Session #${sessionId}`}
             </p>
           )}
           {isProjectSource && (

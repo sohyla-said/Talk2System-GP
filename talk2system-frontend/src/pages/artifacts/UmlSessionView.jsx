@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getArtifact } from "../../api/umlAPI";
+import { getToken } from "../../api/authApi";
 
 const BASE_URL = "http://localhost:8000";
 
@@ -14,6 +15,31 @@ export default function UmlSessionViewPage() {
   const [versions, setVersions] = useState([]);
   const [approved, setApproved] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [projectName, setProjectName] = useState(null);
+  const [sessionName, setSessionName] = useState(null);
+
+  // ===============================
+  // FETCH PROJECT / SESSION NAMES FOR BREADCRUMB
+  // ===============================
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`${BASE_URL}/api/projects/getproject/${projectId}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((r) => r.json())
+      .then((data) => setProjectName(data.name ?? null))
+      .catch(console.error);
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    fetch(`${BASE_URL}/api/sessions/${sessionId}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((r) => r.json())
+      .then((data) => setSessionName(data.title ?? null))
+      .catch(console.error);
+  }, [sessionId]);
 
   // ===============================
   // FETCH SESSION VERSIONS
@@ -82,11 +108,11 @@ export default function UmlSessionViewPage() {
           </button>
           <span>/</span>
           <button onClick={() => navigate(`/projects/${projectId}`)} className="text-primary-accent dark:text-secondary-accent font-medium">
-            Project
+            {projectName ?? `Project #${projectId}`}
           </button>
           <span>/</span>
-          <button onClick={() => navigate(`/projects/${projectId}/sessions/${sessionId}/artifacts`)} className="text-primary-accent dark:text-secondary-accent font-medium">
-            Session #{sessionId} Artifacts
+          <button onClick={() => navigate(`/projects/${projectId}/sessions/${sessionId}/sessiondetails`)} className="text-primary-accent dark:text-secondary-accent font-medium">
+            {sessionName ?? `Session #${sessionId}`}
           </button>
           <span>/</span>
           <span>UML Diagrams</span>
@@ -96,7 +122,7 @@ export default function UmlSessionViewPage() {
         <div className="mb-6">
           <h1 className="text-4xl font-black">UML Diagrams</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Session #{sessionId} — view only
+            {sessionName ?? `Session #${sessionId}`} — view only
           </p>
         </div>
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import EmptyArtifacts from "../../pages/artifacts/EmptyArtifactsPage";
 import { getSessionArtifacts,checkSummary, checkSRS } from "../../api/artifactsAPI";
 import { useNavigate, useParams } from "react-router-dom";
+import { getToken } from "../../api/authApi";
 
 export default function SessionResults() {
   const navigate = useNavigate();
@@ -9,7 +10,9 @@ export default function SessionResults() {
   const [loading, setLoading] = useState(true);
   const [hasUML, setHasUML] = useState(false);
   const [hasSummary, setHasSummary] = useState(false);
-  const [hasSRS, setHasSRS] = useState(false); 
+  const [hasSRS, setHasSRS] = useState(false);
+  const [projectName, setProjectName] = useState(null);
+  const [sessionName, setSessionName] = useState(null);
 
   useEffect(() => {
     const load = async () => {
@@ -33,6 +36,29 @@ export default function SessionResults() {
     load();
   }, [projectId, sessionId]);
 
+  // ===============================
+  // FETCH PROJECT / SESSION NAMES FOR BREADCRUMB
+  // ===============================
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`http://localhost:8000/api/projects/getproject/${projectId}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((r) => r.json())
+      .then((data) => setProjectName(data.name ?? null))
+      .catch(console.error);
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    fetch(`http://localhost:8000/api/sessions/${sessionId}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((r) => r.json())
+      .then((data) => setSessionName(data.title ?? null))
+      .catch(console.error);
+  }, [sessionId]);
+
   if (loading) return <p className="p-8 text-gray-400">Loading...</p>;
 
   if (!hasUML && !hasSummary && !hasSRS) {
@@ -55,17 +81,21 @@ export default function SessionResults() {
         </button>
         <span>/</span>
         <button onClick={() => navigate(`/projects/${projectId}`)} className="text-primary-accent dark:text-secondary-accent font-medium">
-          Project
+          {projectName ?? `Project #${projectId}`}
         </button>
         <span>/</span>
-        <span>Session #{sessionId} Artifacts</span>
+        <button onClick={() => navigate(`/projects/${projectId}/sessions/${sessionId}/sessiondetails`)} className="text-primary-accent dark:text-secondary-accent font-medium">
+          {sessionName ?? `Session #${sessionId}`}
+        </button>
+        <span>/</span>
+        <span>Artifacts</span>
       </div>
 
       {/* TITLE */}
       <div className="w-full max-w-[1200px] py-4">
         <h1 className="text-3xl md:text-4xl font-black">Session Artifacts</h1>
         <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
-          Artifacts generated from Session #{sessionId}
+          Artifacts generated from {sessionName ?? `Session #${sessionId}`}
         </p>
       </div>
 

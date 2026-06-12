@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import EmptyArtifacts from "../../pages/artifacts/EmptyArtifactsPage";
 import { getProjectArtifacts, getProjectSRS } from "../../api/artifactsAPI";
+import { getToken } from "../../api/authApi";
 
 export default function ProjectResults() {
   const navigate = useNavigate();
@@ -9,7 +10,8 @@ export default function ProjectResults() {
 
   const [loading, setLoading] = useState(true);
   const [hasUML, setHasUML] = useState(false);
-  const [hasSRS, setHasSRS] = useState(false); 
+  const [hasSRS, setHasSRS] = useState(false);
+  const [projectName, setProjectName] = useState(null);
 
   useEffect(() => {
     const load = async () => {
@@ -19,7 +21,7 @@ export default function ProjectResults() {
         setHasUML(umlData.filter(a => !a.session_id).length > 0);
 
         const srsData = await getProjectSRS(projectId);
-        // Only count project-level SRS (no session_id)  
+        // Only count project-level SRS (no session_id)
         setHasSRS(srsData.filter(a => !a.session_id).length > 0);
       } catch (e) {
         console.error(e);
@@ -28,6 +30,19 @@ export default function ProjectResults() {
       }
     };
     load();
+  }, [projectId]);
+
+  // ===============================
+  // FETCH PROJECT NAME FOR BREADCRUMB
+  // ===============================
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`http://localhost:8000/api/projects/getproject/${projectId}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((r) => r.json())
+      .then((data) => setProjectName(data.name ?? null))
+      .catch(console.error);
   }, [projectId]);
 
   if (loading) return <p className="p-8 text-gray-400">Loading...</p>;
@@ -42,12 +57,12 @@ export default function ProjectResults() {
 
       {/* ================= BREADCRUMB ================= */}
       <div className="flex gap-2 text-sm w-full max-w-[1200px]">
-        <button onClick={() => navigate("/projects")} className="text-primary-accent">
+        <button onClick={() => navigate("/projects")} className="text-primary-accent dark:text-secondary-accent font-medium">
           Projects
         </button>
         <span>/</span>
-        <button onClick={() => navigate(`/projects/${projectId}`)} className="text-primary-accent">
-          Project
+        <button onClick={() => navigate(`/projects/${projectId}`)} className="text-primary-accent dark:text-secondary-accent font-medium">
+          {projectName ?? `Project #${projectId}`}
         </button>
         <span>/</span>
         <span>Artifacts</span>

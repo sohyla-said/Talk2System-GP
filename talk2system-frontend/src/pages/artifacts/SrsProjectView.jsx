@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import SrsMarkdownRenderer from "../../components/modals/SrsMarkdownRenderer";
 import { getProjectSrsVersions, getSrsArtifact } from "../../api/srsAPI";
+import { getToken } from "../../api/authApi";
 
 const BASE_URL = "http://localhost:8000";
 
@@ -14,6 +15,20 @@ export default function SrsProjectView() {
   const [approved, setApproved] = useState(false);
   const [previewText, setPreviewText] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [projectName, setProjectName] = useState(null);
+
+  // ===============================
+  // FETCH PROJECT NAME FOR BREADCRUMB
+  // ===============================
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`${BASE_URL}/api/projects/getproject/${projectId}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((r) => r.json())
+      .then((data) => setProjectName(data.name ?? null))
+      .catch(console.error);
+  }, [projectId]);
 
   // ===============================
   // FETCH VERSIONS
@@ -87,7 +102,9 @@ export default function SrsProjectView() {
         <div className="flex gap-2 text-sm mb-6">
           <button onClick={() => navigate("/projects")} className="text-primary-accent dark:text-secondary-accent font-medium">Projects</button>
           <span>/</span>
-          <button onClick={() => navigate(`/projects/${projectId}`)} className="text-primary-accent dark:text-secondary-accent font-medium">Project</button>
+          <button onClick={() => navigate(`/projects/${projectId}`)} className="text-primary-accent dark:text-secondary-accent font-medium">
+            {projectName ?? `Project #${projectId}`}
+          </button>
           <span>/</span>
           <button onClick={() => navigate(`/projects/${projectId}/results`)} className="text-primary-accent dark:text-secondary-accent font-medium">Artifacts</button>
           <span>/</span>
