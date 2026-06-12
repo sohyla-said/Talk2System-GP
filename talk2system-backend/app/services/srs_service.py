@@ -793,7 +793,14 @@ def run_async_srs_task(
         }
         task.status = "done"
         db.commit()
-        source_label = f"Session #{session_id}" if source == "session" else "Project-level"
+        session_label = "Project-level"
+        if source == "session" and session_id:
+            from app.models.session import Session as SessionModel
+            session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            if session and session.title:
+                session_label = f'Session "{session.title}"'
+            else:
+                session_label = f"Session #{session_id}"
         log_action(
             db=db,
             user_id=user_id,
@@ -803,7 +810,7 @@ def run_async_srs_task(
             entity_id=artifact["id"],
             details={
                 "label": f"SRS Document {artifact['version']}",
-                "extra": f"{format_version} format ({source_label})"
+                "extra": f"{format_version} format ({session_label})"
             }
         )
         db.commit()
