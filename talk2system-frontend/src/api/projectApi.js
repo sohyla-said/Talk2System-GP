@@ -22,7 +22,11 @@ export async function fetchProject(projectId) {
     headers: authHeaders(),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || "Project not found");
+  if (!res.ok) {
+    const error = new Error(data.detail || "Project not found");
+    error.status = res.status;
+    throw error;
+  }
   return data;
 }
 

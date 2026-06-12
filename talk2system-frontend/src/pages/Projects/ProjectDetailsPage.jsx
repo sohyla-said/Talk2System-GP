@@ -27,12 +27,14 @@ export default function ProjectDetailsPage() {
   const [members, setMembers] = useState([]);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [proj, roleData, sessRes, membersData] = await Promise.all([
-          fetchProject(projectId),
+        const proj = await fetchProject(projectId);
+
+        const [roleData, sessRes, membersData] = await Promise.all([
           fetchMyRole(projectId),
           fetch(`${BASE_URL}/api/sessions/project/${projectId}`, {
             headers: { Authorization: `Bearer ${getToken()}` },
@@ -42,7 +44,7 @@ export default function ProjectDetailsPage() {
         setProject(proj);
         setMyRole(roleData.role);
         setSessions(Array.isArray(sessRes) ? sessRes : []);
-        setMembers(membersData); 
+        setMembers(membersData);
 
         const pm = membersData.find((m) => m.role === "project_manager");
         if (pm) {
@@ -55,6 +57,9 @@ export default function ProjectDetailsPage() {
         }
       } catch (err) {
         console.error(err);
+        if (err.status === 403) {
+          setAccessDenied(true);
+        }
       } finally {
         setLoading(false);
       }
@@ -243,6 +248,24 @@ export default function ProjectDetailsPage() {
   };
 
   if (loading) return <p className="p-8 text-gray-400">Loading...</p>;
+
+  if (accessDenied) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-4 text-center px-4">
+        <span className="material-symbols-outlined text-6xl text-red-400">block</span>
+        <h2 className="text-2xl font-black text-gray-900 dark:text-white">Access Denied</h2>
+        <p className="text-gray-500 dark:text-gray-400 max-w-md">
+          You are not a member of this project, so you don't have permission to view its details.
+        </p>
+        <button
+          onClick={() => navigate("/projects")}
+          className="mt-2 h-10 px-5 rounded-lg bg-primary text-white text-sm font-bold shadow hover:opacity-90 transition"
+        >
+          Back to Projects
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full font-display">
