@@ -123,6 +123,22 @@ const translations = {
   archived:                   { en: "Archived",                         ar: "مؤرشف" },
   pendingStats:               { en: "Pending stats",                    ar: "إحصاءات قادمة" },
 
+  /* ─── Profile Page ─────────────────────────────────────── */
+  myProfile:                  { en: "My Profile",                       ar: "الملف الشخصي" },
+  editProfile:                { en: "Edit Profile",                     ar: "تعديل الملف الشخصي" },
+  email:                      { en: "Email",                            ar: "البريد الإلكتروني" },
+  gender:                     { en: "Gender",                           ar: "الجنس" },
+  male:                       { en: "Male",                             ar: "ذكر" },
+  female:                     { en: "Female",                           ar: "أنثى" },
+  role:                       { en: "Role",                             ar: "الدور" },
+  dateJoined:                 { en: "Date Joined",                      ar: "تاريخ الانضمام" },
+  accountStatus:              { en: "Account Status",                   ar: "حالة الحساب" },
+  selectGender:               { en: "Select Gender",                    ar: "اختر الجنس" },
+  saveChanges:                { en: "Save Changes",                     ar: "حفظ التغييرات" },
+  profileUpdated:             { en: "Profile updated successfully!",     ar: "تم تحديث الملف الشخصي بنجاح!" },
+  changePhoto:                { en: "Change Photo",                     ar: "تغيير الصورة" },
+  removePhoto:                { en: "Remove Photo",                     ar: "إزالة الصورة" },
+
   /* ─── Status labels (DB values → display) ───────────────────── */
   status_in_progress:         { en: "In Progress",                      ar: "قيد التنفيذ" },
   status_pending_approval:    { en: "Pending Approval",                 ar: "في انتظار الموافقة" },
