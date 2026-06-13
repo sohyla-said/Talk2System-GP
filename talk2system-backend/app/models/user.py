@@ -10,6 +10,7 @@ class User(Base):
     email                = Column(String(255), unique=True, nullable=False, index=True)
     hashed_password      = Column(String(255), nullable=False)
     full_name            = Column(String(100), nullable=True)
+    gender               = Column(String(10), nullable=True)
 
     # Global role — only "user" or "admin"
     # Project-level roles (project_manager / participant) live in ProjectMembership

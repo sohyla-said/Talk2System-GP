@@ -17,6 +17,7 @@ import OAuthCallbackPage from "../pages/auth/OAuthCallbackPage";
 
 // Dashboard
 import Dashboard from "../pages/dashboard/DashboardPage";
+import ProfilePage from "../pages/profile/ProfilePage";
 
 // Projects
 import ProjectsPage from "../pages/projects/ProjectsPage";
@@ -112,6 +113,7 @@ export default function AppRoutes() {
       {/* App */}
       <Route element={<AppLayout />}>
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/profile" element={<ProfilePage />} />          
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/admin/all-users" element={
           <ProtectedRoute requireAdmin><AllUsersPage /></ProtectedRoute>

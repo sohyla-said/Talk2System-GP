@@ -41,6 +41,8 @@ const STORAGE_KEYS = [
   "user_role",
   "user_status",
   "user_full_name",
+  "user_gender",     
+  "user_created_at",
 ];
 export function loginWithGoogle() {
   window.location.href = `http://127.0.0.1:8000/api/auth/google/login`;
@@ -61,6 +63,8 @@ export function saveSession(data, rememberMe = true) {
   storage.setItem("user_role", data.role);
   storage.setItem("user_status", data.status);
   storage.setItem("user_full_name", data.full_name);
+  storage.setItem("user_gender", data.gender || "");
+  storage.setItem("user_created_at", data.created_at || "");
 }
 
 function clearSession() {
@@ -149,6 +153,8 @@ export function getCurrentUser() {
     role: storage.getItem("user_role"),
     status: storage.getItem("user_status"),
     full_name: storage.getItem("user_full_name"),
+    gender: storage.getItem("user_gender"),
+    created_at: storage.getItem("user_created_at"),
   };
 }
 
@@ -157,6 +163,43 @@ export function isAdmin() {
   return storage.getItem("user_role") === "admin" && isLoggedIn();
 }
 
+export async function fetchProfile() {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(`${BASE_URL}/api/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error("Failed to fetch profile");
+  
+  const storage = getTokenStorage();
+  storage.setItem("user_full_name", data.full_name || "");
+  storage.setItem("user_gender", data.gender || "");
+  return data;
+}
+
+export async function updateProfile(data) {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(`${BASE_URL}/api/auth/me`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  const responseData = await res.json();
+  if (!res.ok) throw new Error(responseData.detail || "Update failed");
+  
+  const storage = getTokenStorage();
+  if (data.full_name) storage.setItem("user_full_name", data.full_name);
+  if (data.gender) storage.setItem("user_gender", data.gender);
+  
+  return responseData;
+}
 
 export async function fetchAllUsers() {
   const token = getToken();
