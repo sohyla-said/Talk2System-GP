@@ -14,7 +14,7 @@ import Signup from "../pages/auth/SignupPage";
 import PendingApproval from "../pages/auth/PendingApprovalPage";
 import RoleApproval from "../pages/auth/role-approval";
 import OAuthCallbackPage from "../pages/auth/OAuthCallbackPage";
-
+import HelpAccountStatus from "../pages/help/HelpAccountStatus";
 // Dashboard
 import Dashboard from "../pages/dashboard/DashboardPage";
 import ProfilePage from "../pages/profile/ProfilePage";
@@ -109,7 +109,7 @@ export default function AppRoutes() {
       <Route element={
         <ProtectedRoute><AppLayout /></ProtectedRoute>
       }></Route>
-
+      <Route path="/help/account-status" element={<HelpAccountStatus />} />
       {/* App */}
       <Route element={<AppLayout />}>
         <Route path="/dashboard" element={<Dashboard />} />
