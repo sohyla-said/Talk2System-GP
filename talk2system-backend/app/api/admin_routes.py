@@ -163,13 +163,14 @@ def suspend_user(
                     "new_user_status": "suspended",
                 }
             )
-    # notification_service.create_notification(
-    #     db, user_id=user.id, notification_type="account_suspended",
-    #     title="Account Temporarily Suspended",
-    #     message=f"Your account has been temporarily suspended by an administrator. "
-    #             f"{'Reason: ' + reason + '.' if reason else 'Contact an administrator for details.'}",
-    #     actor_name="System Admin", actor_email=current_user.email,
-    # )
+    notification_service.create_notification(
+        db, user_id=user.id, notification_type="account_suspended",
+        title="Account Temporarily Suspended",
+        message=f"Your account has been temporarily suspended by an administrator. "
+                f"You can still log in and view content, but all actions are disabled. "
+                f"{'Reason: ' + reason + '.' if reason else 'Contact an administrator for details.'}",
+        actor_name="System Admin", actor_email=current_user.email,
+    )
     db.commit()
     return {
         "message": f"{user.email} has been suspended. They can still log in but are restricted to view only.",

@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { fetchMyProjects, sendJoinRequest, fetchProjects } from "../../api/projectApi";
-import { isAdmin } from "../../api/authApi";
+import { isAdmin, getCurrentUser } from "../../api/authApi"; 
 import { useTranslation } from "../../hooks/useTranslation";
 
 export default function ProjectsPage() {
@@ -11,6 +11,12 @@ export default function ProjectsPage() {
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState("");
   const { t } = useTranslation();
+  
+  // CHECK IF SUSPENDED 
+  const currentUser = getCurrentUser();
+  const isSuspended = currentUser?.status === "suspended";
+  const [showSuspendedPopup, setShowSuspendedPopup] = useState(false);
+
   // Join modal
   const [showJoinModal, setShowJoinModal]           = useState(false);
   const [joinProjectId, setJoinProjectId]           = useState("");
@@ -57,6 +63,7 @@ export default function ProjectsPage() {
 
   // Check if user can add participants (admin or PM of project)
   const canAddParticipants = (project) => {
+    if (isSuspended) return false;
     return isAdmin() || project.user_role === "project_manager";
   };
 
@@ -70,24 +77,27 @@ export default function ProjectsPage() {
             <h2 className="text-4xl font-black text-[#1F2937] dark:text-white">
               {t("myProjects")}
             </h2>
-            <div className="flex gap-3">
-              {/* Removed joinableProjects.length > 0 so button ALWAYS shows */}
-              <button
-                onClick={() => setShowJoinModal(true)}
-                className="flex items-center gap-2 h-10 px-5 rounded-lg border border-primary text-primary font-bold hover:bg-primary/5 transition"
-              >
-                <span className="material-symbols-outlined">login</span>
-                {t("joinProject")}
-              </button>
-              
-              <button
-                onClick={() => navigate(isAdmin() ? "/projects/new-admin" : "/projects/new")}
-                className="flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-white font-bold"
-              >
-                <span className="material-symbols-outlined">add</span>
-                 {t("createNewProject")}
-              </button>
-            </div>
+            {!isSuspended ? (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowJoinModal(true)}
+                  className="flex items-center gap-2 h-10 px-5 rounded-lg border border-primary text-primary font-bold hover:bg-primary/5 transition"
+                >
+                  <span className="material-symbols-outlined">login</span>
+                  {t("joinProject")}
+                </button>
+                
+                <button
+                  onClick={() => navigate(isAdmin() ? "/projects/new-admin" : "/projects/new")}
+                  className="flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-white font-bold"
+                >
+                  <span className="material-symbols-outlined">add</span>
+                  {t("createNewProject")}
+                </button>
+              </div>
+            ) : (
+              <div className="h-10"></div> 
+            )}
           </div>
 
           {error && <p className="text-red-500 mb-4">{error}</p>}
@@ -103,20 +113,26 @@ export default function ProjectsPage() {
               <p className="text-gray-500 mb-6">
                 {t("createOrJoinDesc")}
               </p>
-              <div className="flex gap-4">
-                <button
-                  onClick={() => navigate(isAdmin() ? "/projects/new-admin" : "/projects/new")}
-                  className="flex items-center gap-2 px-8 py-4 rounded-xl bg-primary text-white font-bold shadow-lg hover:bg-primary/90 transition"
-                >
-                  <span className="material-symbols-outlined">add</span>
-                  {t("createProject")}
-                </button>
+              {!isSuspended ? (
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => navigate(isAdmin() ? "/projects/new-admin" : "/projects/new")}
+                    className="flex items-center gap-2 px-8 py-4 rounded-xl bg-primary text-white font-bold shadow-lg hover:bg-primary/90 transition"
+                  >
+                    <span className="material-symbols-outlined">add</span>
+                    {t("createProject")}
+                  </button>
 
-                <button onClick={() => setShowJoinModal(true)} className="flex items-center gap-2 h-10 px-5 rounded-lg border border-primary text-primary font-bold hover:bg-primary/5 transition">
-                  <span className="material-symbols-outlined">login</span>
-                  {t("joinProject")}
-                </button>
-              </div>
+                  <button onClick={() => setShowJoinModal(true)} className="flex items-center gap-2 h-10 px-5 rounded-lg border border-primary text-primary font-bold hover:bg-primary/5 transition">
+                    <span className="material-symbols-outlined">login</span>
+                    {t("joinProject")}
+                  </button>
+                </div>
+              ) : (
+                <p className="text-yellow-600 dark:text-yellow-400 text-sm mt-2 font-medium">
+                  Your account is suspended. You cannot create or join projects.
+                </p>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -124,11 +140,20 @@ export default function ProjectsPage() {
                 <ProjectCard
                   key={project.id}
                   project={project}
+                  isSuspended={isSuspended} 
                   canAddParticipants={canAddParticipants(project)}
-                  onNavigate={() => navigate(`/projects/${project.id}`)}
+                  onNavigate={() => { 
+                    if (isSuspended) {
+                      setShowSuspendedPopup(true);
+                      return;
+                    }
+                    navigate(`/projects/${project.id}`);
+                  }}
                   onAddParticipant={(e) => {
                     e.stopPropagation();
-                    navigate(`/projects/${project.id}/add-participant`);
+                    if (!isSuspended) { 
+                      navigate(`/projects/${project.id}/add-participant`);
+                    }
                   }}
                   t={t}
                 />
@@ -139,8 +164,7 @@ export default function ProjectsPage() {
         </main>
       </div>
 
-      {/* JOIN MODAL */}
-      {showJoinModal && (
+      {showJoinModal && !isSuspended && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-[#1a162e] rounded-xl p-6 w-full max-w-md shadow-xl">
             <h2 className="text-xl font-black mb-1 text-[#100d1c] dark:text-white">
@@ -214,18 +238,64 @@ export default function ProjectsPage() {
           </div>
         </div>
       )}
+      {showSuspendedPopup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white dark:bg-[#1a162e] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 px-8 pt-8 pb-6 text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-yellow-100 dark:bg-yellow-900/40 mb-4">
+                <span className="material-symbols-outlined text-yellow-600 dark:text-yellow-400 text-3xl">lock_person</span>
+              </div>
+              <h2 className="text-xl font-black text-gray-900 dark:text-white mb-2">
+                Access Restricted
+              </h2>
+            </div>
+            
+            <div className="px-8 py-6">
+              <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed mb-6">
+                You cannot view project details because your account has been 
+                <span className="font-bold text-yellow-600 dark:text-yellow-400"> temporarily suspended</span>.
+              </p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowSuspendedPopup(false)}
+                  className="flex-1 h-11 px-4 rounded-xl bg-primary hover:opacity-90 text-white text-sm font-bold transition"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={() => {
+                    setShowSuspendedPopup(false);
+                    navigate("/help/account-status");
+                  }}
+                  className="flex-1 h-11 px-4 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+                >
+                  Get Help
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function ProjectCard({ project, canAddParticipants, onNavigate, onAddParticipant, t }) {
+function ProjectCard({ project, isSuspended, canAddParticipants, onNavigate, onAddParticipant, t }) {
   return (
     <div
       onClick={onNavigate}
-      className="flex flex-col rounded-xl shadow bg-white dark:bg-[#1C192B] hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer"
+      className={`flex flex-col rounded-xl shadow bg-white dark:bg-[#1C192B] hover:shadow-lg hover:-translate-y-1 transition-all ${
+        isSuspended ? "cursor-not-allowed opacity-80" : "cursor-pointer"
+      }`}
     >
       <div className="p-5 flex flex-col gap-3">
-        <p className="text-lg font-bold">{project.name}</p>
+        <div className="flex items-center justify-between">
+          <p className="text-lg font-bold">{project.name}</p>
+          {isSuspended && (
+            <span className="material-symbols-outlined text-yellow-500 text-lg">lock</span>
+          )}
+        </div>
         {project.domain && (
           <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-0.5 rounded-full w-fit">
             {project.domain}
@@ -240,8 +310,8 @@ function ProjectCard({ project, canAddParticipants, onNavigate, onAddParticipant
         </p>
         
 
-        {/* ADD PARTICIPANT BUTTON - Only for Admin/PM */}
-        {canAddParticipants && (
+        {/* ADD PARTICIPANT BUTTON - Only for Admin/PM and not Suspended */}
+        {!isSuspended && canAddParticipants && (
           <button
             onClick={onAddParticipant}
             className="mt-2 flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-sm font-bold hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"

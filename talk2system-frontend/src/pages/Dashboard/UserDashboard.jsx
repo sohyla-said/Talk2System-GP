@@ -161,6 +161,7 @@ function DonutChart({ segments, size = 180, thickness = 32, sublabel }) {
 export default function UserDashboardPage() {
   const navigate   = useNavigate();
   const user       = getCurrentUser();
+  const isSuspended = user?.status === "suspended";
 
   const [stats,   setStats]   = useState(null);
   const [loading, setLoading] = useState(true);
@@ -340,7 +341,7 @@ export default function UserDashboardPage() {
         </div>
 
         {/* ── Pending approval section ── */}
-        {!loading && (
+        {!loading && !isSuspended && (
           stats?.projects_pending_approval?.length > 0 || stats?.sessions_pending_approval?.length > 0
         ) && (
           <div className="mb-6 bg-white dark:bg-[#1C192B] rounded-2xl border border-red-200 dark:border-red-700/40 px-4 py-3 shadow-sm">
@@ -480,7 +481,7 @@ export default function UserDashboardPage() {
 
 
         {/* ── Stale sessions (PM only) ── */}
-        {!loading && stats?.is_pm && stats?.stale_sessions?.length > 0 && (
+        {!loading && !isSuspended && stats?.is_pm && stats?.stale_sessions?.length > 0 && (
           <div className="mb-6 bg-white dark:bg-[#1C192B] rounded-2xl border border-orange-200 dark:border-orange-700/40 px-4 py-3 shadow-sm">
             <div className="flex items-center gap-2 mb-2">
               <span className="material-symbols-outlined text-[16px] text-orange-500">schedule</span>
@@ -856,7 +857,7 @@ export default function UserDashboardPage() {
                   );
                   return (
                     <li key={i}>
-                      {url ? (
+                      {url && !isSuspended ? (
                         <button
                           onClick={() => navigate(url)}
                           className="w-full flex items-start gap-3 py-3 first:pt-0 last:pb-0 text-left hover:bg-gray-50 dark:hover:bg-white/5 rounded-xl px-2 -mx-2 transition-colors"

@@ -4,7 +4,7 @@ import AppLayout from "../components/layout/AppLayout";
 import AuthLayout from "../components/layout/AuthLayout";
 import { isLoggedIn, getCurrentUser } from "../api/authApi";
 import NotificationsPage from "../notifications/NotificationsPage";
-
+import ReadOnlyGuard from "../components/guards/ReadOnlyGuard";
 // Pages
 import Home from "../pages/Home";
 
@@ -127,8 +127,7 @@ export default function AppRoutes() {
           <Route path="new" element={<AddProject />} />
           <Route path="new-admin" element={<AdminAddProject />} />
           <Route path="new" element={<AddProject />} />
-          <Route path=":id" element={<ProjectDetails />} />
-          <Route path=":id/add-participant" element={<AddParticipant />} />
+          <Route path=":id" element={<ReadOnlyGuard><ProjectDetails /></ReadOnlyGuard>} />          <Route path=":id/add-participant" element={<AddParticipant />} />
           <Route path="empty" element={<EmptyProjectsPage />} />
           <Route path=":id/recording" element={<RecordingSession />} />
           <Route path=":id/transcript-input" element={<TranscriptInput />} />

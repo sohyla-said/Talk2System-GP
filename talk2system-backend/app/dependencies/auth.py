@@ -27,8 +27,8 @@ def get_current_user(
 
     if user.status == "pending":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Account pending approval")
-    if user.status == "suspended":
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Account suspended")
+    # if user.status == "suspended":
+    #     raise HTTPException(status.HTTP_403_FORBIDDEN, "Account suspended")
     if user.status == "terminated":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Account terminated")
     if user.status == "archived":

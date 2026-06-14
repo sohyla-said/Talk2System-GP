@@ -2,18 +2,11 @@ import { Outlet } from "react-router-dom";
 import Header from "./Header";
 import Footer from "./Footer";
 import { useLanguage } from "../../context/LanguageContext";
-import { useState, useEffect } from "react";
 import { getCurrentUser } from "../../api/authApi";
 
 export default function AppLayout() {
   const { dir } = useLanguage();
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    const currentUser = getCurrentUser();
-    setUser(currentUser);
-  }, []);
-
+  const user = getCurrentUser();
   const isSuspended = user?.status === "suspended";
 
   return (
@@ -27,7 +20,7 @@ export default function AppLayout() {
           <div className="flex items-center justify-center gap-3 max-w-screen-2xl mx-auto flex-wrap">
             <span className="material-symbols-outlined text-yellow-600 dark:text-yellow-400 text-[20px]">warning</span>
             <p className="text-yellow-800 dark:text-yellow-300 text-sm font-medium text-center">
-              {user.status_message || "Your account has been temporarily suspended. You cannot perform any actions."}
+              Your account has been temporarily suspended. You cannot perform any actions.
             </p>
             <a 
               href="/help/account-status" 
