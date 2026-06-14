@@ -351,21 +351,70 @@ export default function ProjectDetailsPage() {
                   const roleName = getActingRole(log.user_email);
                   const targetName = log.details?.label || `${log.entity} #${log.entity_id}`;
                   const extraInfo = log.details?.extra || "";
+                  const isStatusChangeLog = log.action?.includes("_user_in_project");
+                  let targetUserName = "";
+                  let projectName = "";
+                  let actionVerb = "";
+                  let statusIcon = "circle";
+
+                  if (isStatusChangeLog) {
+                    const parts = log.details?.label?.split(" in Project: ");
+                    if (parts?.length === 2) {
+                      targetUserName = parts[0].replace("User ", "");
+                      projectName = parts[1];
+                    }
+                    actionVerb = log.action?.replace("_user_in_project", "").replace(/_/g, " "); 
+                  }
+
+                  const statusConfig = {
+                    suspended: { icon: "pause_circle", bg: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400", dot: "text-yellow-500", border: "border-yellow-200 dark:border-yellow-800/40 bg-yellow-50/50 dark:bg-yellow-900/10" },
+                    terminated: { icon: "cancel", bg: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", dot: "text-red-500", border: "border-red-200 dark:border-red-800/40 bg-red-50/50 dark:bg-red-900/10" },
+                    archived: { icon: "archive", bg: "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-400", dot: "text-gray-500", border: "bg-gray-50 dark:bg-[#231e3d]" },
+                  };
+                  const currentStatus = Object.keys(statusConfig).find(s => log.action?.includes(s)) || "";
+                  const config = statusConfig[currentStatus] || {};
+                  if (isStatusChangeLog) statusIcon = config.icon;
 
                   return (
-                    <div key={log.id} className="flex items-start gap-4 p-3 rounded-lg bg-gray-50 dark:bg-[#231e3d]">
-                      <span className="material-symbols-outlined text-primary mt-0.5 text-lg">circle</span>
-                      <div className="flex-1">
-                        <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {log.user_name || "Unknown User"}{" "}
-                          {roleName && (<span className="font-normal text-gray-400 dark:text-gray-500 text-xs">({roleName})</span>)}{" "}
-                          <span className="font-normal text-gray-500 dark:text-gray-400">
-                            {log.action.replace(/_/g, " ")} {targetName}
-                          </span>
-                          {extraInfo && (
-                            <span className="font-normal text-primary text-xs ml-1">{extraInfo}</span>
-                          )}
-                        </p>
+                    <div key={log.id} className={`flex items-start gap-4 p-3 rounded-lg border ${isStatusChangeLog ? config.border : "border-transparent bg-gray-50 dark:bg-[#231e3d]"}`}>
+                      <span className={`material-symbols-outlined mt-0.5 text-lg ${isStatusChangeLog ? config.dot : "text-primary"}`}>{statusIcon}</span>
+                      <div className="flex-1 min-w-0">
+                        {isStatusChangeLog ? (
+                          <div className="flex flex-col gap-1.5">
+                            <p className="text-sm text-gray-900 dark:text-white leading-relaxed">
+                              <span className="font-black">{log.user_name || "Unknown User"}</span>{" "}
+                              {roleName && (<span className="font-normal text-gray-400 dark:text-gray-500 text-xs">({roleName})</span>)}{" "}
+                              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${config.bg} tracking-wide`}>
+                                {actionVerb}
+                              </span>{" "}
+                              user <span className="font-black">{targetUserName}</span>
+                            </p>
+                            <div className="flex items-center gap-3 text-[11px] text-gray-500 dark:text-gray-400 pl-0.5">
+                              <span className="flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[14px]">folder_open</span>
+                                {projectName}
+                              </span>
+                              {log.details?.user_role_in_project && (
+                                <span className="flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px]">badge</span>
+                                  {log.details.user_role_in_project.replace(/_/g, " ")}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          /* === NORMAL LOG LAYOUT === */
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                            {log.user_name || "Unknown User"}{" "}
+                            {roleName && (<span className="font-normal text-gray-400 dark:text-gray-500 text-xs">({roleName})</span>)}{" "}
+                            <span className="font-normal text-gray-500 dark:text-gray-400">
+                              {log.action.replace(/_/g, " ")} {targetName}
+                            </span>
+                            {extraInfo && (
+                              <span className="font-normal text-primary text-xs ml-1">{extraInfo}</span>
+                            )}
+                          </p>
+                        )}
                         
                         {log.details?.before && (
                           <div className="mt-2 p-2.5 rounded-lg bg-white dark:bg-[#1a162e] border border-gray-200 dark:border-white/10 text-xs font-mono space-y-1.5">
@@ -661,24 +710,50 @@ export default function ProjectDetailsPage() {
 
       {showMembersModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-[#1a162e] rounded-xl w-full max-w-md max-h-[80vh] flex flex-col shadow-xl m-4">
+          <div className="bg-white dark:bg-[#1a162e] rounded-xl w-full max-w-md shadow-xl m-4">
             <div className="flex justify-between items-center p-6 border-b dark:border-gray-700">
-              <h2 className="text-lg font-black text-[#100d1c] dark:text-white">Project Members <span className="ml-2 text-sm font-normal text-gray-400">({members.length})</span></h2>
-              <button onClick={() => setShowMembersModal(false)} className="text-gray-400 hover:text-gray-600"><span className="material-symbols-outlined">close</span></button>
+              <h2 className="text-lg font-black text-[#100d1c] dark:text-white">
+                Project Members ({members.length})
+              </h2>
+              <button onClick={() => setShowMembersModal(false)} className="text-gray-400 hover:text-gray-600">
+                <span className="material-symbols-outlined">close</span>
+              </button>
             </div>
-            <div className="p-4 overflow-y-auto space-y-2">
-              {members.length === 0 ? (<p className="text-gray-400 text-center py-10">No members found.</p>) : (
-                members.map((member) => (
-                  <div key={member.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-[#231e3d]">
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+              {members.length === 0 ? (
+                <p className="text-gray-400 text-center py-6">No members found.</p>
+              ) : (
+                members.map((m) => (
+                  <div key={m.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-[#231e3d]">
                     <div className="flex items-center gap-3">
-                      <div className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 flex-shrink-0" style={{ backgroundImage: `url(https://ui-avatars.com/api/?name=${encodeURIComponent(member.full_name || member.email || "User")}&background=random&color=fff)` }} />
+                      <div className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-9 flex-shrink-0" 
+                           style={{ backgroundImage: `url(https://ui-avatars.com/api/?name=${encodeURIComponent(m.full_name || "User")}&background=random&color=fff)` }} />
                       <div>
-                        <p className="font-semibold text-sm text-gray-900 dark:text-white">{member.full_name || "Unknown User"}</p>
-                        <p className="text-xs text-gray-400">{member.email}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-sm text-gray-900 dark:text-white">
+                            {m.full_name || m.email}
+                          </p>
+                          {m.user_status && m.user_status !== "active" && (
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              m.user_status === "suspended" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
+                              m.user_status === "terminated" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                              m.user_status === "archived" ? "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400" :
+                              m.user_status === "pending" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
+                              "bg-gray-100 text-gray-500"
+                            }`}>
+                              {m.user_status.charAt(0).toUpperCase() + m.user_status.slice(1)}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400">{m.email}</p>
                       </div>
                     </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${member.role === "project_manager" ? "bg-primary/15 text-primary" : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"}`}>
-                      {member.role === "project_manager" ? "Project Manager" : "Member"}
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg whitespace-nowrap ${
+                      m.role === "project_manager" 
+                        ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400" 
+                        : "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+                    }`}>
+                      {m.role.replace(/_/g, " ")}
                     </span>
                   </div>
                 ))

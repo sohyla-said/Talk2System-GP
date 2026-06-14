@@ -15,6 +15,14 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "2880
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 
+STATUS_MESSAGES = {
+    "active": None,
+    "pending": "Your account is pending admin approval. You cannot access the system until approved.",
+    "suspended": "Your account has been temporarily suspended. You cannot perform any actions. Contact an administrator for details.",
+    "terminated": "Your account has been permanently terminated. Access is denied.",
+    "archived": "Your account has been archived. Access is denied.",
+}
+
 
 def hash_password(password: str) -> str:
     digest = base64.b64encode(hashlib.sha256(password.encode()).digest()).decode()
@@ -75,15 +83,12 @@ def login_user(db: Session, email: str, password: str) -> dict:
 
     if not user or not ok:
         raise ValueError("Invalid email or password")
-
     if user.status == "pending":
-        raise ValueError("Your account is pending admin approval")
-    if user.status == "suspended":
-        raise ValueError("Your account has been suspended")
+        raise ValueError(STATUS_MESSAGES["pending"])
     if user.status == "terminated":
-        raise ValueError("Your account has been terminated")
+        raise ValueError(STATUS_MESSAGES["terminated"])
     if user.status == "archived":
-        raise ValueError("This account has been archived")
+        raise ValueError(STATUS_MESSAGES["archived"])
     return {
         "access_token": create_access_token(user.id, user.email, user.role),
         "token_type": "bearer",
@@ -92,4 +97,5 @@ def login_user(db: Session, email: str, password: str) -> dict:
         "role": user.role,
         "status": user.status,
         "full_name": user.full_name,
+        "status_message": STATUS_MESSAGES.get(user.status),
     }

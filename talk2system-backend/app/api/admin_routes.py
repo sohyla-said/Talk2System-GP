@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import Optional
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user, require_role
 from app.models.user import User
@@ -13,6 +15,13 @@ from app.models.notification import Notification
 from app.services.audit_service import log_action
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
+class StatusChangeRequest(BaseModel):
+    reason: Optional[str] = None
+STATUS_DEFINITIONS = {
+    "archived": "Account hidden from active lists. All data preserved for historical purposes.",
+    "suspended": "Account temporarily restricted. User can log in but is view only.",
+    "terminated": "Account permanently banned due to severe violations or security threats.",
+}
 
 
 @router.get("/pending-users")
@@ -39,7 +48,23 @@ def approve_user(
         raise HTTPException(404, "User not found")
     if user.role == "admin":
         raise HTTPException(400, "Admin accounts cannot be approved this way")
+
+    old_status = user.status
     user.status = "active"
+
+    log_action(
+        db,
+        current_user.id,
+        "approved_user",
+        "user",
+        entity_id=user.id,
+        details={
+            "label": f"Admin {current_user.full_name or current_user.email} approved user {user.full_name or user.email}",
+            "old_status": old_status,
+            "new_status": "active"
+        }
+    )
+
     db.commit()
     return {"message": f"{user.email} approved", "role": user.role}
 
@@ -47,6 +72,7 @@ def approve_user(
 @router.patch("/users/{user_id}/terminate")
 def terminate_user(
     user_id: int,
+    body: StatusChangeRequest = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("admin"))
 ):
@@ -55,14 +81,49 @@ def terminate_user(
         raise HTTPException(404, "User not found")
     if user.role == "admin":
         raise HTTPException(400, "Cannot terminate admin accounts") 
+    old_status = user.status
     user.status = "terminated"
+    reason = body.reason if body else None
+    log_action(
+        db, current_user.id, "terminated_user", "user", entity_id=user.id,
+        details={
+            "label": f"Admin {current_user.full_name or current_user.email} terminated user {user.full_name or user.email}",
+            "old_status": old_status, "new_status": "terminated", "reason": reason,
+            "definition": STATUS_DEFINITIONS["terminated"],
+        }
+    )
+    user_projects = db.query(ProjectMembership).filter(
+        ProjectMembership.user_id == user.id,
+        ProjectMembership.left_at.is_(None)
+    ).all()
+    
+    for membership in user_projects:
+        project = db.query(Project).filter(Project.id == membership.project_id).first()
+        if project:
+            log_action(
+                db,
+                current_user.id,
+                "terminated_user_in_project",
+                "project",
+                project_id=project.id,
+                entity_id=user.id,
+                details={
+                    "label": f"User {user.full_name or user.email} terminated in Project: {project.name}",
+                    "user_role_in_project": membership.role,
+                    "new_user_status": "terminated",
+                }
+            )
     db.commit()
-    return {"message": f"{user.email} terminated"}
+    return {
+        "message": f"{user.email} has been permanently terminated.",
+        "definition": STATUS_DEFINITIONS["terminated"],
+    }
 
 
 @router.patch("/users/{user_id}/suspend")
 def suspend_user(
     user_id: int,
+    body: StatusChangeRequest = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("admin"))
 ):
@@ -71,14 +132,104 @@ def suspend_user(
         raise HTTPException(404, "User not found")
     if user.role == "admin":
         raise HTTPException(400, "Cannot suspend admin accounts") 
+    old_status = user.status
     user.status = "suspended"
+    reason = body.reason if body else None
+    log_action(
+        db, current_user.id, "suspended_user", "user", entity_id=user.id,
+        details={
+            "label": f"Admin {current_user.full_name or current_user.email} suspended user {user.full_name or user.email}",
+            "old_status": old_status, "new_status": "suspended", "reason": reason,
+            "definition": STATUS_DEFINITIONS["suspended"],
+        }
+    )
+    user_projects = db.query(ProjectMembership).filter(
+        ProjectMembership.user_id == user.id,
+        ProjectMembership.left_at.is_(None)
+    ).all()
+    for membership in user_projects:
+        project = db.query(Project).filter(Project.id == membership.project_id).first()
+        if project:
+            log_action(
+                db,
+                current_user.id,
+                "suspended_user_in_project",
+                "project",
+                project_id=project.id,
+                entity_id=user.id,
+                details={
+                    "label": f"User {user.full_name or user.email} suspended in Project: {project.name}",
+                    "user_role_in_project": membership.role,
+                    "new_user_status": "suspended",
+                }
+            )
+    # notification_service.create_notification(
+    #     db, user_id=user.id, notification_type="account_suspended",
+    #     title="Account Temporarily Suspended",
+    #     message=f"Your account has been temporarily suspended by an administrator. "
+    #             f"{'Reason: ' + reason + '.' if reason else 'Contact an administrator for details.'}",
+    #     actor_name="System Admin", actor_email=current_user.email,
+    # )
     db.commit()
-    return {"message": f"{user.email} suspended"}
+    return {
+        "message": f"{user.email} has been suspended. They can still log in but are restricted to view only.",
+        "definition": STATUS_DEFINITIONS["suspended"],
+    }
+
+@router.patch("/users/{user_id}/restore")
+def restore_user(
+    user_id: int,
+    body: StatusChangeRequest = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    if user.role == "admin":
+        raise HTTPException(400, "Admin accounts cannot be restored this way")
+    if user.status != "suspended":
+        raise HTTPException(
+            400,
+            f"Only suspended users can be restored. '{user.email}' is currently '{user.status}'."
+        )
+
+    old_status = user.status
+    user.status = "active"
+    reason = body.reason if body else None
+
+    log_action(
+        db,
+        current_user.id,
+        "restored_user",
+        "user",
+        entity_id=user.id,
+        details={
+            "label": f"Admin {current_user.full_name or current_user.email} restored user {user.full_name or user.email}",
+            "old_status": old_status,
+            "new_status": "active",
+            "reason": reason,
+        }
+    )
+    notification_service.create_notification(
+        db,
+        user_id=user.id,
+        notification_type="account_restored",
+        title="Account Restored",
+        message=f"Your account has been restored to active status by an administrator. "
+                f"You now have full access to the system again.",
+        actor_name="System Admin",
+        actor_email=current_user.email,
+    )
+
+    db.commit()
+    return {"message": f"{user.full_name or user.email} has been restored to active status."}
 
 
 @router.patch("/users/{user_id}/archive")
 def archive_user(
     user_id: int,
+    body: StatusChangeRequest = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("admin"))
 ):
@@ -87,10 +238,42 @@ def archive_user(
         raise HTTPException(404, "User not found")
     if user.role == "admin":
         raise HTTPException(400, "Cannot archive admin accounts") 
+    old_status = user.status
     user.status = "archived"
+    reason = body.reason if body else None
+    log_action(
+        db, current_user.id, "archived_user", "user", entity_id=user.id,
+        details={
+            "label": f"Admin {current_user.full_name or current_user.email} archived user {user.full_name or user.email}",
+            "old_status": old_status, "new_status": "archived", "reason": reason,
+            "definition": STATUS_DEFINITIONS["archived"],
+        }
+    )
+    user_projects = db.query(ProjectMembership).filter(
+        ProjectMembership.user_id == user.id,
+        ProjectMembership.left_at.is_(None)
+    ).all()
+    for membership in user_projects:
+        project = db.query(Project).filter(Project.id == membership.project_id).first()
+        if project:
+            log_action(
+                db,
+                current_user.id,
+                "archived_user_in_project",
+                "project",
+                project_id=project.id,
+                entity_id=user.id,
+                details={
+                    "label": f"User {user.full_name or user.email} archived in Project: {project.name}",
+                    "user_role_in_project": membership.role,
+                    "new_user_status": "archived",
+                }
+            )
     db.commit()
-    return {"message": f"{user.email} archived"}
-
+    return {
+        "message": f"{user.email} has been archived. All their data is preserved but the account is deactivated.",
+        "definition": STATUS_DEFINITIONS["archived"],
+    }
 
 @router.get("/all-users")
 def get_all_users(
@@ -99,8 +282,14 @@ def get_all_users(
 ):
     users = db.query(User).all()
     return [
-        {"id": u.id, "email": u.email, "full_name": u.full_name,
-         "role": u.role, "status": u.status}
+        {
+            "id": u.id,
+            "email": u.email,
+            "full_name": u.full_name,
+            "role": u.role,
+            "status": u.status,
+            "status_definition": STATUS_DEFINITIONS.get(u.status),
+        }
         for u in users
     ]
 
@@ -140,12 +329,12 @@ def get_project_members_admin(
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(404, "Project not found")
-        
+
     memberships = db.query(ProjectMembership).filter(
         ProjectMembership.project_id == project_id,
         ProjectMembership.left_at.is_(None)
     ).all()
-    
+
     return [
         {
             "id": m.id,                
@@ -154,6 +343,7 @@ def get_project_members_admin(
             "full_name": m.user.full_name,
             "role": m.role,
             "joined_at": m.joined_at,
+            "user_status": m.user.status,
         }
         for m in memberships
     ]
@@ -179,9 +369,12 @@ def change_project_manager(
     if not new_pm_user:
         raise HTTPException(404, f"User '{new_pm_email}' not found")
 
-    # Prevent assigning a terminated/suspended user as PM
+    # Only active users can be PM
     if new_pm_user.status != "active":
-        raise HTTPException(400, "Cannot assign an inactive user as Project Manager")
+        raise HTTPException(
+            400,
+            f"Cannot assign a {new_pm_user.status} user as Project Manager. Only active users can be PMs."
+        )
 
     current_pm = db.query(ProjectMembership).filter_by(project_id=project_id, role="project_manager").first()
     old_pm_user_id = None
@@ -230,7 +423,7 @@ def change_project_manager(
         project_id=project_id, 
         entity_id=new_pm_user.id,
         details={
-            "label": f"to be{new_pm_user.full_name or new_pm_user.email} for Project: {project.name}"
+            "label": f"Admin {current_user.full_name or current_user.email} changed PM to {new_pm_user.full_name or new_pm_user.email} for Project: {project.name}"
         }
     )
 
@@ -251,8 +444,6 @@ def delete_system_project(
 
     project_name = project.name
 
-    # Null out session_id on notifications before sessions are deleted,
-    # because the DB FK has no ON DELETE SET NULL clause.
     session_ids = [s.id for s in db.query(SessionModel.id).filter(SessionModel.project_id == project_id)]
     if session_ids:
         db.query(Notification).filter(Notification.session_id.in_(session_ids)).update(
@@ -265,7 +456,7 @@ def delete_system_project(
         "deleted_project",
         "project",
         project_id=project_id,
-        details={"label": f"Project: {project_name}"}
+        details={"label": f"Admin {current_user.full_name or current_user.email} deleted Project: {project_name}"}
     )
 
     db.delete(project)

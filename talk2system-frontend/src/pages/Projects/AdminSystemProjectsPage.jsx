@@ -137,7 +137,7 @@ export default function AdminSystemProjectsPage() {
               </thead>
               <tbody>
                 {projects.map((p) => {
-                  const pmTerminated = p.pm_status === "terminated" || p.pm_status === "suspended";
+                  const pmTerminated = p.pm_status === "terminated" || p.pm_status === "suspended"|| p.pm_status === "archived";
                   
                   return (
                     <tr 

@@ -104,11 +104,21 @@ export default function LoginPage() {
                   <div className="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
                 </div>
                 <form className="space-y-6" onSubmit={handleSubmit}>
-                  {error && (
-                    <p className="text-red-600 text-sm bg-red-50 dark:bg-red-900/20 px-4 py-2 rounded-lg">
+                {error && (
+                  <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 rounded-lg p-4 text-center space-y-2">
+                    <p className="text-sm text-red-600 dark:text-red-400 font-medium">
                       {error}
                     </p>
-                  )}
+                    {(error.toLowerCase().includes("terminated") || error.toLowerCase().includes("archived") || error.toLowerCase().includes("deactivated")) && (
+                      <a 
+                        href="/help/account-status" 
+                        className="inline-block text-sm text-red-700 dark:text-red-300 underline underline-offset-2 font-bold hover:text-red-800 dark:hover:text-red-200 transition-colors"
+                      >
+                      Learn more
+                      </a>
+                    )}
+                  </div>
+                )}
 
                   <div>
                     <label className="text-sm font-medium text-[#100d1c] dark:text-white">

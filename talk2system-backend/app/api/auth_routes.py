@@ -1,18 +1,27 @@
-from fastapi import APIRouter, Depends, HTTPException ,Request
+from datetime import datetime
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user
 from app.models.user import User
 from app.services import auth_service
 from fastapi.security import OAuth2PasswordRequestForm
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
+STATUS_MESSAGES = {
+    "active": None,
+    "pending": "Your account is pending admin approval. You cannot access the system until approved.",
+    "suspended": "Your account has been temporarily suspended. You cannot perform any actions. Contact an administrator for details.",
+    "terminated": "Your account has been permanently terminated. Access is denied.",
+    "archived": "Your account has been archived. Access is denied.",
+}
 
 
 class SignupRequest(BaseModel):
     email: str = Field(min_length=5)
     password: str = Field(min_length=8)
-    full_name: str = None
+    full_name: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
@@ -28,14 +37,23 @@ class AuthResponse(BaseModel):
     role: str
     status: str
     full_name: str
+    status_message: Optional[str] = None  
 
 
 class MeResponse(BaseModel):
     user_id: int
     email: str
-    full_name: str = None
+    full_name: Optional[str] = None
     role: str
     status: str
+    created_at: Optional[datetime] = None
+    gender: Optional[str] = None
+    status_message: Optional[str] = None   
+    is_readonly: bool = False               
+
+class UpdateProfileRequest(BaseModel):
+    full_name: Optional[str] = None
+    gender: Optional[str] = None
 
 
 @router.post("/signup", response_model=AuthResponse, status_code=201)
@@ -53,6 +71,7 @@ def signup(data: SignupRequest, db: Session = Depends(get_db)):
         role=user.role,
         status=user.status,
         full_name=user.full_name,
+        status_message=STATUS_MESSAGES.get(user.status),
     )
 
 
@@ -69,16 +88,48 @@ async def login(request: Request, db: Session = Depends(get_db)):
             password = body.get("password")
         return auth_service.login_user(db, email, password)
     except ValueError as e:
-        status_code = 403 if any(w in str(e) for w in ("pending", "suspended", "terminated", "archived")) else 401
+        # Only archived & terminated are fully blocked at login
+        status_code = 403 if any(w in str(e) for w in ("pending", "terminated", "archived")) else 401
         raise HTTPException(status_code=status_code, detail=str(e))
 
 
 @router.get("/me", response_model=MeResponse)
 def me(current_user: User = Depends(get_current_user)):
+    is_readonly = current_user.status in ("suspended",)
     return MeResponse(
         user_id=current_user.id,
         email=current_user.email,
         full_name=current_user.full_name,
         role=current_user.role,
         status=current_user.status,
+        created_at=current_user.created_at,
+        gender=current_user.gender,
+        status_message=STATUS_MESSAGES.get(current_user.status),
+        is_readonly=is_readonly,
     )
+
+
+@router.put("/me")
+def update_profile(
+    data: UpdateProfileRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.status in ("suspended", "terminated", "archived"):
+        raise HTTPException(
+            403,
+            detail=f"Cannot update profile: account is {current_user.status}."
+        )
+
+    if data.full_name is not None:
+        current_user.full_name = data.full_name.strip()
+
+    if data.gender is not None:
+        valid_genders = ["male", "female", "other"]
+        if data.gender.lower() not in valid_genders:
+            raise HTTPException(400, "Gender must be male, female, or other")
+        current_user.gender = data.gender.lower()
+
+    db.commit()
+    db.refresh(current_user)
+    return {"message": "Profile updated successfully"}
