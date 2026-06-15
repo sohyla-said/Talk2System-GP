@@ -24,6 +24,42 @@ const ICON_MAP = {
   uml_generated:       { icon: "account_tree",    color: "text-purple-500", bg: "bg-purple-50 dark:bg-purple-900/20", border: "border-purple-200 dark:border-purple-800" },
   uml_generation_failed: { icon: "error",         color: "text-red-500",    bg: "bg-red-50 dark:bg-red-900/20",       border: "border-red-200 dark:border-red-800" },
 };
+function renderBellMessage(message) {
+  if (!message) return null;
+  if (message.includes("[pm_note]")) {
+    const parts = message.split(/\[pm_note\](.*?)\[\/pm_note\]/s);
+    return parts.map((part, index) => {
+      if (index % 2 === 1) {
+        return (
+          <div key={index} className="mt-2 p-2 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20 rounded-r-lg">
+            <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 mb-0.5 flex items-center gap-1">
+              <span className="material-symbols-outlined text-xs">edit_note</span>
+              Note from PM:
+            </p>
+            <p className="text-xs text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">{part}</p>
+          </div>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
+  }
+  const plainMatch = message.match(/^(.*?)(Note from PM:\s*)(.*)$/s);
+  if (plainMatch) {
+    return (
+      <>
+        <span>{plainMatch[1]}</span>
+        <div className="mt-2 p-2 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20 rounded-r-lg">
+          <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 mb-0.5 flex items-center gap-1">
+            <span className="material-symbols-outlined text-xs">edit_note</span>
+            {plainMatch[2]}
+          </p>
+          <p className="text-xs text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">{plainMatch[3]}</p>
+        </div>
+      </>
+    );
+  }
+  return <span>{message}</span>;
+}
 
 export default function NotificationBell() {
   const navigate = useNavigate();
@@ -104,7 +140,7 @@ export default function NotificationBell() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-12 w-[400px] max-h-[500px] bg-white dark:bg-[#1a162e] rounded-xl border border-gray-200 dark:border-white/10 shadow-2xl flex flex-col z-50 overflow-hidden">
+        <div className="absolute right-0 top-12 w-[420px] max-h-[500px] bg-white dark:bg-[#1a162e] rounded-xl border border-gray-200 dark:border-white/10 shadow-2xl flex flex-col z-50 overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b dark:border-gray-700">
             <h3 className="font-black text-[#100d1c] dark:text-white">Notifications</h3>
             {unreadCount > 0 && <button onClick={handleMarkAllRead} className="text-xs text-primary font-bold hover:underline">Mark all read</button>}
@@ -120,12 +156,14 @@ export default function NotificationBell() {
             ) : (
               notifications.map((notif) => {
                 const style = ICON_MAP[notif.notification_type] || ICON_MAP.added_to_project;
+                const hasNote = notif.message?.includes("[pm_note]") || notif.message?.includes("Note from PM:");
+                
                 return (
                   <div key={notif.id} onClick={async () => {
-                                        if (!notif.is_read) handleMarkRead(notif.id);
-                                        setIsOpen(false);
-                                        await handleNotificationNav(notif, navigate, getToken);
-                                      }}
+                    if (!notif.is_read) handleMarkRead(notif.id);
+                    setIsOpen(false);
+                    await handleNotificationNav(notif, navigate, getToken);
+                  }}
                     className={`flex items-start gap-3 px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 transition-colors border-b border-gray-100 dark:border-gray-800 last:border-0 ${!notif.is_read ? style.bg : ""}`}>
                     <span className={`material-symbols-outlined mt-0.5 ${style.color}`}>{style.icon}</span>
                     <div className="flex-1 min-w-0">
@@ -133,7 +171,9 @@ export default function NotificationBell() {
                         <p className={`text-sm ${!notif.is_read ? "font-bold" : "font-medium"} text-[#100d1c] dark:text-white`}>{notif.title}</p>
                         {!notif.is_read && <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-1.5" />}
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{notif.message}</p>
+                      <div className={`text-xs text-gray-500 dark:text-gray-400 mt-0.5 ${!hasNote ? "line-clamp-2" : ""}`}>
+                        {renderBellMessage(notif.message)}
+                      </div>
                       <div className="flex items-center gap-2 mt-1.5">
                         {notif.actor_name && <span className="text-[11px] text-gray-400">by {notif.actor_name}</span>}
                         <span className="text-[11px] text-gray-400">• {formatTime(notif.created_at)}</span>

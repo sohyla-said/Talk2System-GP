@@ -459,12 +459,16 @@ def add_participant_directly(
         actor_name = current_user.full_name
         actor_email = current_user.email
 
+    note_text = ""
+    if data.notes and data.notes.strip():
+        note_text = f"\n[pm_note]{data.notes.strip()}[/pm_note]"
+    message = f"You have been added to '{project.name}' as a participant.{note_text}"
     notification_service.create_notification(
         db,
         user_id=target_user.id,
         notification_type="added_to_project",
         title="Added to Project",
-        message=f"You have been added to '{project.name}' as a participant.",
+        message=message,
         actor_name=actor_name,
         actor_email=actor_email,
         project_id=project_id,

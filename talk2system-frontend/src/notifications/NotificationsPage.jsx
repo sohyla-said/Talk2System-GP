@@ -23,14 +23,48 @@ const ICON_MAP = {
   uml_generation_failed: { icon: "error",         color: "text-red-500",    bg: "bg-red-50 dark:bg-red-900/20",       border: "border-red-200 dark:border-red-800" },
 };
 
+function renderMessage(message) {
+  if (!message) return null;
+  if (message.includes("[pm_note]")) {
+    const parts = message.split(/\[pm_note\](.*?)\[\/pm_note\]/s);
+    return parts.map((part, index) => {
+      if (index % 2 === 1) {
+        return (
+          <div key={index} className="mt-3 p-3 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20 rounded-r-lg">
+            <p className="text-xs font-bold text-blue-600 dark:text-blue-400 mb-1 flex items-center gap-1">
+              <span className="material-symbols-outlined text-sm">edit_note</span>
+              Note from PM:
+            </p>
+            <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">{part}</p>
+          </div>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
+  }
+  const plainMatch = message.match(/^(.*?)(Note from PM:\s*)(.*)$/s);
+  if (plainMatch) {
+    return (
+      <>
+        <span>{plainMatch[1]}</span>
+        <div className="mt-3 p-3 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20 rounded-r-lg">
+          <p className="text-xs font-bold text-blue-600 dark:text-blue-400 mb-1 flex items-center gap-1">
+            <span className="material-symbols-outlined text-sm">edit_note</span>
+            {plainMatch[2]}
+          </p>
+          <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">{plainMatch[3]}</p>
+        </div>
+      </>
+    );
+  }
+  return <span>{message}</span>;
+}
 export default function NotificationsPage() {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
 
-  
-  
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -61,14 +95,14 @@ export default function NotificationsPage() {
   //   if (notif.project_id) navigate(`/projects/${notif.project_id}`);
   // };
   const handleGoToProject = async (notif) => {
-  if (!notif.is_read) {
-    await markNotificationRead(notif.id);
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === notif.id ? { ...n, is_read: true } : n))
-    );
-  }
-  await handleNotificationNav(notif, navigate, getToken);
-};
+    if (!notif.is_read) {
+      await markNotificationRead(notif.id);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === notif.id ? { ...n, is_read: true } : n))
+      );
+    }
+    await handleNotificationNav(notif, navigate, getToken);
+  };
 
   // Filter by status (all/unread/read)
   const statusFiltered = notifications.filter((n) => {
@@ -166,7 +200,9 @@ export default function NotificationsPage() {
                       <h3 className={`text-sm ${!notif.is_read ? "font-black" : "font-semibold"} text-[#100d1c] dark:text-white`}>{notif.title}</h3>
                       {!notif.is_read && <span className="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0 mt-1" />}
                     </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{notif.message}</p>
+                    <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                      {renderMessage(notif.message)}
+                    </div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3">
                       {notif.actor_name && (
                         <div className="flex items-center gap-1.5 text-xs text-gray-500">
