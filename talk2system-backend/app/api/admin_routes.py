@@ -84,6 +84,7 @@ def terminate_user(
     old_status = user.status
     user.status = "terminated"
     reason = body.reason if body else None
+    user.status_reason = reason
     log_action(
         db, current_user.id, "terminated_user", "user", entity_id=user.id,
         details={
@@ -111,6 +112,7 @@ def terminate_user(
                     "label": f"User {user.full_name or user.email} terminated in Project: {project.name}",
                     "user_role_in_project": membership.role,
                     "new_user_status": "terminated",
+                    "reason": reason,  
                 }
             )
     db.commit()
@@ -135,6 +137,7 @@ def suspend_user(
     old_status = user.status
     user.status = "suspended"
     reason = body.reason if body else None
+    user.status_reason = reason
     log_action(
         db, current_user.id, "suspended_user", "user", entity_id=user.id,
         details={
@@ -161,6 +164,8 @@ def suspend_user(
                     "label": f"User {user.full_name or user.email} suspended in Project: {project.name}",
                     "user_role_in_project": membership.role,
                     "new_user_status": "suspended",
+                    "reason": reason, 
+
                 }
             )
     notification_service.create_notification(
@@ -188,15 +193,16 @@ def restore_user(
     if not user:
         raise HTTPException(404, "User not found")
     if user.role == "admin":
-        raise HTTPException(400, "Admin accounts cannot be restored this way")
-    if user.status != "suspended":
+        raise HTTPException(400, "Admin accounts cannot be restored this way")    
+    if user.status not in ["suspended", "terminated", "archived"]:
         raise HTTPException(
             400,
-            f"Only suspended users can be restored. '{user.email}' is currently '{user.status}'."
+            f"Only non active users can be restored. '{user.email}' is currently '{user.status}'."
         )
 
     old_status = user.status
-    user.status = "active"
+    user.status = "active"    
+    user.status_reason = None
     reason = body.reason if body else None
 
     log_action(
@@ -242,6 +248,7 @@ def archive_user(
     old_status = user.status
     user.status = "archived"
     reason = body.reason if body else None
+    user.status_reason = reason
     log_action(
         db, current_user.id, "archived_user", "user", entity_id=user.id,
         details={
@@ -268,6 +275,7 @@ def archive_user(
                     "label": f"User {user.full_name or user.email} archived in Project: {project.name}",
                     "user_role_in_project": membership.role,
                     "new_user_status": "archived",
+                    "reason": reason,
                 }
             )
     db.commit()
@@ -289,6 +297,7 @@ def get_all_users(
             "full_name": u.full_name,
             "role": u.role,
             "status": u.status,
+            "status_reason": u.status_reason,
             "status_definition": STATUS_DEFINITIONS.get(u.status),
         }
         for u in users

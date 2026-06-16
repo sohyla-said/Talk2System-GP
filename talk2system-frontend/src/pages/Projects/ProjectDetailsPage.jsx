@@ -357,15 +357,6 @@ export default function ProjectDetailsPage() {
                   let actionVerb = "";
                   let statusIcon = "circle";
 
-                  if (isStatusChangeLog) {
-                    const parts = log.details?.label?.split(" in Project: ");
-                    if (parts?.length === 2) {
-                      targetUserName = parts[0].replace("User ", "");
-                      projectName = parts[1];
-                    }
-                    actionVerb = log.action?.replace("_user_in_project", "").replace(/_/g, " "); 
-                  }
-
                   const statusConfig = {
                     suspended: { icon: "pause_circle", bg: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400", dot: "text-yellow-500", border: "border-yellow-200 dark:border-yellow-800/40 bg-yellow-50/50 dark:bg-yellow-900/10" },
                     terminated: { icon: "cancel", bg: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", dot: "text-red-500", border: "border-red-200 dark:border-red-800/40 bg-red-50/50 dark:bg-red-900/10" },
@@ -373,8 +364,18 @@ export default function ProjectDetailsPage() {
                   };
                   const currentStatus = Object.keys(statusConfig).find(s => log.action?.includes(s)) || "";
                   const config = statusConfig[currentStatus] || {};
-                  if (isStatusChangeLog) statusIcon = config.icon;
 
+                  if (isStatusChangeLog) {
+                    const parts = log.details?.label?.split(" in Project: ");
+                    if (parts?.length === 2) {
+                      targetUserName = parts[0].replace("User ", "").replace(currentStatus, "").trim();
+                      projectName = parts[1];
+                    }
+                    actionVerb = log.action?.replace("_user_in_project", "").replace(/_/g, " "); 
+                  }
+
+                  
+                  if (isStatusChangeLog) statusIcon = config.icon;
                   return (
                     <div key={log.id} className={`flex items-start gap-4 p-3 rounded-lg border ${isStatusChangeLog ? config.border : "border-transparent bg-gray-50 dark:bg-[#231e3d]"}`}>
                       <span className={`material-symbols-outlined mt-0.5 text-lg ${isStatusChangeLog ? config.dot : "text-primary"}`}>{statusIcon}</span>
@@ -387,7 +388,10 @@ export default function ProjectDetailsPage() {
                               <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${config.bg} tracking-wide`}>
                                 {actionVerb}
                               </span>{" "}
-                              user <span className="font-black">{targetUserName}</span>
+                              user <span className="font-black">{targetUserName}</span>                              
+                              {log.details?.reason && (
+                                <> for reason <span className="font-medium text-gray-600 dark:text-gray-300">{log.details.reason}</span></>
+                              )}
                             </p>
                             <div className="flex items-center gap-3 text-[11px] text-gray-500 dark:text-gray-400 pl-0.5">
                               <span className="flex items-center gap-1">
@@ -403,7 +407,7 @@ export default function ProjectDetailsPage() {
                             </div>
                           </div>
                         ) : (
-                          /* === NORMAL LOG LAYOUT === */
+                          /* LOG LAYOUT */
                           <p className="text-sm font-semibold text-gray-900 dark:text-white">
                             {log.user_name || "Unknown User"}{" "}
                             {roleName && (<span className="font-normal text-gray-400 dark:text-gray-500 text-xs">({roleName})</span>)}{" "}

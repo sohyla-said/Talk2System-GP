@@ -213,39 +213,51 @@ export async function fetchAllUsers() {
   return data;
 }
 
-export async function adminSuspendUser(userId) {
+export async function adminSuspendUser(userId, reason) {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
 
   const res = await fetch(`${BASE_URL}/api/admin/users/${userId}/suspend`, {
     method: "PATCH",
-    headers: { Authorization: `Bearer ${token}` },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ reason }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || "Failed to suspend user");
   return data;
 }
 
-export async function adminTerminateUser(userId) {
+export async function adminTerminateUser(userId, reason) {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
 
   const res = await fetch(`${BASE_URL}/api/admin/users/${userId}/terminate`, {
     method: "PATCH",
-    headers: { Authorization: `Bearer ${token}` },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ reason }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || "Failed to terminate user");
   return data;
 }
 
-export async function adminArchiveUser(userId) {
+export async function adminArchiveUser(userId, reason) {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
 
   const res = await fetch(`${BASE_URL}/api/admin/users/${userId}/archive`, {
     method: "PATCH",
-    headers: { Authorization: `Bearer ${token}` },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ reason }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || "Failed to archive user");
@@ -255,8 +267,7 @@ export async function adminArchiveUser(userId) {
 export async function adminActivateUser(userId) {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
-
-  const res = await fetch(`${BASE_URL}/api/admin/users/${userId}/approve`, {
+  const res = await fetch(`${BASE_URL}/api/admin/users/${userId}/restore`, {
     method: "PATCH",
     headers: { Authorization: `Bearer ${token}` },
   });

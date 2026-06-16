@@ -20,6 +20,7 @@ class User(Base):
     # status lifecycle
     status = Column(String(20), nullable=False, default="pending")
     # pending / active / suspended / terminated / archived
+    status_reason = Column(String, nullable=True)
 
     created_at = Column(
         DateTime(timezone=True),
