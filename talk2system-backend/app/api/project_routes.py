@@ -299,10 +299,13 @@ def accept_invitation(
     db.refresh(inv)
     return inv
 
+class RejectRequest(BaseModel):
+    reason: Optional[str] = None
 
 @router.patch("/invitations/{invitation_id}/reject", response_model=InvitationResponse)
 def reject_invitation(
     invitation_id: int,
+    body: RejectRequest = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -319,16 +322,18 @@ def reject_invitation(
 
     inv.status = "rejected"
     inv.actioned_at = datetime.now(timezone.utc)
-
+    reason_text = (body.reason.strip() if body and body.reason else None) or None
     project = db.query(Project).filter(Project.id == inv.project_id).first()
 
-    # CREATE NOTIFICATION
+    message = f"Your request to join '{project.name if project else 'Project #' + str(inv.project_id)}' has been rejected."
+    if reason_text:
+        message += f"\n[reason]{reason_text}[/reason]"
     notification_service.create_notification(
         db,
         user_id=inv.invitee_user_id,
         notification_type="join_rejected",
         title="Join Request Rejected",
-        message=f"Your request to join '{project.name if project else 'Project #' + str(inv.project_id)}' has been rejected.",
+        message=message,
         actor_name=current_user.full_name,
         actor_email=current_user.email,
         project_id=inv.project_id,

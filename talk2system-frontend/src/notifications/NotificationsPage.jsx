@@ -42,6 +42,22 @@ function renderMessage(message) {
       return <span key={index}>{part}</span>;
     });
   }
+  if (message.includes("[reason]")) {
+    const parts = message.split(/\[reason\](.*?)\[\/reason\]/s);
+    return parts.map((part, index) => {
+      if (index % 2 === 1) {
+        return (
+          <div key={index} className="mt-3 p-3 border-l-4 border-red-400 bg-red-50 dark:bg-red-900/20 rounded-r-lg">
+            <p className="text-xs font-bold text-red-600 dark:text-red-400 mb-1 flex items-center gap-1">
+              Reason for rejection:
+            </p>
+            <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">{part}</p>
+          </div>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
+  }
   const plainMatch = message.match(/^(.*?)(Note from PM:\s*)(.*)$/s);
   if (plainMatch) {
     return (

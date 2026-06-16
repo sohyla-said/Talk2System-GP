@@ -43,6 +43,22 @@ function renderBellMessage(message) {
       return <span key={index}>{part}</span>;
     });
   }
+  if (message.includes("[reason]")) {
+    const parts = message.split(/\[reason\](.*?)\[\/reason\]/s);
+    return parts.map((part, index) => {
+      if (index % 2 === 1) {
+        return (
+          <div key={index} className="mt-2 p-2 border-l-4 border-red-400 bg-red-50 dark:bg-red-900/20 rounded-r-lg">
+            <p className="text-[10px] font-bold text-red-600 dark:text-red-400 mb-0.5 flex items-center gap-1">
+              Reason for rejection:
+            </p>
+            <p className="text-xs text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">{part}</p>
+          </div>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
+  }
   const plainMatch = message.match(/^(.*?)(Note from PM:\s*)(.*)$/s);
   if (plainMatch) {
     return (
@@ -156,8 +172,7 @@ export default function NotificationBell() {
             ) : (
               notifications.map((notif) => {
                 const style = ICON_MAP[notif.notification_type] || ICON_MAP.added_to_project;
-                const hasNote = notif.message?.includes("[pm_note]") || notif.message?.includes("Note from PM:");
-                
+                const hasNote = notif.message?.includes("[pm_note]") || notif.message?.includes("[reason]") || notif.message?.includes("Note from PM:");                
                 return (
                   <div key={notif.id} onClick={async () => {
                     if (!notif.is_read) handleMarkRead(notif.id);

@@ -29,6 +29,7 @@ export default function ProjectDetailsPage() {
   const [isCompleting, setIsCompleting] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
 
+  const [rejectModal, setRejectModal] = useState({ show: false, req: null, reason: "" });
   useEffect(() => {
     const load = async () => {
       try {
@@ -95,11 +96,12 @@ export default function ProjectDetailsPage() {
     }
   };
 
-  const handleReject = async (invId, userName) => {
+  const handleReject = async (invId, userName, reason) => {
     try {
-      await rejectInvitation(invId);
+      await rejectInvitation(invId, reason);
       setPendingRequests((prev) => prev.filter((r) => r.id !== invId));
       showToast(`${userName} rejected`, "error"); 
+      setRejectModal({ show: false, req: null, reason: "" }); // Close modal
     } catch (err) {
       showToast(err.message, "error");
     }
@@ -188,6 +190,9 @@ export default function ProjectDetailsPage() {
       }
       if (details.extra) {
         lines.push(`${details.extra}`);
+      }
+      if (details.reason) {
+        lines.push(`Reason: ${details.reason}`);
       }
       return lines.length > 0 ? lines.join("\n") : "—";
     };
@@ -297,12 +302,52 @@ export default function ProjectDetailsPage() {
                     </div>
                     <div className="flex gap-2">
                       <button onClick={() => handleAccept(req.id, req.invitee_full_name || `User #${req.invitee_user_id}`)} className="px-3 py-1 rounded-lg bg-primary text-white text-xs font-bold hover:bg-primary/90">Accept</button>
-                      <button onClick={() => handleReject(req.id, req.invitee_full_name || `User #${req.invitee_user_id}`)} className="px-3 py-1 rounded-lg border border-red-300 text-red-500 text-xs font-bold hover:bg-red-50">Reject</button>
-                    </div>
+                      <button onClick={() => setRejectModal({ show: true, req, reason: "" })} className="px-3 py-1 rounded-lg border border-red-300 text-red-500 text-xs font-bold hover:bg-red-50">Reject</button>                    </div>
                   </div>
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+            {/* Reject Reason Modal */}
+      {rejectModal.show && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60]">
+          <div className="bg-white dark:bg-[#1a162e] rounded-xl w-full max-w-sm shadow-xl p-6 m-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                <span className="material-symbols-outlined text-red-500 text-xl">cancel</span>
+              </div>
+              <h3 className="text-lg font-black text-gray-900 dark:text-white">Reject Request</h3>
+            </div>
+            
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Rejecting <span className="font-bold text-gray-700 dark:text-gray-200">{rejectModal.req?.invitee_full_name || "this user"}</span> from joining the project.
+            </p>
+
+            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Reason for rejection <span className="text-gray-400 font-normal">(optional)</span></label>
+            <textarea
+              value={rejectModal.reason}
+              onChange={(e) => setRejectModal(prev => ({ ...prev, reason: e.target.value }))}
+              placeholder="e.g., Project is currently full..."
+              rows={3}
+              className="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#231e3d] text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none mb-5"
+            />
+
+            <div className="flex justify-end gap-2">
+              <button 
+                onClick={() => setRejectModal({ show: false, req: null, reason: "" })} 
+                className="px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => handleReject(rejectModal.req.id, rejectModal.req.invitee_full_name, rejectModal.reason)} 
+                className="px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition"
+              >
+                Reject User
+              </button>
+            </div>
           </div>
         </div>
       )}

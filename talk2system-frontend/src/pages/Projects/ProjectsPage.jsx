@@ -197,26 +197,17 @@ export default function ProjectsPage() {
                   <option value="">{t("selectAProject")}</option>
                   {joinableProjects.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {/* Only show project name now */}
                       {p.name}
                     </option>
                   ))}
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-bold mb-1">
-                  {t("confirmDomain")}{" "}
-                  <span className="text-gray-400 font-normal">{t("autoFilledFromDB")}</span>
-                </label>
-                <input
-                  type="text"
-                  value={selectedProject?.domain || ""}
-                  readOnly
-                  placeholder={t("selectProjectAbove")}
-                  className="w-full h-11 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 text-sm opacity-70 cursor-not-allowed"
-                />
-              </div>
+              {selectedProject?.domain && (
+                <p className="text-sm text-gray-500">
+                  {t("domain")}: <span className="font-semibold text-gray-700 dark:text-gray-300">{selectedProject.domain}</span>
+                </p>
+              )}
 
               <div className="flex justify-end gap-3 pt-2">
                 <button
