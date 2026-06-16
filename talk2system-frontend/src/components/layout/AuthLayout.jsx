@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useLanguage } from "../../context/LanguageContext";
+import ThemeToggle from "./ThemeToggle";
 import LangToggle from "./LangToggle";
 import { useTranslation } from "../../hooks/useTranslation";
 
@@ -48,6 +49,7 @@ export default function AuthLayout() {
         {/* Auth Links + Lang Toggle */}
         <nav className="flex items-center gap-6">
           <LangToggle />
+          <ThemeToggle />
           <NavLink to="/login" className={linkClasses}>
             {t("login")}
           </NavLink>
