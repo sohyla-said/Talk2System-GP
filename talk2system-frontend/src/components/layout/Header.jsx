@@ -160,14 +160,14 @@ export default function Header() {
         <img
           src="/logo.png"
           alt="Talk2System Logo"
-          className="h-12 w-auto object-contain block dark:hidden"
+          className="h-9 sm:h-12 w-auto object-contain block dark:hidden"
           onError={(e) => { e.target.onerror = null; e.target.style.display = "none"; }}
         />
         {/* Dark Mode Logo */}
         <img
           src="/Darkmode_logo.png"
           alt="Talk2SystemLogo"
-          className="h-12 w-auto object-contain hidden dark:block"
+          className="h-9 sm:h-12 w-auto object-contain hidden dark:block"
           onError={(e) => { e.target.onerror = null; e.target.style.display = "none"; }}
         />
       </NavLink>
@@ -226,7 +226,9 @@ export default function Header() {
       </div>
 
       {/* RIGHT: Mobile controls (visible only below md) */}
-      <div className="flex md:hidden items-center gap-2 ms-auto">
+      <div className="flex md:hidden items-center gap-1 sm:gap-2 ms-auto">
+        <LangToggle />
+        <ThemeToggle />
         {!isAdmin() && <NotificationBell />}
 
         {/* Avatar (always visible) */}

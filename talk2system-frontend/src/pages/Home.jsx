@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { isLoggedIn, getCurrentUser, isAdmin } from "../api/authApi";
 import Header from "../components/layout/Header";
+import ThemeToggle from "../components/layout/ThemeToggle";
 import LangToggle from "../components/layout/LangToggle";
 import { useTranslation } from "../hooks/useTranslation";
 export default function Home() {
@@ -51,6 +52,7 @@ export default function Home() {
 
           <nav className="flex items-center gap-6">
             <LangToggle />
+            <ThemeToggle />
             <Link to="/login" className="text-sm font-semibold text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-white transition-colors">
               {t("login")}
             </Link>
