@@ -106,13 +106,20 @@ export async function acceptInvitation(invitationId) {
   return data;
 }
 
-export async function rejectInvitation(invitationId) {
-  const res = await fetch(`${BASE_URL}/api/projects/invitations/${invitationId}/reject`, {
+export async function rejectInvitation(invId, reason) {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(`${BASE_URL}/api/projects/invitations/${invId}/reject`, {
     method: "PATCH",
-    headers: authHeaders(),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ reason }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || "Failed to reject");
+  if (!res.ok) throw new Error(data.detail || "Failed to reject request");
   return data;
 }
 // My projects (only ones I own or am member of)
