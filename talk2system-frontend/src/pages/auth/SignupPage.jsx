@@ -1,14 +1,25 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { signupApi, loginWithGoogle, loginWithGitHub } from "../../api/authApi";
 import { useTranslation } from "../../hooks/useTranslation";
+import ReCAPTCHA from "react-google-recaptcha";                     
 
 export default function SignupPage() {
   const navigate = useNavigate();
+  const recaptchaRef = useRef();                                      
   const [form, setForm]       = useState({ name: "", email: "", password: "", confirmPassword: "" });
   const [error, setError]     = useState("");
   const [loading, setLoading] = useState(false);
   const { t } = useTranslation();
+  const [showPassword, setShowPassword]         = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  useEffect(() => {
+    setForm({ name: "", email: "", password: "", confirmPassword: "" });
+    setError("");
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+    if (recaptchaRef.current) recaptchaRef.current.reset();
+  }, []);
 
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -26,16 +37,21 @@ export default function SignupPage() {
       return;
     }
 
+    const recaptchaValue = recaptchaRef.current?.getValue();
+    if (!recaptchaValue) {
+      setError(t("pleaseCompleteCaptcha") || "Please complete the captcha verification");
+      return;
+    }
+
     setLoading(true);
     try {
-      // role is always "user" — no selector needed
       await signupApi(form);
-      // always goes to pending page; backend never auto approves regular signups
       navigate("/pending-approval");
     } catch (err) {
       setError(err.message || t("signupFailed"));
     } finally {
       setLoading(false);
+      if (recaptchaRef.current) recaptchaRef.current.reset();          
     }
   };
 
@@ -114,7 +130,7 @@ export default function SignupPage() {
               placeholder={t("fullName")}
               value={form.name}
               onChange={handleChange}
-              required
+              autoComplete="off"                                       
               className="w-full h-12 px-4 rounded-lg bg-slate-100 dark:bg-slate-800"
             />
             <input
@@ -123,29 +139,60 @@ export default function SignupPage() {
               placeholder={t("emailAddress")}
               value={form.email}
               onChange={handleChange}
-              required
-              className="w-full h-12 px-4 rounded-lg bg-slate-100 dark:bg-slate-800"
-            />
-            <input
-              type="password"
-              name="password"
-              placeholder={t("passwordMinHint")}
-              value={form.password}
-              onChange={handleChange}
-              required
-              className="w-full h-12 px-4 rounded-lg bg-slate-100 dark:bg-slate-800"
-            />
-            <input
-              type="password"
-              name="confirmPassword"
-              placeholder={t("confirmPassword")}
-              value={form.confirmPassword}
-              onChange={handleChange}
-              required
+              autoComplete="off"
               className="w-full h-12 px-4 rounded-lg bg-slate-100 dark:bg-slate-800"
             />
 
-            {/* everyone signs up as "user" */}
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                name="password"
+                placeholder={t("passwordMinHint")}
+                value={form.password}
+                onChange={handleChange}
+                autoComplete="new-password"
+                className="w-full h-12 px-4 pr-12 rounded-lg bg-slate-100 dark:bg-slate-800"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                <span className="material-symbols-outlined text-xl">
+                  {showPassword ? "visibility_off" : "visibility"}
+                </span>
+              </button>
+            </div>
+
+            <div className="relative">
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                name="confirmPassword"
+                placeholder={t("confirmPassword")}
+                value={form.confirmPassword}
+                onChange={handleChange}
+                autoComplete="new-password"
+                className="w-full h-12 px-4 pr-12 rounded-lg bg-slate-100 dark:bg-slate-800"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                <span className="material-symbols-outlined text-xl">
+                  {showConfirmPassword ? "visibility_off" : "visibility"}
+                </span>
+              </button>
+            </div>
+
+            {/* Google reCAPTCHA */}
+            <div className="flex justify-center">
+              <ReCAPTCHA
+                ref={recaptchaRef}
+                sitekey="6LexYiMtAAAAAHVa32NeoLu4OFMqtHscJpafrqQK"
+                theme="dark"
+              />
+            </div>
 
             <button
               type="submit"

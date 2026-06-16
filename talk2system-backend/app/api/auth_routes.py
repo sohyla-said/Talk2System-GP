@@ -2,13 +2,16 @@ from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user
 from app.models.user import User
 from app.services import auth_service
-from fastapi.security import OAuth2PasswordRequestForm
+from passlib.context import CryptContext
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 STATUS_MESSAGES = {
     "active": None,
     "pending": "Your account is pending admin approval. You cannot access the system until approved.",
@@ -47,14 +50,11 @@ class MeResponse(BaseModel):
     role: str
     status: str
     created_at: Optional[datetime] = None
-    gender: Optional[str] = None
     status_message: Optional[str] = None   
     is_readonly: bool = False               
 
 class UpdateProfileRequest(BaseModel):
     full_name: Optional[str] = None
-    gender: Optional[str] = None
-
 
 @router.post("/signup", response_model=AuthResponse, status_code=201)
 def signup(data: SignupRequest, db: Session = Depends(get_db)):
@@ -88,7 +88,6 @@ async def login(request: Request, db: Session = Depends(get_db)):
             password = body.get("password")
         return auth_service.login_user(db, email, password)
     except ValueError as e:
-        # Only archived & terminated are fully blocked at login
         status_code = 403 if any(w in str(e) for w in ("pending", "terminated", "archived")) else 401
         raise HTTPException(status_code=status_code, detail=str(e))
 
@@ -103,7 +102,6 @@ def me(current_user: User = Depends(get_current_user)):
         role=current_user.role,
         status=current_user.status,
         created_at=current_user.created_at,
-        gender=current_user.gender,
         status_message=STATUS_MESSAGES.get(current_user.status),
         is_readonly=is_readonly,
     )
@@ -123,12 +121,6 @@ def update_profile(
 
     if data.full_name is not None:
         current_user.full_name = data.full_name.strip()
-
-    if data.gender is not None:
-        valid_genders = ["male", "female", "other"]
-        if data.gender.lower() not in valid_genders:
-            raise HTTPException(400, "Gender must be male, female, or other")
-        current_user.gender = data.gender.lower()
 
     db.commit()
     db.refresh(current_user)
