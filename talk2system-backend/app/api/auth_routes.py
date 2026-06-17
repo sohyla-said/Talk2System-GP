@@ -55,7 +55,9 @@ class MeResponse(BaseModel):
 
 class UpdateProfileRequest(BaseModel):
     full_name: Optional[str] = None
-
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8)
 @router.post("/signup", response_model=AuthResponse, status_code=201)
 def signup(data: SignupRequest, db: Session = Depends(get_db)):
     try:
@@ -125,3 +127,23 @@ def update_profile(
     db.commit()
     db.refresh(current_user)
     return {"message": "Profile updated successfully"}
+@router.post("/change-password")
+def change_password(
+    data: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.status in ("suspended", "terminated", "archived"):
+        raise HTTPException(
+            403,
+            detail=f"Cannot change password: account is {current_user.status}."
+        )
+
+    if not auth_service.verify_password(data.current_password, current_user.hashed_password):
+        raise HTTPException(
+            401,
+            detail="Current password is incorrect"
+        )
+    current_user.hashed_password = auth_service.hash_password(data.new_password)
+    db.commit()
+    return {"message": "Password changed successfully"}

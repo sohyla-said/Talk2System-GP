@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "../../hooks/useTranslation";
-import { fetchProfile, updateProfile, getCurrentUser } from "../../api/authApi"; 
+import { fetchProfile, updateProfile, getCurrentUser, changePassword } from "../../api/authApi"; 
 
-const userForAvatar = getCurrentUser();
-const DEFAULT_AVATAR = `https://ui-avatars.com/api/?name=${encodeURIComponent(userForAvatar?.full_name || "User")}&background=6366f1&color=fff&bold=true`;
+const DEFAULT_AVATAR = `https://ui-avatars.com/api/?name=${encodeURIComponent("User")}&background=6366f1&color=fff&bold=true`;
+
 export default function ProfilePage() {
   const { t, dir } = useTranslation();
   const fileInputRef = useRef(null);
@@ -11,35 +11,63 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [formData, setFormData] = useState({ full_name: "", gender: "" });
+  const [formData, setFormData] = useState({ full_name: "" });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   
-  const [avatarUrl, setAvatarUrl] = useState(localStorage.getItem("user_avatar"));
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    current_password: "",
+    new_password: "",
+    confirm_password: ""
+  });
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState("");
+  
+  const [avatarUrl, setAvatarUrl] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   useEffect(() => {
     loadProfile();
+    
+    setAvatarUrl(localStorage.getItem("user_avatar"));
+    
     const handleAvatarUpdate = (e) => setAvatarUrl(e.detail);
     window.addEventListener("avatar-updated", handleAvatarUpdate);
-    return () => window.removeEventListener("avatar-updated", handleAvatarUpdate);
-  }, []);
+    
+    return () => {
+      window.removeEventListener("avatar-updated", handleAvatarUpdate);
+    };
+  }, []); // Empty dependency array = runs on every mount
 
   const loadProfile = async () => {
+    setLoading(true);
+    setProfile(null);
+    
     try {
       const data = await fetchProfile();
+      
       setProfile({
         id: data.user_id,
         email: data.email,
         full_name: data.full_name,
         role: data.role,
         status: data.status,
-        gender: data.gender,
         created_at: data.created_at
       });
-      setFormData({ full_name: data.full_name || "", gender: data.gender || "" });
+      
+      setFormData({ full_name: data.full_name || "" });
+      
+      // Update local storage with fresh data
+      const storage = localStorage.getItem("access_token") ? localStorage : sessionStorage;
+      storage.setItem("user_full_name", data.full_name || "");
+      storage.setItem("user_email", data.email);
+      storage.setItem("user_role", data.role);
+      storage.setItem("user_status", data.status);
+      storage.setItem("user_created_at", data.created_at || "");
+      
     } catch (err) {
-      console.error("API Error, using local fallback:", err.message);
+      console.error("API Error:", err.message);      
       const localUser = getCurrentUser();
       if (localUser) {
         setProfile({
@@ -48,12 +76,11 @@ export default function ProfilePage() {
           full_name: localUser.full_name,
           role: localUser.role,
           status: localUser.status,
-          gender: localUser.gender,
           created_at: localUser.created_at
         });
-        setFormData({ full_name: localUser.full_name || "", gender: localUser.gender || "" });
+        setFormData({ full_name: localUser.full_name || "" });
       } else {
-        setMessage("Failed to load profile data.");
+        setMessage("Failed to load profile data. Please try refreshing the page.");
       }
     } finally {
       setLoading(false);
@@ -76,19 +103,57 @@ export default function ProfilePage() {
       setSaving(false);
     }
   };
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    
+    if (passwordData.new_password !== passwordData.confirm_password) {
+      setPasswordMessage("New passwords do not match");
+      return;
+    }
+    
+    if (passwordData.new_password.length < 8) {
+      setPasswordMessage("Password must be at least 8 characters");
+      return;
+    }
+    
+    setChangingPassword(true);
+    setPasswordMessage("");
+    
+    try {
+      await changePassword({
+        current_password: passwordData.current_password,
+        new_password: passwordData.new_password
+      });
+      
+      setPasswordMessage(t("passwordChanged") || "Password changed successfully!");
+      setPasswordData({
+        current_password: "",
+        new_password: "",
+        confirm_password: ""
+      });
+      setTimeout(() => {
+        setPasswordMessage("");
+        setShowChangePassword(false);
+      }, 3000);
+    } catch (err) {
+      setPasswordMessage(err.message);
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   const formatDate = (dateStr) => {
     if (!dateStr || dateStr === "null" || dateStr === "undefined" || dateStr === "") {
-      return new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+      return "N/A";
     }
     try {
       const date = new Date(dateStr);
       if (isNaN(date.getTime())) {
-        return new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+        return "N/A";
       }
       return date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
     } catch {
-      return new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+      return "N/A";
     }
   };
 
@@ -125,11 +190,32 @@ export default function ProfilePage() {
     setDropdownOpen(false);
   };
 
+  const getCurrentAvatarUrl = () => {
+    if (avatarUrl) return avatarUrl;
+    const name = profile?.full_name || "User";
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff&bold=true`;
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <span className="material-symbols-outlined animate-spin text-5xl text-primary">progress_activity</span>
         <p className="text-sm text-gray-500 dark:text-gray-400 animate-pulse">Loading profile...</p>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <span className="material-symbols-outlined text-5xl text-gray-400">error</span>
+        <p className="text-sm text-gray-500 dark:text-gray-400">Unable to load profile</p>
+        <button 
+          onClick={loadProfile}
+          className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90"
+        >
+          Try Again
+        </button>
       </div>
     );
   }
@@ -169,7 +255,7 @@ export default function ProfilePage() {
               <div
                 onClick={handleAvatarClick}
                 className="w-28 h-28 rounded-2xl border-4 border-white dark:border-gray-800 bg-gray-200 dark:bg-gray-700 bg-center bg-cover shadow-2xl cursor-pointer transition-all duration-300 group-hover:scale-105 group-hover:shadow-primary/20"
-                style={{ backgroundImage: `url("${avatarUrl || DEFAULT_AVATAR}")` }}
+                style={{ backgroundImage: `url("${getCurrentAvatarUrl()}")` }}
               />
               <div className="absolute inset-0 rounded-2xl bg-black/0 group-hover:bg-black/30 transition-all duration-300 flex items-center justify-center">
                 <span className="material-symbols-outlined text-white text-3xl opacity-0 group-hover:opacity-100 transition-opacity">photo_camera</span>
@@ -198,9 +284,9 @@ export default function ProfilePage() {
             </div>
             <div className="text-center sm:text-start mb-2 sm:mb-0 flex-1">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white capitalize">
-                {profile?.full_name || "User"}
+                {profile.full_name || "User"}
               </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{profile?.email}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{profile.email}</p>
             </div>
             <div className="sm:ms-auto w-full sm:w-auto flex gap-2 justify-center sm:justify-end">
               {!editing ? (
@@ -215,7 +301,7 @@ export default function ProfilePage() {
                 <button
                   onClick={() => { 
                     setEditing(false); 
-                    setFormData({ full_name: profile.full_name || "", gender: profile.gender || "" }); 
+                    setFormData({ full_name: profile.full_name || "" }); 
                   }}
                   className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-bold hover:bg-gray-200 dark:hover:bg-gray-600 transition-all border border-gray-200 dark:border-gray-600"
                 >
@@ -240,20 +326,6 @@ export default function ProfilePage() {
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  {t("gender") || "Gender"}
-                </label>
-                <select
-                  value={formData.gender}
-                  onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-white focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all text-sm"
-                >
-                  <option value="">{t("selectGender") || "Select Gender"}</option>
-                  <option value="male">{t("male") || "Male"}</option>
-                  <option value="female">{t("female") || "Female"}</option>
-                </select>
-              </div>
               <div className="flex justify-end pt-2 border-t border-gray-200 dark:border-gray-700">
                 <button
                   type="submit"
@@ -271,20 +343,15 @@ export default function ProfilePage() {
             </form>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <InfoRow label={t("email") || "Email"} value={profile?.email} icon="email" noCapitalize />              
-              <InfoRow 
-                label={t("gender") || "Gender"} 
-                value={profile?.gender ? (profile.gender === "male" ? (t("male") || "Male") : (t("female") || "Female")) : "Not specified"} 
-                icon="wc" 
-              />
-              <InfoRow label={t("role") || "Role"} value={profile?.role?.replace("_", " ")} icon="shield_person" />
+              <InfoRow label={t("email") || "Email"} value={profile.email} icon="email" noCapitalize />
+              <InfoRow label={t("role") || "Role"} value={profile.role?.replace("_", " ")} icon="shield_person" />
               <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-600/50">
                 <div className="p-2.5 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
                   <span className="material-symbols-outlined text-xl">calendar_month</span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{t("dateJoined") || "Date Joined"}</p>
-                  <p className="text-sm font-bold text-gray-800 dark:text-white truncate">{formatDate(profile?.created_at)}</p>
+                  <p className="text-sm font-bold text-gray-800 dark:text-white truncate">{formatDate(profile.created_at)}</p>
                 </div>
               </div>
               <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-600/50">
@@ -295,21 +362,131 @@ export default function ProfilePage() {
                   <div>
                     <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{t("accountStatus") || "Account Status"}</p>
                   </div>
-                  <span className={`text-xs font-bold px-3 py-1.5 rounded-lg capitalize flex items-center gap-1.5 ${statusColors[profile?.status] || "bg-gray-100 text-gray-600"}`}>
-                    {/* Pulsing dot for active status */}
-                    {profile?.status === "active" && (
+                  <span className={`text-xs font-bold px-3 py-1.5 rounded-lg capitalize flex items-center gap-1.5 ${statusColors[profile.status] || "bg-gray-100 text-gray-600"}`}>
+                    {profile.status === "active" && (
                       <span className="relative flex h-2 w-2">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                       </span>
                     )}
-                    {profile?.status}
+                    {profile.status}
                   </span>
                 </div>
               </div>
             </div>
           )}
         </div>
+      </div>
+      
+      {/* Change Password Section */}
+      <div className="mt-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700/50 overflow-hidden">
+        <div className="px-6 sm:px-8 py-5 border-b border-gray-100 dark:border-gray-700/50 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
+              <span className="material-symbols-outlined text-xl">lock</span>
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t("changePassword") || "Change Password"}</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Update your password to keep your account secure</p>
+            </div>
+          </div>
+          {!showChangePassword && (
+            <button
+              onClick={() => setShowChangePassword(true)}
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary/90 transition-all shadow-md hover:shadow-lg hover:shadow-primary/25"
+            >
+              <span className="material-symbols-outlined text-lg">edit</span>
+              {t("change") || "Change"}
+            </button>
+          )}
+        </div>
+        
+        {showChangePassword && (
+          <div className="px-6 sm:px-8 py-6">
+            {passwordMessage && (
+              <div className={`mb-4 p-3 rounded-lg text-sm font-medium flex items-center gap-2 ${
+                passwordMessage.includes("failed") || passwordMessage.includes("Failed") || passwordMessage.includes("Error") || passwordMessage.includes("do not match") || passwordMessage.includes("incorrect") || passwordMessage.includes("must be")
+                  ? "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300 border border-red-200 dark:border-red-800" 
+                  : "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+              }`}>
+                <span className="material-symbols-outlined text-lg">
+                  {passwordMessage.includes("failed") || passwordMessage.includes("Failed") || passwordMessage.includes("Error") || passwordMessage.includes("do not match") || passwordMessage.includes("incorrect") || passwordMessage.includes("must be") ? "error" : "check_circle"}
+                </span>
+                {passwordMessage}
+              </div>
+            )}
+            
+            <form onSubmit={handlePasswordChange} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  {t("currentPassword") || "Current Password"}
+                </label>
+                <input
+                  type="password"
+                  value={passwordData.current_password}
+                  onChange={(e) => setPasswordData({ ...passwordData, current_password: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-white focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  {t("newPassword") || "New Password"}
+                </label>
+                <input
+                  type="password"
+                  value={passwordData.new_password}
+                  onChange={(e) => setPasswordData({ ...passwordData, new_password: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-white focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all text-sm"
+                  required
+                  minLength={8}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  {t("confirmNewPassword") || "Confirm New Password"}
+                </label>
+                <input
+                  type="password"
+                  value={passwordData.confirm_password}
+                  onChange={(e) => setPasswordData({ ...passwordData, confirm_password: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-white focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all text-sm"
+                  required
+                  minLength={8}
+                />
+              </div>
+              <div className="flex justify-end pt-2 border-t border-gray-200 dark:border-gray-700 gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowChangePassword(false);
+                    setPasswordMessage("");
+                    setPasswordData({
+                      current_password: "",
+                      new_password: "",
+                      confirm_password: ""
+                    });
+                  }}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-bold hover:bg-gray-200 dark:hover:bg-gray-600 transition-all border border-gray-200 dark:border-gray-600"
+                >
+                  {t("cancel") || "Cancel"}
+                </button>
+                <button
+                  type="submit"
+                  disabled={changingPassword}
+                  className="flex items-center gap-2 px-8 py-3 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary/90 transition-all shadow-md hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {changingPassword ? (
+                    <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+                  ) : (
+                    <span className="material-symbols-outlined text-lg">save</span>
+                  )}
+                  {t("updatePassword") || "Update Password"}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );

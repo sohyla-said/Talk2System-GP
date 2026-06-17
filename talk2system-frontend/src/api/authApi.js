@@ -20,7 +20,6 @@ function isTokenExpired(token) {
   if (!token) return true;
   const payload = decodeJwtPayload(token);
   if (!payload || !payload.exp) return true;
-  // exp is in seconds, Date.now() is in milliseconds
   return Date.now() >= payload.exp * 1000;
 }
 
@@ -31,7 +30,7 @@ function getStorage(rememberMe) {
 function getTokenStorage() {
   if (localStorage.getItem("access_token")) return localStorage;
   if (sessionStorage.getItem("access_token")) return sessionStorage;
-  return localStorage; // fallback
+  return localStorage;
 }
 
 const STORAGE_KEYS = [
@@ -41,9 +40,9 @@ const STORAGE_KEYS = [
   "user_role",
   "user_status",
   "user_full_name",
-  "user_gender",     
   "user_created_at",
 ];
+
 export function loginWithGoogle() {
   window.location.href = `http://127.0.0.1:8000/api/auth/google/login`;
 }
@@ -51,6 +50,7 @@ export function loginWithGoogle() {
 export function loginWithGitHub() {
   window.location.href = `http://127.0.0.1:8000/api/auth/github/login`;
 }
+
 export function saveSession(data, rememberMe = true) {
   const storage = getStorage(rememberMe);
   const otherStorage = rememberMe ? sessionStorage : localStorage;
@@ -63,17 +63,16 @@ export function saveSession(data, rememberMe = true) {
   storage.setItem("user_role", data.role);
   storage.setItem("user_status", data.status);
   storage.setItem("user_full_name", data.full_name);
-  storage.setItem("user_gender", data.gender || "");
   storage.setItem("user_created_at", data.created_at || "");
 }
 
 function clearSession() {
-  // Clear BOTH storages
   STORAGE_KEYS.forEach((key) => {
     localStorage.removeItem(key);
     sessionStorage.removeItem(key);
   });
 }
+
 export async function signupApi(form) {
   const response = await fetch(`${BASE_URL}/api/auth/signup`, {
     method: "POST",
@@ -86,7 +85,6 @@ export async function signupApi(form) {
   });
   const data = await response.json();
   if (!response.ok) throw new Error(data.detail || "Signup failed");
-
   saveSession(data, false);
   return data;
 }
@@ -100,10 +98,8 @@ export async function loginApi(form, rememberMe = true) {
       password: form.password,
     }),
   });
-
   const data = await response.json();
   if (!response.ok) throw new Error(data.detail || "Login failed");
-
   saveSession(data, rememberMe);
   return data;
 }
@@ -117,43 +113,36 @@ export function isLoggedIn() {
   const storage = getTokenStorage();
   const token = storage.getItem("access_token");
   if (!token) return false;
-
   if (isTokenExpired(token)) {
     clearSession();
     return false;
   }
-
   return true;
 }
 
 export function getToken() {
   const storage = getTokenStorage();
   const token = storage.getItem("access_token");
-  
   if (isTokenExpired(token)) {
     clearSession();
     return null;
   }
-  
   return token;
 }
 
 export function getCurrentUser() {
   const storage = getTokenStorage();
   const token = storage.getItem("access_token");
-  
   if (isTokenExpired(token)) {
     clearSession();
     return null;
   }
-
   return {
     id: storage.getItem("user_id"),
     email: storage.getItem("user_email"),
     role: storage.getItem("user_role"),
     status: storage.getItem("user_status"),
     full_name: storage.getItem("user_full_name"),
-    gender: storage.getItem("user_gender"),
     created_at: storage.getItem("user_created_at"),
   };
 }
@@ -166,16 +155,13 @@ export function isAdmin() {
 export async function fetchProfile() {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
-
   const res = await fetch(`${BASE_URL}/api/auth/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   const data = await res.json();
   if (!res.ok) throw new Error("Failed to fetch profile");
-  
   const storage = getTokenStorage();
   storage.setItem("user_full_name", data.full_name || "");
-  storage.setItem("user_gender", data.gender || "");
   return data;
 }
 
@@ -196,7 +182,27 @@ export async function updateProfile(data) {
   
   const storage = getTokenStorage();
   if (data.full_name) storage.setItem("user_full_name", data.full_name);
-  if (data.gender) storage.setItem("user_gender", data.gender);
+  window.dispatchEvent(new CustomEvent("profile-updated", { 
+    detail: { full_name: data.full_name }
+  }));
+  
+  return responseData;
+}
+
+export async function changePassword(data) {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(`${BASE_URL}/api/auth/change-password`, {
+    method: "POST",  
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  const responseData = await res.json();
+  if (!res.ok) throw new Error(responseData.detail || "Password change failed");
   
   return responseData;
 }
@@ -204,7 +210,6 @@ export async function updateProfile(data) {
 export async function fetchAllUsers() {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
-
   const res = await fetch(`${BASE_URL}/api/admin/all-users`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -216,7 +221,6 @@ export async function fetchAllUsers() {
 export async function adminSuspendUser(userId, reason) {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
-
   const res = await fetch(`${BASE_URL}/api/admin/users/${userId}/suspend`, {
     method: "PATCH",
     headers: {
@@ -233,7 +237,6 @@ export async function adminSuspendUser(userId, reason) {
 export async function adminTerminateUser(userId, reason) {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
-
   const res = await fetch(`${BASE_URL}/api/admin/users/${userId}/terminate`, {
     method: "PATCH",
     headers: {
@@ -250,7 +253,6 @@ export async function adminTerminateUser(userId, reason) {
 export async function adminArchiveUser(userId, reason) {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
-
   const res = await fetch(`${BASE_URL}/api/admin/users/${userId}/archive`, {
     method: "PATCH",
     headers: {
