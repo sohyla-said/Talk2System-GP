@@ -1,10 +1,11 @@
 import { useNavigate } from "react-router-dom";
 
 export default function UmlToast({
-  status,      // "pending" | "in_progress" | "done" | "failed"
+  status,        // "pending" | "in_progress" | "done" | "failed"
   projectId,
-  sessionId,   // null for project-level generation
-  taskOutput,  // set by onDone; null while pending/in_progress
+  sessionId,     // null for project-level generation
+  taskOutput,    // set by onDone; null while pending/in_progress
+  diagramType: diagramTypeProp,  // explicitly passed from App.jsx so it's always available
   onDismiss,
   onRetry,
 }) {
@@ -14,17 +15,17 @@ export default function UmlToast({
     const failedMessage = (rawError && rawError.length < 200 && !rawError.includes("<"))
     ? rawError
     : "UML generation failed. Please retry or try again in a moment.";
-    
-  const diagramType = taskOutput?.diagram_type ?? "";
+
+  const diagramType = diagramTypeProp ?? taskOutput?.diagram_type ?? "";
 
   const handleView = () => {
     if (sessionId) {
-      navigate(`/projects/${projectId}/artifacts/uml`, {
-        state: { source: "session", sessionId },
+      navigate(`/projects/${projectId}/sessions/${sessionId}/artifacts/uml`, {
+        state: { diagramType: diagramType || undefined },
       });
     } else {
-      navigate(`/projects/${projectId}/artifacts/uml`, {
-        state: { source: "project" },
+      navigate(`/projects/${projectId}/artifacts/uml-view`, {
+        state: { diagramType: diagramType || undefined },
       });
     }
     onDismiss();

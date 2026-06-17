@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+﻿import { useState, useRef } from "react";
 import { BrowserRouter } from "react-router-dom";
 import { createContext } from "react";
 import { ToastContainer } from "react-toastify";
@@ -92,6 +92,7 @@ function AppInner() {
   const [umlTaskOutput,   setUmlTaskOutput]   = useState(null);
   const [umlProjectId,    setUmlProjectId]    = useState(null);
   const [umlSessionId,    setUmlSessionId]    = useState(null);
+  const [umlDiagramType, setUmlDiagramType] = useState(null);
   const lastUmlCallRef = useRef(null);
 
   const { trackTask: trackUml, cancelTracking: cancelUml } = useUmlTask({
@@ -134,6 +135,7 @@ function AppInner() {
     }
 
     const data = await res.json();
+    setUmlDiagramType(diagramType);
     setUmlProjectId(projectId);
     setUmlSessionId(sessionId ?? null);
     setUmlTaskOutput(null);
@@ -195,7 +197,7 @@ function AppInner() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <ExtractionContext.Provider value={{ startExtraction }}>
-    <UmlContext.Provider value={{ startUmlGeneration }}>
+    <UmlContext.Provider value={{ startUmlGeneration, umlTaskStatus, umlProjectId, umlSessionId }}>
     <SrsContext.Provider value={{ startSrsGeneration }}>
       <AppRoutes />
 
@@ -231,6 +233,7 @@ function AppInner() {
           projectId={umlProjectId}
           sessionId={umlSessionId}
           taskOutput={umlTaskOutput}
+          diagramType={umlTaskOutput?.diagram_type || umlDiagramType}
           onDismiss={() => setUmlToastVisible(false)}
           onRetry={() => {
             if (!lastUmlCallRef.current) return;

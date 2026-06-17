@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState, useRef } from "react";
 import UMLApprovalModal from "../../components/modals/UMLApprovalModal";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { getToken } from "../../api/authApi";
@@ -317,7 +317,7 @@ export default function UmlPage() {
 //     }
 //   };
 
-  const { startUmlGeneration } = useContext(UmlContext);
+  const { startUmlGeneration, umlTaskStatus, umlProjectId, umlSessionId } = useContext(UmlContext);
 
   const handleGenerate = async () => {
 
@@ -373,6 +373,21 @@ export default function UmlPage() {
   };
 
 
+
+  // Auto-refresh when the background UML task for this page's project/session completes
+  const prevUmlStatusRef = useRef(umlTaskStatus);
+  useEffect(() => {
+    const prevStatus = prevUmlStatusRef.current;
+    prevUmlStatusRef.current = umlTaskStatus;
+    if (umlTaskStatus !== "done" || prevStatus === "done") return;
+    if (String(umlProjectId) !== String(projectId)) return;
+    if (isProjectSource && umlSessionId == null) {
+      fetchVersions();
+    } else if (!isProjectSource && String(umlSessionId) === String(sessionId)) {
+      fetchVersions();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [umlTaskStatus]);
   // ===============================
   // APPROVE (project-level — direct artifact approval, no session members)
   // ===============================

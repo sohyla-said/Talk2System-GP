@@ -54,14 +54,13 @@ export async function handleNotificationNav(notif, navigate, getToken) {
   if (notification_type === "uml_generated" && project_id) {
     const sessionMatch = message?.match(/\[session_id:(\d+)\]/);
     const sId = sessionMatch ? parseInt(sessionMatch[1], 10) : null;
+    const dtMatch = message?.match(/\[diagram_type:([a-z]+)\]/);
+    const diagramType = dtMatch ? dtMatch[1] : null;
+    const navState = diagramType ? { diagramType } : undefined;
     if (sId) {
-      navigate(`/projects/${project_id}/artifacts/uml`, {
-        state: { source: "session", sessionId: sId },
-      });
+      navigate(`/projects/${project_id}/sessions/${sId}/artifacts/uml`, { state: navState });
     } else {
-      navigate(`/projects/${project_id}/artifacts/uml`, {
-        state: { source: "project" },
-      });
+      navigate(`/projects/${project_id}/artifacts/uml-view`, { state: navState });
     }
     return;
   }
@@ -85,18 +84,9 @@ export async function handleNotificationNav(notif, navigate, getToken) {
     const sessionMatch = message?.match(/\[session_id:(\d+)\]/);
     const sId = sessionMatch ? parseInt(sessionMatch[1], 10) : null;
     if (sId) {
-      navigate(`/projects/${project_id}/sessions/${sId}/srs/generate`, {
-        state: {
-          source: "session",
-          sessionId: sId,
-        },
-      });
+      navigate(`/projects/${project_id}/sessions/${sId}/artifacts/srs`);
     } else {
-      navigate(`/projects/${project_id}/srs/generate`, {
-        state: {
-          source: "project",
-        },
-      });
+      navigate(`/projects/${project_id}/artifacts/srs`);
     }
     return;
   }

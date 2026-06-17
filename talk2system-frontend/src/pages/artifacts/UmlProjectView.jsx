@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+﻿import { useEffect, useState } from "react";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { getVersions, getArtifact } from "../../api/umlAPI";
 import { getToken } from "../../api/authApi";
 
@@ -9,7 +9,8 @@ export default function UmlProjectViewPage() {
   const navigate = useNavigate();
   const { id: projectId } = useParams();
 
-  const [diagramType, setDiagramType] = useState("usecase");
+  const location = useLocation();
+  const [diagramType, setDiagramType] = useState(location.state?.diagramType ?? "usecase");
   const [diagramUrl, setDiagramUrl] = useState(null);
   const [artifactId, setArtifactId] = useState(null);
   const [versions, setVersions] = useState([]);
