@@ -23,6 +23,13 @@ const ICON_MAP = {
   srs_generation_failed: { icon: "error",         color: "text-red-500",    bg: "bg-red-50 dark:bg-red-900/20",       border: "border-red-200 dark:border-red-800" },
   uml_generated:       { icon: "account_tree",    color: "text-purple-500", bg: "bg-purple-50 dark:bg-purple-900/20", border: "border-purple-200 dark:border-purple-800" },
   uml_generation_failed: { icon: "error",         color: "text-red-500",    bg: "bg-red-50 dark:bg-red-900/20",       border: "border-red-200 dark:border-red-800" },
+  // Leave request notifications
+  leave_request_received:    { icon: "exit_to_app",      color: "text-orange-500",  bg: "bg-orange-50 dark:bg-orange-900/20",  border: "border-orange-200 dark:border-orange-800" },
+  pm_leave_request_received: { icon: "manage_accounts",  color: "text-amber-500",   bg: "bg-amber-50 dark:bg-amber-900/20",    border: "border-amber-200 dark:border-amber-800" },
+  leave_approved:            { icon: "check_circle",     color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20",border: "border-emerald-200 dark:border-emerald-800" },
+  leave_rejected:            { icon: "cancel",           color: "text-red-500",     bg: "bg-red-50 dark:bg-red-900/20",        border: "border-red-200 dark:border-red-800" },
+  project_suspended:         { icon: "pause_circle",     color: "text-yellow-500",  bg: "bg-yellow-50 dark:bg-yellow-900/20",  border: "border-yellow-200 dark:border-yellow-800" },
+  project_resumed:           { icon: "play_circle",      color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20",border: "border-emerald-200 dark:border-emerald-800" },
 };
 
 const TYPE_CATEGORIES = {
@@ -36,6 +43,9 @@ const TYPE_CATEGORIES = {
       "admin_assigned_pm", "admin_added_participant",
       "admin_removed_participant", "admin_removed_you",
       "admin_replaced_pm", "admin_deleted_project", "join_requested",
+      "leave_request_received", "pm_leave_request_received",
+      "leave_approved", "leave_rejected",
+      "project_suspended", "project_resumed",
     ],
   },
   requirements: {

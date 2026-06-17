@@ -458,7 +458,7 @@ export default function SrsPage() {
       headers: getAuthHeaders(),
     })
       .then((r) => r.json())
-      .then((data) => setProjectCompleted(data.project_status === "completed"))
+      .then((data) => setProjectCompleted(data.project_status === "completed" || data.project_status === "suspended"))
       .catch(console.error);
   } else if (sessionId) {
     fetchVersions();

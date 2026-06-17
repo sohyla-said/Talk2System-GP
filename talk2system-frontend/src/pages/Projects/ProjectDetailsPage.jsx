@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { getToken } from "../../api/authApi";
-import { fetchProject, fetchMyRole, fetchPendingRequests, acceptInvitation, rejectInvitation, fetchMembers, fetchProjectAuditLogs } from "../../api/projectApi";
+import { fetchProject, fetchMyRole, fetchPendingRequests, acceptInvitation, rejectInvitation, fetchMembers, fetchProjectAuditLogs, fetchPendingLeaveRequests, approveLeaveRequest, rejectLeaveRequest } from "../../api/projectApi";
 
 const BASE_URL = "http://127.0.0.1:8000";
 
@@ -30,6 +30,11 @@ export default function ProjectDetailsPage() {
   const [accessDenied, setAccessDenied] = useState(false);
 
   const [rejectModal, setRejectModal] = useState({ show: false, req: null, reason: "" });
+
+  // Leave requests (PM view)
+  const [pendingLeaveRequests, setPendingLeaveRequests] = useState([]);
+  const [showLeavePanel, setShowLeavePanel] = useState(false);
+  const [leaveRejectModal, setLeaveRejectModal] = useState({ show: false, req: null, reason: "" });
   useEffect(() => {
     const load = async () => {
       try {
@@ -53,8 +58,12 @@ export default function ProjectDetailsPage() {
         }
 
         if (roleData.role === "project_manager") {
-          const reqs = await fetchPendingRequests();
+          const [reqs, leaveReqs] = await Promise.all([
+            fetchPendingRequests(),
+            fetchPendingLeaveRequests(),
+          ]);
           setPendingRequests(reqs.filter((r) => r.project_id === Number(projectId)));
+          setPendingLeaveRequests(leaveReqs.filter((r) => r.project_id === Number(projectId)));
         }
       } catch (err) {
         console.error(err);
@@ -100,8 +109,29 @@ export default function ProjectDetailsPage() {
     try {
       await rejectInvitation(invId, reason);
       setPendingRequests((prev) => prev.filter((r) => r.id !== invId));
-      showToast(`${userName} rejected`, "error"); 
-      setRejectModal({ show: false, req: null, reason: "" }); // Close modal
+      showToast(`${userName} rejected`, "error");
+      setRejectModal({ show: false, req: null, reason: "" });
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  };
+
+  const handleApproveLeave = async (req) => {
+    try {
+      await approveLeaveRequest(req.project_id, req.id);
+      setPendingLeaveRequests((prev) => prev.filter((r) => r.id !== req.id));
+      showToast(`${req.user_full_name || req.user_email} has left the project`, "success");
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  };
+
+  const handleRejectLeave = async (req, reason) => {
+    try {
+      await rejectLeaveRequest(req.project_id, req.id, reason);
+      setPendingLeaveRequests((prev) => prev.filter((r) => r.id !== req.id));
+      setLeaveRejectModal({ show: false, req: null, reason: "" });
+      showToast(`Leave request from ${req.user_full_name || req.user_email} rejected`, "error");
     } catch (err) {
       showToast(err.message, "error");
     }
@@ -825,10 +855,11 @@ export default function ProjectDetailsPage() {
                 {myRole && (<button onClick={() => setShowMembersModal(true)} className="relative flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition"><span className="material-symbols-outlined text-sm">group</span>Members<span className="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{members.length}</span></button>)}
                 {myRole === "project_manager" && (<button onClick={() => navigate(`/projects/${projectId}/add-participant`)} className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 shadow-sm transition"><span className="material-symbols-outlined text-sm">person_add</span>Add Participant</button>)}
                 {myRole === "project_manager" && (<button onClick={() => setShowRequestsPanel(true)} className="relative flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition"><span className="material-symbols-outlined text-sm">group_add</span>Requests{pendingRequests.length > 0 && (<span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-primary text-white text-[9px] flex items-center justify-center font-bold">{pendingRequests.length}</span>)}</button>)}
+                {myRole === "project_manager" && (<button onClick={() => setShowLeavePanel(true)} className="relative flex items-center gap-1.5 h-8 px-3 rounded-lg border border-red-300 dark:border-red-700 text-red-500 dark:text-red-400 text-xs font-bold hover:bg-red-50 dark:hover:bg-red-900/20 transition"><span className="material-symbols-outlined text-sm">exit_to_app</span>Leave Req.{pendingLeaveRequests.length > 0 && (<span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center font-bold">{pendingLeaveRequests.length}</span>)}</button>)}
                 {myRole === "project_manager" && (<button onClick={openLogsModal} className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition"><span className="material-symbols-outlined text-sm">history</span>Activity</button>)}
               </div>
              <div className="flex items-center gap-3">
-              {myRole === "project_manager" && project?.project_status !== "completed" && (
+              {myRole === "project_manager" && !["completed", "suspended"].includes(project?.project_status) && (
                 <button
                   onClick={() => navigate(`/projects/${projectId}/start-session`)}
                   className="flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-white text-sm font-bold shadow hover:opacity-90 transition"
@@ -838,7 +869,7 @@ export default function ProjectDetailsPage() {
                 </button>
               )}
 
-              {myRole === "project_manager" && project?.project_status !== "completed" && (
+              {myRole === "project_manager" && !["completed", "suspended"].includes(project?.project_status) && (
                 <button
                   onClick={() => setShowCompleteModal(true)}
                   className="flex items-center gap-2 h-10 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow transition"
@@ -852,6 +883,13 @@ export default function ProjectDetailsPage() {
                 <div className="flex items-center gap-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 px-4 py-2.5 text-sm font-bold text-indigo-700 dark:text-indigo-300">
                   <span className="material-symbols-outlined text-lg">verified</span>
                   Project Completed
+                </div>
+              )}
+
+              {project?.project_status === "suspended" && (
+                <div className="flex items-center gap-2 rounded-lg bg-amber-100 dark:bg-amber-900/30 px-4 py-2.5 text-sm font-bold text-amber-700 dark:text-amber-300">
+                  <span className="material-symbols-outlined text-lg">pause_circle</span>
+                  Project Suspended — Pending PM Reassignment
                 </div>
               )}
             </div>
@@ -876,13 +914,13 @@ export default function ProjectDetailsPage() {
                 key={session.id}
                 onClick={() => navigate(
                   `/projects/${projectId}/sessions/${session.id}/sessiondetails`,
-                  { state: { sessionId: session.id, projectCompleted: project?.project_status === "completed" } }
+                  { state: { sessionId: session.id, projectCompleted: ["completed", "suspended"].includes(project?.project_status) } }
                 )}
                 className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border shadow-sm hover:shadow-md cursor-pointer transition"
               >
                 <div className="flex items-start justify-between">
                   <h3 className="font-bold text-lg">{session.title || `Session #${session.id}`}</h3>
-                  {project?.project_status === "completed" && (
+                  {["completed", "suspended"].includes(project?.project_status) && (
                     <span className="material-symbols-outlined text-indigo-400 text-base">lock</span>
                   )}
                 </div>
@@ -938,6 +976,102 @@ export default function ProjectDetailsPage() {
                 className="inline-flex w-full justify-center items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-3 text-sm font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LEAVE REQUESTS PANEL (PM) */}
+      {showLeavePanel && myRole === "project_manager" && (
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50">
+          <div className="bg-white dark:bg-[#1a162e] rounded-t-2xl sm:rounded-xl w-full sm:max-w-lg shadow-xl p-6 max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-black text-[#100d1c] dark:text-white flex items-center gap-2">
+                <span className="material-symbols-outlined text-red-500 text-xl">exit_to_app</span>
+                Leave Requests
+                {pendingLeaveRequests.length > 0 && (
+                  <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{pendingLeaveRequests.length}</span>
+                )}
+              </h2>
+              <button onClick={() => setShowLeavePanel(false)} className="text-gray-400 hover:text-gray-600">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            {pendingLeaveRequests.length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-6">No pending leave requests.</p>
+            ) : (
+              <div className="space-y-3">
+                {pendingLeaveRequests.map((req) => (
+                  <div key={req.id} className="flex items-center justify-between bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/40 rounded-lg p-4">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-9 flex-shrink-0"
+                        style={{ backgroundImage: `url(https://ui-avatars.com/api/?name=${encodeURIComponent(req.user_full_name || "User")}&background=random&color=fff)` }}
+                      />
+                      <div>
+                        <p className="font-semibold text-sm">{req.user_full_name || "Unknown User"}</p>
+                        <p className="text-xs text-gray-400">{req.user_email}</p>
+                        <p className="text-xs text-red-500 font-medium mt-0.5">Wants to leave this project</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleApproveLeave(req)}
+                        className="px-3 py-1 rounded-lg bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => setLeaveRejectModal({ show: true, req, reason: "" })}
+                        className="px-3 py-1 rounded-lg border border-red-300 text-red-500 text-xs font-bold hover:bg-red-50"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* LEAVE REJECT REASON MODAL */}
+      {leaveRejectModal.show && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60]">
+          <div className="bg-white dark:bg-[#1a162e] rounded-xl w-full max-w-sm shadow-xl p-6 m-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                <span className="material-symbols-outlined text-red-500 text-xl">cancel</span>
+              </div>
+              <h3 className="text-lg font-black text-gray-900 dark:text-white">Reject Leave Request</h3>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Rejecting leave request from <span className="font-bold text-gray-700 dark:text-gray-200">{leaveRejectModal.req?.user_full_name || "this user"}</span>.
+            </p>
+            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+              Reason <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <textarea
+              value={leaveRejectModal.reason}
+              onChange={(e) => setLeaveRejectModal((prev) => ({ ...prev, reason: e.target.value }))}
+              placeholder="e.g., Your participation is critical right now..."
+              rows={3}
+              className="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#231e3d] text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none mb-5"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setLeaveRejectModal({ show: false, req: null, reason: "" })}
+                className="px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleRejectLeave(leaveRejectModal.req, leaveRejectModal.reason)}
+                className="px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition"
+              >
+                Reject Request
               </button>
             </div>
           </div>

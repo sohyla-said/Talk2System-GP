@@ -6,7 +6,8 @@ from app.models.project import Project
 from app.models.project_membership import ProjectMembership
 from app.models.invitation import Invitation
 from app.models.user import User
-from app.services import notification_service 
+from app.models.audit_log import AuditLog
+from app.services import notification_service
 
 
 class ProjectService:
@@ -104,21 +105,47 @@ class ProjectService:
             "project_id": project_id
         }
 
-    # MEMBERSHIP 
+    # MEMBERSHIP
     @staticmethod
     def get_membership(db: Session, project_id: int, user_id: int):
         return (
             db.query(ProjectMembership)
-            .filter_by(project_id=project_id, user_id=user_id)
+            .filter(
+                ProjectMembership.project_id == project_id,
+                ProjectMembership.user_id == user_id,
+                ProjectMembership.left_at.is_(None),
+            )
             .first()
         )
     @staticmethod
     def get_project_members(db: Session, project_id: int):
-        return (
+        memberships = (
             db.query(ProjectMembership)
-            .filter_by(project_id=project_id, left_at=None) 
+            .filter(
+                ProjectMembership.project_id == project_id,
+                ProjectMembership.left_at.is_(None),
+            )
             .all()
         )
+        # Deduplicate by user_id: prefer PM role; soft-delete extras so the DB self-heals.
+        seen: dict = {}
+        extras = []
+        for m in memberships:
+            if m.user_id not in seen:
+                seen[m.user_id] = m
+            else:
+                prev = seen[m.user_id]
+                if m.role == "project_manager" and prev.role != "project_manager":
+                    extras.append(prev)
+                    seen[m.user_id] = m
+                else:
+                    extras.append(m)
+        if extras:
+            now = datetime.now(timezone.utc)
+            for dup in extras:
+                dup.left_at = now
+            db.commit()
+        return list(seen.values())
 
     # JOIN REQUEST (user sends a join request) 
     @staticmethod
@@ -132,9 +159,6 @@ class ProjectService:
         if existing_membership and existing_membership.left_at is None:
             raise HTTPException(409, "You are already a member of this project")
 
-        # If they were removed, block them from rejoining
-        if existing_membership and existing_membership.left_at is not None:
-            raise HTTPException(403, "You were previously removed from this project. You cannot rejoin unless explicitly added back by a manager or admin.")
         # Check if they already sent a pending request
         pending = (
             db.query(Invitation)
@@ -143,10 +167,14 @@ class ProjectService:
         )
         if pending:
             raise HTTPException(409, "You already have a pending join request for this project")
-        # find the project manager to notify
+        # find the active project manager to notify
         pm_membership = (
             db.query(ProjectMembership)
-            .filter_by(project_id=project_id, role="project_manager")
+            .filter(
+                ProjectMembership.project_id == project_id,
+                ProjectMembership.role == "project_manager",
+                ProjectMembership.left_at.is_(None),
+            )
             .first()
         )
 
@@ -180,13 +208,29 @@ class ProjectService:
         inv.status      = "accepted"
         inv.actioned_at = datetime.now(timezone.utc)
 
-        # add as participant
-        membership = ProjectMembership(
-            project_id=inv.project_id,
-            user_id=inv.invitee_user_id,
-            role="participant",
+        # Reuse an existing membership row (from a previous leave) rather than creating a new one.
+        # This prevents duplicate rows when a user rejoins after leaving.
+        existing_rows = (
+            db.query(ProjectMembership)
+            .filter_by(project_id=inv.project_id, user_id=inv.invitee_user_id)
+            .order_by(ProjectMembership.joined_at.desc())
+            .all()
         )
-        db.add(membership)
+        if existing_rows:
+            primary = existing_rows[0]
+            primary.role = "participant"
+            primary.left_at = None
+            # Soft-delete any other rows to keep at most one record per user per project
+            for extra in existing_rows[1:]:
+                if extra.left_at is None:
+                    extra.left_at = datetime.now(timezone.utc)
+        else:
+            db.add(ProjectMembership(
+                project_id=inv.project_id,
+                user_id=inv.invitee_user_id,
+                role="participant",
+            ))
+
         db.commit()
         db.refresh(inv)
         return inv

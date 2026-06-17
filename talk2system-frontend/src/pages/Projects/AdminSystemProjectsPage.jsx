@@ -1,25 +1,69 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchAdminProjects, adminDeleteProject, fetchAdminProjectMembers, adminChangePM, removeParticipant } from "../../api/projectApi";
+import { fetchAdminProjects, adminDeleteProject, fetchAdminProjectMembers, adminChangePM, removeParticipant, fetchPendingPmLeaveRequests, approvePmLeaveRequest, rejectPmLeaveRequest } from "../../api/projectApi";
 
 export default function AdminSystemProjectsPage() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   const [showModal, setShowModal] = useState(false);
   const [modalProject, setModalProject] = useState(null);
   const [members, setMembers] = useState([]);
   const [newPmEmail, setNewPmEmail] = useState("");
   const [modalError, setModalError] = useState("");
   const [modalSuccess, setModalSuccess] = useState("");
-  
+
   // Search state for modal members
   const [memberSearch, setMemberSearch] = useState("");
 
+  // PM leave requests
+  const [pmLeaveRequests, setPmLeaveRequests] = useState([]);
+  const [leaveRequestsLoading, setLeaveRequestsLoading] = useState(true);
+  const [showLeavePanel, setShowLeavePanel] = useState(false);
+  const [pmLeaveRejectModal, setPmLeaveRejectModal] = useState({ show: false, req: null, reason: "" });
+  const [leaveActionMsg, setLeaveActionMsg] = useState({ text: "", type: "" });
+
   useEffect(() => {
     loadProjects();
+    loadPmLeaveRequests();
   }, []);
+
+  const loadPmLeaveRequests = async () => {
+    try {
+      const data = await fetchPendingPmLeaveRequests();
+      setPmLeaveRequests(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLeaveRequestsLoading(false);
+    }
+  };
+
+  const handleApprovePmLeave = async (req) => {
+    try {
+      await approvePmLeaveRequest(req.id);
+      setPmLeaveRequests((prev) => prev.filter((r) => r.id !== req.id));
+      setLeaveActionMsg({ text: `${req.user_full_name || req.user_email}'s leave approved. Assign a new PM to resume the project.`, type: "success" });
+      loadProjects();
+      setTimeout(() => setLeaveActionMsg({ text: "", type: "" }), 5000);
+    } catch (err) {
+      setLeaveActionMsg({ text: err.message, type: "error" });
+    }
+  };
+
+  const handleRejectPmLeave = async (req, reason) => {
+    try {
+      await rejectPmLeaveRequest(req.id, reason);
+      setPmLeaveRequests((prev) => prev.filter((r) => r.id !== req.id));
+      setPmLeaveRejectModal({ show: false, req: null, reason: "" });
+      setLeaveActionMsg({ text: `Leave request from ${req.user_full_name || req.user_email} rejected. Project restored.`, type: "success" });
+      loadProjects();
+      setTimeout(() => setLeaveActionMsg({ text: "", type: "" }), 4000);
+    } catch (err) {
+      setLeaveActionMsg({ text: err.message, type: "error" });
+    }
+  };
 
   const loadProjects = async () => {
     try {
@@ -116,11 +160,139 @@ export default function AdminSystemProjectsPage() {
             <h1 className="text-4xl font-black text-[#100d1c] dark:text-white">System Projects</h1>
             <p className="text-gray-500 mt-1">Full control over all projects in the system.</p>
           </div>
-          <button onClick={() => navigate("/projects/new-admin")} className="flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-white font-bold">
-            <span className="material-symbols-outlined">add</span>
-            Create New Project
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowLeavePanel(true)}
+              className="relative h-9 px-4 bg-primary text-white rounded-lg font-semibold text-sm hover:bg-primary/90 transition-colors whitespace-nowrap flex items-center justify-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-[18px]">exit_to_app</span>
+              <span className="hidden sm:inline">PM Leave Requests</span>
+              {pmLeaveRequests.length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] flex items-center justify-center font-bold">
+                  {pmLeaveRequests.length}
+                </span>
+              )}
+            </button>
+            <button onClick={() => navigate("/projects/new-admin")} className="flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-white font-bold">
+              <span className="material-symbols-outlined">add</span>
+              Create New Project
+            </button>
+          </div>
         </div>
+
+        {/* PM LEAVE REQUESTS MODAL */}
+        {showLeavePanel && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-[#1a162e] rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-xl">
+              <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <span className="material-symbols-outlined text-primary text-xl">exit_to_app</span>
+                <div className="flex-1">
+                  <h2 className="text-base font-black text-gray-900 dark:text-white">PM Leave Requests</h2>
+                  <p className="text-xs text-gray-500">Project managers requesting to leave their projects</p>
+                </div>
+                {pmLeaveRequests.length > 0 && (
+                  <span className="bg-amber-500 text-white text-xs font-bold px-2.5 py-0.5 rounded-full">
+                    {pmLeaveRequests.length} pending
+                  </span>
+                )}
+                <button onClick={() => setShowLeavePanel(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 ml-2">
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+
+              {leaveActionMsg.text && (
+                <div className={`mx-6 mt-4 px-4 py-3 rounded-lg text-sm font-semibold ${leaveActionMsg.type === "success" ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400" : "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400"}`}>
+                  {leaveActionMsg.text}
+                </div>
+              )}
+
+              <div className="p-6 space-y-3 overflow-y-auto">
+                {leaveRequestsLoading ? (
+                  <p className="text-gray-400 text-sm text-center py-4">Loading...</p>
+                ) : pmLeaveRequests.length === 0 ? (
+                  <p className="text-gray-400 text-sm text-center py-8">No pending PM leave requests.</p>
+                ) : (
+                  pmLeaveRequests.map((req) => (
+                    <div key={req.id} className="flex items-center justify-between p-4 rounded-xl bg-gray-50 dark:bg-[#231e3d] border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center gap-4">
+                        <div
+                          className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 flex-shrink-0"
+                          style={{ backgroundImage: `url(https://ui-avatars.com/api/?name=${encodeURIComponent(req.user_full_name || "PM")}&background=random&color=fff)` }}
+                        />
+                        <div>
+                          <p className="font-bold text-sm text-gray-900 dark:text-white">{req.user_full_name || "Unknown PM"}</p>
+                          <p className="text-xs text-gray-500">{req.user_email}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="material-symbols-outlined text-amber-500 text-xs">folder</span>
+                            <span className="text-xs font-medium text-amber-600 dark:text-amber-400">{req.project_name}</span>
+                            <span className="text-xs text-gray-400">· {new Date(req.created_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleApprovePmLeave(req)}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 transition"
+                        >
+                          <span className="material-symbols-outlined text-sm">check_circle</span>
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => setPmLeaveRejectModal({ show: true, req, reason: "" })}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-300 dark:border-red-700 text-red-500 dark:text-red-400 text-xs font-bold hover:bg-red-50 dark:hover:bg-red-900/20 transition"
+                        >
+                          <span className="material-symbols-outlined text-sm">cancel</span>
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* PM LEAVE REJECT MODAL */}
+        {pmLeaveRejectModal.show && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-[#1a162e] rounded-xl w-full max-w-sm shadow-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-red-500 text-xl">cancel</span>
+                </div>
+                <h3 className="text-lg font-black text-gray-900 dark:text-white">Reject PM Leave Request</h3>
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Rejecting leave request from <span className="font-bold text-gray-700 dark:text-gray-200">{pmLeaveRejectModal.req?.user_full_name || "this PM"}</span> for project <span className="font-bold text-primary">{pmLeaveRejectModal.req?.project_name}</span>. The project will be restored to active.
+              </p>
+              <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                Reason <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <textarea
+                value={pmLeaveRejectModal.reason}
+                onChange={(e) => setPmLeaveRejectModal((prev) => ({ ...prev, reason: e.target.value }))}
+                placeholder="e.g., No suitable replacement available at this time..."
+                rows={3}
+                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#231e3d] text-sm focus:ring-2 focus:ring-primary/20 outline-none resize-none mb-5"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setPmLeaveRejectModal({ show: false, req: null, reason: "" })}
+                  className="px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleRejectPmLeave(pmLeaveRejectModal.req, pmLeaveRejectModal.reason)}
+                  className="px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition"
+                >
+                  Reject Request
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {projects.length === 0 ? (
           <p className="text-gray-400 text-center py-20">No projects in the system.</p>
@@ -137,30 +309,64 @@ export default function AdminSystemProjectsPage() {
               </thead>
               <tbody>
                 {projects.map((p) => {
-                  const pmTerminated = p.pm_status === "terminated" || p.pm_status === "suspended"|| p.pm_status === "archived";
-                  
+                  const pmTerminated = p.pm_status === "terminated" || p.pm_status === "suspended" || p.pm_status === "archived";
+                  const needsPm = p.status === "suspended" && !p.has_active_pm;
+
                   return (
-                    <tr 
-                      key={p.id} 
-                      className={`border-t hover:bg-gray-50 dark:hover:bg-[#1a162e] ${pmTerminated ? "bg-red-50/50 dark:bg-red-900/10" : ""}`}
+                    <tr
+                      key={p.id}
+                      className={`border-t ${
+                        needsPm
+                          ? "bg-amber-50/70 dark:bg-amber-900/15"
+                          : pmTerminated
+                          ? "bg-red-50/50 dark:bg-red-900/10"
+                          : "hover:bg-gray-50 dark:hover:bg-[#1a162e]"
+                      }`}
                     >
                       <td className="px-6 py-4 font-medium">
-                        {p.name}
-                        {pmTerminated && (
-                          <span className="block text-xs text-red-500 font-bold mt-1">
-                            ⚠️ Project Manager is {p.pm_status}
-                          </span>
-                        )}
+                        <div className="flex items-start gap-3">
+                          {needsPm && (
+                            <span className="mt-0.5 flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 animate-pulse">
+                              <span className="material-symbols-outlined text-white text-[14px]">priority_high</span>
+                            </span>
+                          )}
+                          <div>
+                            {p.name}
+                            {needsPm && (
+                              <span className="block text-xs text-amber-600 dark:text-amber-400 font-bold mt-1">
+                                Action required — no Project Manager assigned
+                              </span>
+                            )}
+                            {pmTerminated && !needsPm && (
+                              <span className="block text-xs text-red-500 font-bold mt-1">
+                                ⚠️ Project Manager is {p.pm_status}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-gray-500">{p.domain || "—"}</td>
                       <td className="px-6 py-4">
-                        <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs">{p.status}</span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                          p.status === "suspended"
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                            : p.status === "completed"
+                            ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
+                            : "bg-green-100 text-green-700"
+                        }`}>{p.status}</span>
                       </td>
                       <td className="px-6 py-4 text-right space-x-2">
-                        
-                        {pmTerminated ? (
-                          <button 
-                            onClick={() => openMemberModal(p)} 
+                        {needsPm ? (
+                          <button
+                            onClick={() => openMemberModal(p)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition-colors shadow-sm"
+                          >
+                            <span className="material-symbols-outlined text-sm">manage_accounts</span>
+                            Assign New PM
+                          </button>
+                        ) : pmTerminated ? (
+                          <button
+                            onClick={() => openMemberModal(p)}
                             className="px-3 py-1 bg-orange-500 text-white rounded text-xs font-bold hover:bg-orange-600 transition-colors"
                           >
                             <span className="inline-flex items-center gap-1">
@@ -170,8 +376,8 @@ export default function AdminSystemProjectsPage() {
                           </button>
                         ) : (
                           <>
-                            <button 
-                              onClick={() => navigate(`/projects/${p.id}/add-participant`)} 
+                            <button
+                              onClick={() => navigate(`/projects/${p.id}/add-participant`)}
                               className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded text-xs font-bold hover:bg-emerald-100 transition-colors"
                             >
                               <span className="inline-flex items-center gap-1">
@@ -182,7 +388,6 @@ export default function AdminSystemProjectsPage() {
                             <button onClick={() => openMemberModal(p)} className="px-3 py-1 bg-blue-50 text-blue-600 rounded text-xs font-bold hover:bg-blue-100">Manage Team</button>
                           </>
                         )}
-                        
                         <button onClick={() => handleDelete(p.id, p.name)} className="px-3 py-1 bg-red-50 text-red-600 rounded text-xs font-bold hover:bg-red-100">Delete Project</button>
                       </td>
                     </tr>

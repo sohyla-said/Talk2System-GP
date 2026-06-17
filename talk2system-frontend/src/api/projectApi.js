@@ -225,3 +225,83 @@ export async function fetchProjectAuditLogs(projectId) {
   if (!res.ok) throw new Error("Failed to fetch logs");
   return data;
 }
+
+// ── Leave Project ─────────────────────────────────────────────
+
+export async function requestLeaveProject(projectId) {
+  const res = await fetch(`${BASE_URL}/api/projects/${projectId}/leave-request`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to submit leave request");
+  return data;
+}
+
+// PM: fetch pending leave requests from participants
+export async function fetchPendingLeaveRequests() {
+  const res = await fetch(`${BASE_URL}/api/projects/pending-leave-requests`, {
+    headers: authHeaders(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to fetch leave requests");
+  return data;
+}
+
+export async function approveLeaveRequest(projectId, requestId) {
+  const res = await fetch(
+    `${BASE_URL}/api/projects/${projectId}/leave-request/${requestId}/approve`,
+    { method: "PATCH", headers: authHeaders() }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to approve leave request");
+  return data;
+}
+
+export async function rejectLeaveRequest(projectId, requestId, reason) {
+  const res = await fetch(
+    `${BASE_URL}/api/projects/${projectId}/leave-request/${requestId}/reject`,
+    {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ reason }),
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to reject leave request");
+  return data;
+}
+
+// Admin: fetch pending PM leave requests
+export async function fetchPendingPmLeaveRequests() {
+  const res = await fetch(`${BASE_URL}/api/admin/pending-pm-leave-requests`, {
+    headers: authHeaders(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to fetch PM leave requests");
+  return data;
+}
+
+export async function approvePmLeaveRequest(requestId) {
+  const res = await fetch(
+    `${BASE_URL}/api/admin/pm-leave-request/${requestId}/approve`,
+    { method: "PATCH", headers: authHeaders() }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to approve PM leave request");
+  return data;
+}
+
+export async function rejectPmLeaveRequest(requestId, reason) {
+  const res = await fetch(
+    `${BASE_URL}/api/admin/pm-leave-request/${requestId}/reject`,
+    {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ reason }),
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to reject PM leave request");
+  return data;
+}

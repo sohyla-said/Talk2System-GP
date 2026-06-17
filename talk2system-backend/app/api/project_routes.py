@@ -17,6 +17,8 @@ from app.models.session_requirement import SessionRequirement
 from app.models.notification import Notification
 from app.services.audit_service import log_action
 from app.services import notification_service
+from app.models.project_leave_request import ProjectLeaveRequest
+
 router = APIRouter(prefix="/api/projects", tags=["Projects"])
 
 
@@ -74,6 +76,24 @@ class MemberResponse(BaseModel):
 class AddParticipantRequest(BaseModel):
     email: str
     notes: Optional[str] = None
+
+
+class MyProjectResponse(BaseModel):
+    id: int
+    name: str
+    description: str
+    domain: str
+    created_at: datetime
+    project_status: str
+    user_role: str
+    has_pending_leave_request: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class LeaveRejectRequest(BaseModel):
+    reason: Optional[str] = None
 
 
 
@@ -162,7 +182,7 @@ def delete_project(
     db.commit()
     return
 
-@router.get("/my-projects", response_model=list[ProjectResponse])
+@router.get("/my-projects", response_model=list[MyProjectResponse])
 def my_projects(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -171,12 +191,31 @@ def my_projects(
         db.query(ProjectMembership)
         .filter(
             ProjectMembership.user_id == current_user.id,
-            ProjectMembership.left_at.is_(None)  
+            ProjectMembership.left_at.is_(None)
         )
         .all()
     )
-    project_ids = [m.project_id for m in memberships]
-    return db.query(Project).filter(Project.id.in_(project_ids)).all()
+    result = []
+    for m in memberships:
+        project = db.query(Project).filter(Project.id == m.project_id).first()
+        if not project:
+            continue
+        pending_leave = db.query(ProjectLeaveRequest).filter(
+            ProjectLeaveRequest.project_id == m.project_id,
+            ProjectLeaveRequest.user_id == current_user.id,
+            ProjectLeaveRequest.status == "pending",
+        ).first()
+        result.append({
+            "id": project.id,
+            "name": project.name,
+            "description": project.description,
+            "domain": project.domain,
+            "created_at": project.created_at,
+            "project_status": project.project_status,
+            "user_role": m.role,
+            "has_pending_leave_request": pending_leave is not None,
+        })
+    return result
 
 
 @router.post("/join", response_model=InvitationResponse, status_code=201)
@@ -512,10 +551,14 @@ def remove_participant(
 
     target_membership = (
         db.query(ProjectMembership)
-        .filter_by(project_id=project_id, user_id=user_id)
+        .filter(
+            ProjectMembership.project_id == project_id,
+            ProjectMembership.user_id == user_id,
+            ProjectMembership.left_at.is_(None),
+        )
         .first()
     )
-    
+
     if not target_membership:
         raise HTTPException(404, "This user is not a member of this project")
 
@@ -591,6 +634,246 @@ def get_project_audit_logs(
         }
         for log in logs
     ]
+# ──────────────────────────────────────────────────────────────
+# LEAVE REQUEST ROUTES
+# ──────────────────────────────────────────────────────────────
+
+@router.post("/{project_id}/leave-request", status_code=201)
+def request_leave_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    membership = ProjectService.get_membership(db, project_id, current_user.id)
+    if not membership:
+        raise HTTPException(403, "You are not a member of this project")
+
+    existing = db.query(ProjectLeaveRequest).filter(
+        ProjectLeaveRequest.project_id == project_id,
+        ProjectLeaveRequest.user_id == current_user.id,
+        ProjectLeaveRequest.status == "pending",
+    ).first()
+    if existing:
+        raise HTTPException(409, "You already have a pending leave request for this project")
+
+    project = ProjectService.get_project(db, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    leave_req = ProjectLeaveRequest(
+        project_id=project_id,
+        user_id=current_user.id,
+        role_at_request=membership.role,
+    )
+    db.add(leave_req)
+
+    if membership.role == "participant":
+        pm_membership = db.query(ProjectMembership).filter(
+            ProjectMembership.project_id == project_id,
+            ProjectMembership.role == "project_manager",
+            ProjectMembership.left_at.is_(None),
+        ).first()
+        if pm_membership:
+            notification_service.create_notification(
+                db,
+                user_id=pm_membership.user_id,
+                notification_type="leave_request_received",
+                title="Leave Request",
+                message=(
+                    f"'{current_user.full_name or current_user.email}' "
+                    f"({current_user.email}) has requested to leave '{project.name}'."
+                ),
+                actor_name=current_user.full_name,
+                actor_email=current_user.email,
+                project_id=project_id,
+                project_name=project.name,
+            )
+    else:
+        # PM leaving — notify admin(s) to review. Project status unchanged until admin approves.
+        admin_users = db.query(User).filter(User.role == "admin").all()
+        for admin in admin_users:
+            notification_service.create_notification(
+                db,
+                user_id=admin.id,
+                notification_type="pm_leave_request_received",
+                title="PM Leave Request",
+                message=(
+                    f"Project Manager '{current_user.full_name or current_user.email}' "
+                    f"({current_user.email}) has requested to leave '{project.name}'. "
+                    f"Please review and approve or reject the request."
+                ),
+                actor_name=current_user.full_name,
+                actor_email=current_user.email,
+                project_id=project_id,
+                project_name=project.name,
+            )
+
+    log_action(
+        db,
+        current_user.id,
+        "leave_requested",
+        "project",
+        project_id=project_id,
+        details={"label": f"{current_user.full_name or current_user.email} requested to leave"},
+    )
+    db.commit()
+    db.refresh(leave_req)
+    return {"message": "Leave request submitted successfully", "request_id": leave_req.id}
+
+
+@router.get("/pending-leave-requests")
+def get_pending_leave_requests(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """PM retrieves pending participant leave requests for their projects."""
+    pm_memberships = db.query(ProjectMembership).filter(
+        ProjectMembership.user_id == current_user.id,
+        ProjectMembership.role == "project_manager",
+        ProjectMembership.left_at.is_(None),
+    ).all()
+    pm_project_ids = [m.project_id for m in pm_memberships]
+
+    requests = db.query(ProjectLeaveRequest).filter(
+        ProjectLeaveRequest.project_id.in_(pm_project_ids),
+        ProjectLeaveRequest.role_at_request == "participant",
+        ProjectLeaveRequest.status == "pending",
+    ).all()
+
+    result = []
+    for r in requests:
+        project = db.query(Project).filter(Project.id == r.project_id).first()
+        result.append({
+            "id": r.id,
+            "project_id": r.project_id,
+            "project_name": project.name if project else None,
+            "user_id": r.user_id,
+            "user_email": r.user.email if r.user else None,
+            "user_full_name": r.user.full_name if r.user else None,
+            "role_at_request": r.role_at_request,
+            "status": r.status,
+            "created_at": r.created_at,
+        })
+    return result
+
+
+@router.patch("/{project_id}/leave-request/{request_id}/approve", status_code=200)
+def approve_leave_request(
+    project_id: int,
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """PM approves a participant's leave request."""
+    leave_req = db.query(ProjectLeaveRequest).filter(
+        ProjectLeaveRequest.id == request_id,
+        ProjectLeaveRequest.project_id == project_id,
+    ).first()
+    if not leave_req:
+        raise HTTPException(404, "Leave request not found")
+    if leave_req.status != "pending":
+        raise HTTPException(409, f"Request is already {leave_req.status}")
+
+    pm_membership = ProjectService.get_membership(db, project_id, current_user.id)
+    if not pm_membership or pm_membership.role != "project_manager":
+        raise HTTPException(403, "Only the project manager can approve leave requests")
+
+    target_membership = db.query(ProjectMembership).filter(
+        ProjectMembership.project_id == project_id,
+        ProjectMembership.user_id == leave_req.user_id,
+        ProjectMembership.left_at.is_(None),
+    ).first()
+    if target_membership:
+        target_membership.left_at = datetime.now(timezone.utc)
+
+    leave_req.status = "approved"
+    leave_req.resolved_at = datetime.now(timezone.utc)
+    leave_req.resolved_by_id = current_user.id
+
+    project = ProjectService.get_project(db, project_id)
+    notification_service.create_notification(
+        db,
+        user_id=leave_req.user_id,
+        notification_type="leave_approved",
+        title="Leave Request Approved",
+        message=f"Your request to leave '{project.name if project else 'the project'}' has been approved.",
+        actor_name=current_user.full_name,
+        actor_email=current_user.email,
+        project_id=project_id,
+        project_name=project.name if project else None,
+    )
+
+    log_action(
+        db,
+        current_user.id,
+        "approved_leave_request",
+        "project",
+        project_id=project_id,
+        entity_id=leave_req.user_id,
+        details={"label": f"PM approved leave for {leave_req.user.email if leave_req.user else leave_req.user_id}"},
+    )
+    db.commit()
+    return {"message": "Leave request approved"}
+
+
+@router.patch("/{project_id}/leave-request/{request_id}/reject", status_code=200)
+def reject_leave_request(
+    project_id: int,
+    request_id: int,
+    body: LeaveRejectRequest = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """PM rejects a participant's leave request."""
+    leave_req = db.query(ProjectLeaveRequest).filter(
+        ProjectLeaveRequest.id == request_id,
+        ProjectLeaveRequest.project_id == project_id,
+    ).first()
+    if not leave_req:
+        raise HTTPException(404, "Leave request not found")
+    if leave_req.status != "pending":
+        raise HTTPException(409, f"Request is already {leave_req.status}")
+
+    pm_membership = ProjectService.get_membership(db, project_id, current_user.id)
+    if not pm_membership or pm_membership.role != "project_manager":
+        raise HTTPException(403, "Only the project manager can reject leave requests")
+
+    reason_text = (body.reason.strip() if body and body.reason else None) or None
+    leave_req.status = "rejected"
+    leave_req.rejection_reason = reason_text
+    leave_req.resolved_at = datetime.now(timezone.utc)
+    leave_req.resolved_by_id = current_user.id
+
+    project = ProjectService.get_project(db, project_id)
+    message = f"Your request to leave '{project.name if project else 'the project'}' has been rejected."
+    if reason_text:
+        message += f"\n[reason]{reason_text}[/reason]"
+
+    notification_service.create_notification(
+        db,
+        user_id=leave_req.user_id,
+        notification_type="leave_rejected",
+        title="Leave Request Rejected",
+        message=message,
+        actor_name=current_user.full_name,
+        actor_email=current_user.email,
+        project_id=project_id,
+        project_name=project.name if project else None,
+    )
+
+    log_action(
+        db,
+        current_user.id,
+        "rejected_leave_request",
+        "project",
+        project_id=project_id,
+        entity_id=leave_req.user_id,
+        details={"label": f"PM rejected leave for {leave_req.user.email if leave_req.user else leave_req.user_id}"},
+    )
+    db.commit()
+    return {"message": "Leave request rejected"}
+
+
 @router.patch("/{project_id}/complete")
 def complete_project(
     project_id: int,

@@ -96,7 +96,18 @@ export async function handleNotificationNav(notif, navigate, getToken) {
     return;
   }
 
-  // ── All existing notification types: project page (unchanged behaviour) ───
+  // ── All leave result notifications → project list (never the project page) ──
+  if (
+    notification_type === "leave_approved" ||
+    notification_type === "leave_rejected" ||
+    notification_type === "pm_leave_approved" ||
+    notification_type === "pm_leave_rejected"
+  ) {
+    navigate("/projects");
+    return;
+  }
+
+  // ── All other types with a project: go to project details ──────────────────
   if (project_id) {
     navigate(`/projects/${project_id}`);
   }

@@ -69,7 +69,7 @@ export default function RequirementsProjectView() {
     headers: { Authorization: `Bearer ${getToken()}` },
   })
     .then((r) => r.json())
-    .then((data) => setProjectCompleted(data.project_status === "completed"))
+    .then((data) => setProjectCompleted(data.project_status === "completed" || data.project_status === "suspended"))
     .catch(console.error);
   }, [projectId]);
   useEffect(() => {

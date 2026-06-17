@@ -13,6 +13,7 @@ class Project(Base):
     domain = Column(String(50))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     project_status = Column(String, default="in_progress")
+    pre_suspension_status = Column(String, nullable=True)
 
     # relationships
     sessions = relationship("Session", back_populates="project", cascade="all, delete-orphan")
