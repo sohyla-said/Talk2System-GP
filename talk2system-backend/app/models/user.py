@@ -26,6 +26,9 @@ class User(Base):
         default=lambda: datetime.now(timezone.utc),
     )
 
+    reset_password_token = Column(String(255), nullable=True, index=True)
+    reset_password_expires = Column(DateTime, nullable=True)
+    
     # Relationships 
     memberships = relationship(
         "ProjectMembership",

@@ -2,13 +2,13 @@ import os
 import hashlib
 import base64
 from datetime import datetime, timedelta, timezone
-
+import secrets
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app.models.user import User
-
+from .email_service import email_service
 SECRET_KEY = os.getenv("SECRET_KEY", "fallback-dev-secret-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "2880")) # 48 hours
@@ -99,3 +99,41 @@ def login_user(db: Session, email: str, password: str) -> dict:
         "full_name": user.full_name,
         "status_message": STATUS_MESSAGES.get(user.status),
     }
+
+def forgot_password(db: Session, email: str) -> dict:
+    user = db.query(User).filter(User.email == email.lower()).first()
+    if user and user.status in ["active", "pending"]:
+        plain_token = secrets.token_urlsafe(32)
+        hashed_token = hashlib.sha256(plain_token.encode()).hexdigest()
+        user.reset_password_token = hashed_token
+        user.reset_password_expires = datetime.utcnow() + timedelta(hours=1)
+        db.commit()
+        email_service.send_password_reset(
+            to_email=user.email,
+            user_name=user.full_name,
+            token=plain_token
+        )
+    return {
+        "message": "If an account with that email exists, we've sent a password reset link."
+    }
+
+
+def reset_password(db: Session, token: str, new_password: str) -> dict:
+    hashed_token = hashlib.sha256(token.encode()).hexdigest()
+    user = db.query(User).filter(
+        User.reset_password_token == hashed_token,
+        User.reset_password_expires > datetime.utcnow()
+    ).first()
+    if not user:
+        raise ValueError("Password reset link is invalid or has expired.")
+    if len(new_password) < 8:
+        raise ValueError("Password must be at least 8 characters.")
+    user.hashed_password = hash_password(new_password)
+    user.reset_password_token = None
+    user.reset_password_expires = None
+    db.commit()
+    email_service.send_reset_confirmation(
+        to_email=user.email,
+        user_name=user.full_name
+    )
+    return {"message": "Password has been reset successfully."}

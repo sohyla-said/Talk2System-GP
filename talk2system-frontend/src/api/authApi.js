@@ -277,3 +277,25 @@ export async function adminActivateUser(userId) {
   if (!res.ok) throw new Error(data.detail || "Failed to activate user");
   return data;
 }
+
+export const forgotPasswordApi = async (email) => {
+  const response = await fetch(`${BASE_URL}/api/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || "Failed to send reset email");
+  return data;
+};
+
+export const resetPasswordApi = async (token, password) => {
+  const response = await fetch(`${BASE_URL}/api/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, new_password: password }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || "Failed to reset password");
+  return data;
+};

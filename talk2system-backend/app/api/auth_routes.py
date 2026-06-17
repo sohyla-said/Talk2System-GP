@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field,EmailStr, validator
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user
 from app.models.user import User
@@ -55,9 +55,24 @@ class MeResponse(BaseModel):
 
 class UpdateProfileRequest(BaseModel):
     full_name: Optional[str] = None
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8)
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @validator('new_password')
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
+
 @router.post("/signup", response_model=AuthResponse, status_code=201)
 def signup(data: SignupRequest, db: Session = Depends(get_db)):
     try:
@@ -147,3 +162,22 @@ def change_password(
     current_user.hashed_password = auth_service.hash_password(data.new_password)
     db.commit()
     return {"message": "Password changed successfully"}
+
+@router.post("/forgot-password", status_code=200)
+def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    try:
+        return auth_service.forgot_password(db, request.email)
+    except Exception as e:
+        print(f"Forgot password error: {e}")
+        return {"message": "If an account with that email exists, we've sent a password reset link."}
+
+
+@router.post("/reset-password", status_code=200)
+def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+    try:
+        return auth_service.reset_password(db, request.token, request.new_password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"Reset password error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to reset password")

@@ -15,6 +15,7 @@ import PendingApproval from "../pages/auth/PendingApprovalPage";
 import RoleApproval from "../pages/auth/role-approval";
 import OAuthCallbackPage from "../pages/auth/OAuthCallbackPage";
 import HelpAccountStatus from "../pages/help/HelpAccountStatus";
+import ResetPasswordPage from "../pages/auth/ResetPasswordPage";
 // Dashboard
 import Dashboard from "../pages/dashboard/DashboardPage";
 import ProfilePage from "../pages/profile/ProfilePage";
@@ -101,6 +102,7 @@ export default function AppRoutes() {
           <GuestRoute><Signup /></GuestRoute>     
         } />
         <Route path="/pending-approval" element={<PendingApproval />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Route>
       <Route path="/role-approval" element={
           <ProtectedRoute><RoleApproval /></ProtectedRoute>  
