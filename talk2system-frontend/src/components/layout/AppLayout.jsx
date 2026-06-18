@@ -1,4 +1,5 @@
 import { Outlet } from "react-router-dom";
+import { useState, useEffect } from "react";
 import Header from "./Header";
 import Footer from "./Footer";
 import { useLanguage } from "../../context/LanguageContext";
@@ -8,6 +9,13 @@ export default function AppLayout() {
   const { dir } = useLanguage();
   const user = getCurrentUser();
   const isSuspended = user?.status === "suspended";
+
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 300);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   return (
     <div dir={dir} className="relative flex min-h-screen w-full flex-col bg-background-light dark:bg-background-dark font-display text-[#1F2937] dark:text-gray-200">
@@ -36,6 +44,17 @@ export default function AppLayout() {
       </main>
 
       <Footer />
+
+      {/* Scroll to top */}
+      {showScrollTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="fixed bottom-6 right-6 z-50 w-11 h-11 flex items-center justify-center rounded-full bg-primary text-white shadow-lg hover:bg-primary/90 hover:shadow-xl hover:-translate-y-0.5 transition-all"
+          aria-label="Scroll to top"
+        >
+          <span className="material-symbols-outlined text-[22px]">arrow_upward</span>
+        </button>
+      )}
     </div>
   );
 }

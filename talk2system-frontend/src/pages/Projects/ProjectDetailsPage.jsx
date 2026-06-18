@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { getToken } from "../../api/authApi";
 import { fetchProject, fetchMyRole, fetchPendingRequests, acceptInvitation, rejectInvitation, fetchMembers, fetchProjectAuditLogs, fetchPendingLeaveRequests, approveLeaveRequest, rejectLeaveRequest } from "../../api/projectApi";
@@ -11,6 +11,8 @@ export default function ProjectDetailsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [project, setProject]     = useState(null);
   const [sessions, setSessions]   = useState([]);
+  const [sessionPage, setSessionPage] = useState(1);
+  const SESSIONS_PER_PAGE = 6;
   const [myRole, setMyRole]       = useState(null);
   const [loading, setLoading]     = useState(true);
   const [pmName, setPmName]       = useState(null);
@@ -919,37 +921,110 @@ export default function ProjectDetailsPage() {
               ))}
             </div>
           </div>
-          <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {sessions.length === 0 ? (<p className="text-gray-400 col-span-3">No sessions yet.</p>) : (
-             sessions.map((session) => (
-              <div
-                key={session.id}
-                onClick={() => navigate(
-                  `/projects/${projectId}/sessions/${session.id}/sessiondetails`,
-                  { state: { sessionId: session.id, projectCompleted: ["completed", "suspended"].includes(project?.project_status) } }
-                )}
-                className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border shadow-sm hover:shadow-md cursor-pointer transition"
-              >
-                <div className="flex items-start justify-between">
-                  <h3 className="font-bold text-lg">{session.title || `Session #${session.id}`}</h3>
-                  {["completed", "suspended"].includes(project?.project_status) && (
-                    <span className="material-symbols-outlined text-indigo-400 text-base">lock</span>
+          {(() => {
+            const totalSessionPages = Math.max(1, Math.ceil(sessions.length / SESSIONS_PER_PAGE));
+            const safeSessionPage = Math.min(sessionPage, totalSessionPages);
+            const paginatedSessions = sessions.slice(
+              (safeSessionPage - 1) * SESSIONS_PER_PAGE,
+              safeSessionPage * SESSIONS_PER_PAGE
+            );
+            const getSessionPageNumbers = () => {
+              const pages = [];
+              const maxVisible = 5;
+              let start = Math.max(1, safeSessionPage - Math.floor(maxVisible / 2));
+              let end = Math.min(totalSessionPages, start + maxVisible - 1);
+              if (end - start + 1 < maxVisible) start = Math.max(1, end - maxVisible + 1);
+              for (let i = start; i <= end; i++) pages.push(i);
+              return pages;
+            };
+            return (
+              <div className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {sessions.length === 0 ? (<p className="text-gray-400 col-span-3">No sessions yet.</p>) : (
+                    paginatedSessions.map((session) => (
+                      <div
+                        key={session.id}
+                        onClick={() => navigate(
+                          `/projects/${projectId}/sessions/${session.id}/sessiondetails`,
+                          { state: { sessionId: session.id, projectCompleted: ["completed", "suspended"].includes(project?.project_status) } }
+                        )}
+                        className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border shadow-sm hover:shadow-md cursor-pointer transition"
+                      >
+                        <div className="flex items-start justify-between">
+                          <h3 className="font-bold text-lg">{session.title || `Session #${session.id}`}</h3>
+                          {["completed", "suspended"].includes(project?.project_status) && (
+                            <span className="material-symbols-outlined text-indigo-400 text-base">lock</span>
+                          )}
+                        </div>
+                        <span className={`self-start flex h-6 items-center rounded-full px-2.5 text-xs font-semibold ${
+                          (session.status || "").toLowerCase() === "completed"
+                            ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
+                            : (session.status || "").toLowerCase() === "in_progress"
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                            : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                        }`}>
+                          {(session.status || "pending").replace(/_/g, " ")}
+                        </span>
+                      </div>
+                    ))
                   )}
                 </div>
 
-                <span className={`self-start flex h-6 items-center rounded-full px-2.5 text-xs font-semibold ${
-                  (session.status || "").toLowerCase() === "completed"
-                    ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
-                    : (session.status || "").toLowerCase() === "in_progress"
-                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
-                    : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
-                }`}>
-                  {(session.status || "pending").replace(/_/g, " ")}
-                </span>
+                {totalSessionPages > 1 && (
+                  <div className="flex items-center justify-between mt-6 px-1">
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      {(safeSessionPage - 1) * SESSIONS_PER_PAGE + 1}–{Math.min(safeSessionPage * SESSIONS_PER_PAGE, sessions.length)} of {sessions.length}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setSessionPage((p) => Math.max(1, p - 1))}
+                        disabled={safeSessionPage <= 1}
+                        className="w-8 h-8 rounded-md flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">chevron_left</span>
+                      </button>
+
+                      {safeSessionPage > 3 && totalSessionPages > 5 && (
+                        <>
+                          <button onClick={() => setSessionPage(1)} className="w-8 h-8 rounded-md flex items-center justify-center text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">1</button>
+                          <span className="w-8 h-8 flex items-center justify-center text-gray-400 text-xs">...</span>
+                        </>
+                      )}
+
+                      {getSessionPageNumbers().map((page) => (
+                        <button
+                          key={page}
+                          onClick={() => setSessionPage(page)}
+                          className={`w-8 h-8 rounded-md flex items-center justify-center text-sm font-medium transition-colors ${
+                            page === safeSessionPage
+                              ? "bg-primary text-white shadow-sm"
+                              : "text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10"
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+
+                      {safeSessionPage < totalSessionPages - 2 && totalSessionPages > 5 && (
+                        <>
+                          <span className="w-8 h-8 flex items-center justify-center text-gray-400 text-xs">...</span>
+                          <button onClick={() => setSessionPage(totalSessionPages)} className="w-8 h-8 rounded-md flex items-center justify-center text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">{totalSessionPages}</button>
+                        </>
+                      )}
+
+                      <button
+                        onClick={() => setSessionPage((p) => Math.min(totalSessionPages, p + 1))}
+                        disabled={safeSessionPage >= totalSessionPages}
+                        className="w-8 h-8 rounded-md flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            ))
-            )}
-          </div>
+            );
+          })()}
         </div>
       </div>
       
