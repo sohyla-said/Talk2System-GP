@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field,EmailStr, validator
 from app.db.session import get_db
@@ -41,6 +41,7 @@ class AuthResponse(BaseModel):
     status: str
     full_name: str
     status_message: Optional[str] = None  
+    avatar_url: Optional[str] = None  
 
 
 class MeResponse(BaseModel):
@@ -52,6 +53,7 @@ class MeResponse(BaseModel):
     created_at: Optional[datetime] = None
     status_message: Optional[str] = None   
     is_readonly: bool = False               
+    avatar_url: Optional[str] = None  
 
 class UpdateProfileRequest(BaseModel):
     full_name: Optional[str] = None
@@ -89,6 +91,7 @@ def signup(data: SignupRequest, db: Session = Depends(get_db)):
         status=user.status,
         full_name=user.full_name,
         status_message=STATUS_MESSAGES.get(user.status),
+        avatar_url=user.avatar_url,                  
     )
 
 
@@ -121,6 +124,7 @@ def me(current_user: User = Depends(get_current_user)):
         created_at=current_user.created_at,
         status_message=STATUS_MESSAGES.get(current_user.status),
         is_readonly=is_readonly,
+        avatar_url=current_user.avatar_url,
     )
 
 
@@ -161,7 +165,48 @@ def change_password(
         )
     current_user.hashed_password = auth_service.hash_password(data.new_password)
     db.commit()
+    # db.refresh(current_user)
     return {"message": "Password changed successfully"}
+
+@router.post("/upload-avatar")
+async def upload_avatar(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Upload or update user avatar."""
+    if current_user.status in ("suspended", "terminated", "archived"):
+        raise HTTPException(
+            403,
+            detail=f"Cannot upload avatar: account is {current_user.status}."
+        )
+
+    try:
+        result = auth_service.update_user_avatar(db, current_user, file)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload avatar: {str(e)}")
+
+
+@router.delete("/avatar")
+def delete_avatar(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete user avatar and revert to default."""
+    if current_user.status in ("suspended", "terminated", "archived"):
+        raise HTTPException(
+            403,
+            detail=f"Cannot delete avatar: account is {current_user.status}."
+        )
+
+    try:
+        result = auth_service.remove_user_avatar(db, current_user)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete avatar: {str(e)}")
 
 @router.post("/forgot-password", status_code=200)
 def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):

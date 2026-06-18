@@ -1,21 +1,34 @@
 import { useState, useEffect } from "react";
 import { useRef } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
-import { logout, getCurrentUser, isAdmin } from "../../api/authApi";
+import { logout, getCurrentUser, isAdmin, uploadAvatar, deleteAvatar } from "../../api/authApi";
 import { fetchMyRole } from "../../api/projectApi";
 import NotificationBell from "./NotificationBell";
 import ThemeToggle from "./ThemeToggle";
 import LangToggle from "./LangToggle";
 import { useTranslation } from "../../hooks/useTranslation";
 
-const DEFAULT_AVATAR = "https://lh3.googleusercontent.com/aida-public/AB6AXuAYI0aZKZE-VvkXhyWW_VwkFYcUyP5A363tXUVEJZI9IQnWLJZSWjkFjtum-9r3XSE2aVD8q0YI0GfCRdJIxBSKtp1Pfg7Zry0Fg84eK_N5mwr1GqwzCX5COa-xlc7aG6bGFjmklNozxNTGIxUGljxMdlZpIqIXGUGLRmHxXS6AL7I-lCz2VrQSTwq5dhA_r_SWqg4nvlg-lRdrXoX43iLvC3H9IyvL34_D9I_8Tj5CeSXFfNTeXhfQNhKm9MM-1TFcXFSXs8dmwWAe";
+const BASE_URL = "http://127.0.0.1:8000";
 
 function UserAvatar({ size = "md", editable = false, avatarUrl, onAvatarChange, t }) {
   const fileInputRef = useRef(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const dropdownRef = useRef(null);
   const sizeClasses = { sm: "size-8", md: "size-10", lg: "size-12" };
-  const hasCustomAvatar = avatarUrl && avatarUrl !== DEFAULT_AVATAR;
+  const [message, setMessage] = useState({ text: "", type: "" }); // type: "error" or "success"
+  const [showConfirm, setShowConfirm] = useState(false);
+  const hasCustomAvatar = avatarUrl && 
+    !avatarUrl.startsWith('https://ui-avatars.com') && 
+    !avatarUrl.startsWith('https://lh3.googleusercontent.com');
+
+  // hide message after 3 seconds
+  useEffect(() => {
+    if (message.text) {
+      const timer = setTimeout(() => setMessage({ text: "", type: "" }), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [message.text]);
 
   useEffect(() => {
     const handleAvatarUpdate = (e) => {
@@ -29,31 +42,65 @@ function UserAvatar({ size = "md", editable = false, avatarUrl, onAvatarChange, 
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setDropdownOpen(false);
+        setShowConfirm(false);
       }
     };
     if (dropdownOpen) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [dropdownOpen]);
 
-  const handleFileSelect = (e) => {
+  const handleFileSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { alert("Image must be less than 2MB"); return; }
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target.result;
-      localStorage.setItem("user_avatar", base64);
-      onAvatarChange?.(base64);
-    };
-    reader.readAsDataURL(file);
+    
+    if (file.size > 2 * 1024 * 1024) { 
+      setMessage({ text: "Image must be less than 2MB", type: "error" }); 
+      return; 
+    }
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setMessage({ text: "Please upload a valid image file (JPG, PNG, GIF, or WebP)", type: "error" });
+      return;
+    }
+    setUploading(true);
+    setMessage({ text: "", type: "" });
+    try {
+      const result = await uploadAvatar(file);
+      onAvatarChange?.(result.avatar_url);
+      setDropdownOpen(false);
+      setMessage({ text: "Photo uploaded successfully!", type: "success" });
+    } catch (error) {
+      setMessage({ text: error.message || "Failed to upload avatar", type: "error" });
+    } finally {
+      setUploading(false);
+    }
+    
     e.target.value = "";
-    setDropdownOpen(false);
   };
 
-  const handleRemove = () => {
-    localStorage.removeItem("user_avatar");
-    onAvatarChange?.(null);
-    setDropdownOpen(false);
+  const handleRemove = async () => {
+    setShowConfirm(false);
+    
+    try {
+      const result = await deleteAvatar();
+      onAvatarChange?.(result.avatar_url);
+      setDropdownOpen(false);
+      setMessage({ text: "Photo removed successfully!", type: "success" });
+    } catch (error) {
+      setMessage({ text: error.message || "Failed to delete avatar", type: "error" });
+    }
+  };
+
+  const getDisplayUrl = () => {
+    if (!avatarUrl || avatarUrl.startsWith('https://ui-avatars.com') || avatarUrl.startsWith('https://lh3.googleusercontent.com')) {
+      const user = getCurrentUser();
+      const name = user?.full_name || "User";
+      return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff&bold=true`;
+    }
+    if (avatarUrl.startsWith('/uploads/')) {
+      return `${BASE_URL}${avatarUrl}`;
+    }
+    return avatarUrl;
   };
 
   return (
@@ -61,25 +108,78 @@ function UserAvatar({ size = "md", editable = false, avatarUrl, onAvatarChange, 
       <div
         onClick={() => editable && setDropdownOpen(!dropdownOpen)}
         className={`bg-center bg-no-repeat aspect-square bg-cover rounded-full ring-2 ring-white dark:ring-white/10 ${sizeClasses[size]} ${editable ? "cursor-pointer hover:ring-primary/50 transition-all" : ""}`}
-        style={{ backgroundImage: `url("${avatarUrl || DEFAULT_AVATAR}")` }}
+        style={{ backgroundImage: `url("${getDisplayUrl()}")` }}
       />
       {editable && (
         <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-primary border-2 border-white dark:border-gray-900 flex items-center justify-center">
-          <span className="material-symbols-outlined text-white text-[10px] leading-none">edit</span>
+          {uploading ? (
+            <span className="material-symbols-outlined text-white text-[10px] leading-none animate-spin">progress_activity</span>
+          ) : (
+            <span className="material-symbols-outlined text-white text-[10px] leading-none">edit</span>
+          )}
         </div>
       )}
-      {editable && dropdownOpen && (
+      
+      {/* Inline Message */}
+      {message.text && (
+        <div className={`absolute top-full mt-2 end-0 z-50 px-4 py-2.5 rounded-lg shadow-xl text-sm font-medium flex items-center gap-2 min-w-[200px] ${
+          message.type === "error" 
+            ? "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 border border-red-200 dark:border-red-800" 
+            : "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+        }`}>
+          <span className="material-symbols-outlined text-lg">
+            {message.type === "error" ? "error" : "check_circle"}
+          </span>
+          {message.text}
+        </div>
+      )}
+      
+      {editable && !message.text && dropdownOpen && (
         <div className="absolute top-full mt-2 end-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 py-1 min-w-[160px]">
-          <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+          <button 
+            onClick={() => fileInputRef.current?.click()} 
+            disabled={uploading}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+          >
             <span className="material-symbols-outlined text-lg text-primary">photo_camera</span>
-            {t?.("changePhoto") || "Change Photo"}
+            {uploading ? "Uploading..." : (t?.("changePhoto") || "Change Photo")}
           </button>
           {hasCustomAvatar && (
-            <button onClick={handleRemove} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+            <button 
+              onClick={() => setShowConfirm(true)} 
+              disabled={uploading}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+            >
               <span className="material-symbols-outlined text-lg">delete</span>
               {t?.("removePhoto") || "Remove Photo"}
             </button>
           )}
+        </div>
+      )}
+
+      {editable && showConfirm && (
+        <div className="absolute top-full mt-2 end-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 p-4 min-w-[240px]">
+          <div className="flex items-start gap-3 mb-3">
+            <span className="material-symbols-outlined text-xl text-amber-600 dark:text-amber-400 mt-0.5">warning</span>
+            <p className="text-sm text-gray-700 dark:text-gray-200 font-medium">
+              Are you sure you want to remove your photo?
+            </p>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => setShowConfirm(false)}
+              className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleRemove}
+              disabled={uploading}
+              className="px-3 py-1.5 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
+            >
+              Remove
+            </button>
+          </div>
         </div>
       )}
       {editable && <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />}
@@ -95,18 +195,15 @@ export default function Header() {
 
   const [projectRole, setProjectRole] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState(null);
+  const [avatarUrl, setAvatarUrl] = useState(() => {
+  const storage = localStorage.getItem("access_token") ? localStorage : (sessionStorage.getItem("access_token") ? sessionStorage : localStorage);
+  return storage.getItem("user_avatar") || null;
+  });
   const { t, dir } = useTranslation();
-  // Close menu on route change
+  
   useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
-  
-  // load saved avatar from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem("user_avatar");
-    if (saved) setAvatarUrl(saved);
-  }, []);
 
   useEffect(() => {
     const match = location.pathname.match(/^\/projects\/(\d+)(\/|$)/);
@@ -137,7 +234,6 @@ export default function Header() {
   const navLabel = "hidden lg:inline";
 
   function handleLogout() {
-    localStorage.removeItem("user_avatar");
     logout();
     navigate("/login");
   }
@@ -189,8 +285,6 @@ export default function Header() {
           </NavLink>
         )}
         {!isAdmin() && <NotificationBell />}
-        
-        {/* ── Theme Toggle ── */}
         <ThemeToggle />
         <LangToggle />
         {/* User info */}
@@ -230,8 +324,6 @@ export default function Header() {
         <LangToggle />
         <ThemeToggle />
         {!isAdmin() && <NotificationBell />}
-
-        {/* Avatar (always visible) */}
         <UserAvatar size="sm" editable={true} avatarUrl={avatarUrl} onAvatarChange={setAvatarUrl} t={t} />
 
         {/* Hamburger button */}

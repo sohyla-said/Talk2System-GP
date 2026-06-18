@@ -1,6 +1,11 @@
 import os
 import hashlib
 import base64
+import uuid
+import shutil
+import urllib.parse
+from fastapi import UploadFile, HTTPException
+from typing import Optional
 from datetime import datetime, timedelta, timezone
 import secrets
 from jose import JWTError, jwt
@@ -12,6 +17,9 @@ from .email_service import email_service
 SECRET_KEY = os.getenv("SECRET_KEY", "fallback-dev-secret-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "2880")) # 48 hours
+UPLOAD_DIR = "uploads/avatars"
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2MB
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 
@@ -98,6 +106,8 @@ def login_user(db: Session, email: str, password: str) -> dict:
         "status": user.status,
         "full_name": user.full_name,
         "status_message": STATUS_MESSAGES.get(user.status),
+        "avatar_url": user.avatar_url,            
+
     }
 
 def forgot_password(db: Session, email: str) -> dict:
@@ -137,3 +147,84 @@ def reset_password(db: Session, token: str, new_password: str) -> dict:
         user_name=user.full_name
     )
     return {"message": "Password has been reset successfully."}
+
+
+def get_avatar_upload_dir() -> str:
+    """Ensure upload directory exists and return its path."""
+    upload_path = os.path.join(os.getcwd(), UPLOAD_DIR)
+    os.makedirs(upload_path, exist_ok=True)
+    return upload_path
+
+
+def validate_avatar_file(file: UploadFile) -> None:
+    """Validate the uploaded avatar file."""
+    if not file.filename:
+        raise ValueError("No filename provided")
+    # Check file extension
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise ValueError(f"Invalid file type. Allowed types: {', '.join(ALLOWED_EXTENSIONS)}")
+    content = file.file.read()
+    if len(content) > MAX_AVATAR_SIZE:
+        raise ValueError("File size must be less than 2MB")
+    file.file.seek(0)
+
+
+def save_avatar_file(file: UploadFile, user_id: int) -> str:
+    """Save uploaded avatar file and return the URL path."""
+    validate_avatar_file(file)
+    upload_dir = get_avatar_upload_dir()
+    ext = os.path.splitext(file.filename)[1].lower()
+    filename = f"{user_id}_{uuid.uuid4().hex}{ext}"
+    file_path = os.path.join(upload_dir, filename)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    return f"/uploads/avatars/{filename}"
+
+def delete_avatar_file(avatar_url: Optional[str]) -> None:
+    """Delete avatar file from disk if it exists."""
+    if not avatar_url:
+        return
+    if avatar_url.startswith("/uploads/"):
+        file_path = os.path.join(os.getcwd(), avatar_url.lstrip("/"))
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+                print(f"Deleted avatar file: {file_path}")
+            except Exception as e:
+                print(f"Error deleting avatar file: {e}")
+
+def get_default_avatar_url(full_name: Optional[str] = None) -> str:
+    """Generate default avatar URL using UI Avatars API."""
+    name = full_name or "User"
+    encoded_name = urllib.parse.quote(name)
+    return f"https://ui-avatars.com/api/?name={encoded_name}&background=6366f1&color=fff&bold=true"
+
+
+def update_user_avatar(db: Session, user: User, file: UploadFile) -> dict:
+    """Update user avatar: delete old, save new, update DB."""
+    # Delete old avatar file if exists
+    if user.avatar_url:
+        delete_avatar_file(user.avatar_url)
+    avatar_url = save_avatar_file(file, user.id)
+    user.avatar_url = avatar_url
+    db.commit()
+    db.refresh(user)
+    return {
+        "message": "Avatar uploaded successfully",
+        "avatar_url": avatar_url
+    }
+
+
+def remove_user_avatar(db: Session, user: User) -> dict:
+    """Remove user avatar and revert to default."""
+    if user.avatar_url:
+        delete_avatar_file(user.avatar_url)
+        user.avatar_url = None
+        db.commit()
+        db.refresh(user)
+    default_avatar = get_default_avatar_url(user.full_name)
+    return {
+        "message": "Avatar deleted successfully",
+        "avatar_url": default_avatar
+    }

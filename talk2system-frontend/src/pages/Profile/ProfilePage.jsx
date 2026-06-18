@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "../../hooks/useTranslation";
-import { fetchProfile, updateProfile, getCurrentUser, changePassword } from "../../api/authApi";
+import { fetchProfile, updateProfile, getCurrentUser, changePassword, uploadAvatar, deleteAvatar } from "../../api/authApi";
+
+const BASE_URL = "http://127.0.0.1:8000";
 
 const EyeIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
@@ -13,8 +15,6 @@ const EyeOffIcon = () => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
   </svg>
 );
-
-const DEFAULT_AVATAR = `https://ui-avatars.com/api/?name=${encodeURIComponent("User")}&background=6366f1&color=fff&bold=true`;
 
 export default function ProfilePage() {
   const { t, dir } = useTranslation();
@@ -39,13 +39,25 @@ export default function ProfilePage() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
 
-  const [avatarUrl, setAvatarUrl] = useState(null);
+  const [avatarUrl, setAvatarUrl] = useState(() => {
+  const storage = localStorage.getItem("access_token") ? localStorage : (sessionStorage.getItem("access_token") ? sessionStorage : localStorage);
+  return storage.getItem("user_avatar") || null;
+  });
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [avatarMessage, setAvatarMessage] = useState({ text: "", type: "" });
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+
+  // hide avatar message after 3 seconds
+  useEffect(() => {
+    if (avatarMessage.text) {
+      const timer = setTimeout(() => setAvatarMessage({ text: "", type: "" }), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [avatarMessage.text]);
 
   useEffect(() => {
     loadProfile();
-    
-    setAvatarUrl(localStorage.getItem("user_avatar"));
     
     const handleAvatarUpdate = (e) => setAvatarUrl(e.detail);
     window.addEventListener("avatar-updated", handleAvatarUpdate);
@@ -53,7 +65,7 @@ export default function ProfilePage() {
     return () => {
       window.removeEventListener("avatar-updated", handleAvatarUpdate);
     };
-  }, []); // Empty dependency array = runs on every mount
+  }, []);
 
   const loadProfile = async () => {
     setLoading(true);
@@ -73,7 +85,6 @@ export default function ProfilePage() {
       
       setFormData({ full_name: data.full_name || "" });
       
-      // Update local storage with fresh data
       const storage = localStorage.getItem("access_token") ? localStorage : sessionStorage;
       storage.setItem("user_full_name", data.full_name || "");
       storage.setItem("user_email", data.email);
@@ -118,6 +129,7 @@ export default function ProfilePage() {
       setSaving(false);
     }
   };
+
   const handlePasswordChange = async (e) => {
     e.preventDefault();
     
@@ -185,33 +197,61 @@ export default function ProfilePage() {
 
   const handleAvatarClick = () => fileInputRef.current?.click();
 
-  const handleFileSelect = (e) => {
+  const handleFileSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { alert("Image must be less than 2MB"); return; }
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target.result;
-      localStorage.setItem("user_avatar", base64);
-      setAvatarUrl(base64); 
-      window.dispatchEvent(new CustomEvent("avatar-updated", { detail: base64 }));
+    
+    if (file.size > 2 * 1024 * 1024) { 
+      setAvatarMessage({ text: "Image must be less than 2MB", type: "error" }); 
+      return; 
+    }
+    
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setAvatarMessage({ text: "Please upload a valid image file (JPG, PNG, GIF, or WebP)", type: "error" });
+      return;
+    }
+
+    setUploading(true);
+    setAvatarMessage({ text: "", type: "" });
+    try {
+      const result = await uploadAvatar(file);
+      setAvatarUrl(result.avatar_url);
       setDropdownOpen(false);
-    };
-    reader.readAsDataURL(file);
+      setAvatarMessage({ text: "Photo uploaded successfully!", type: "success" });
+    } catch (error) {
+      setAvatarMessage({ text: error.message || "Failed to upload avatar", type: "error" });
+    } finally {
+      setUploading(false);
+    }
+    
     e.target.value = "";
   };
 
-  const handleRemoveAvatar = () => {
-    localStorage.removeItem("user_avatar");
-    setAvatarUrl(null); 
-    window.dispatchEvent(new CustomEvent("avatar-updated", { detail: null }));
-    setDropdownOpen(false);
+  const handleRemoveAvatar = async () => {
+    setShowRemoveConfirm(false);
+    
+    try {
+      const result = await deleteAvatar();
+      setAvatarUrl(result.avatar_url);
+      setDropdownOpen(false);
+      setAvatarMessage({ text: "Photo removed successfully!", type: "success" });
+    } catch (error) {
+      setAvatarMessage({ text: error.message || "Failed to delete avatar", type: "error" });
+    }
   };
 
+  const hasCustomAvatar = avatarUrl && !avatarUrl.startsWith('https://ui-avatars.com');
+
   const getCurrentAvatarUrl = () => {
-    if (avatarUrl) return avatarUrl;
-    const name = profile?.full_name || "User";
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff&bold=true`;
+    if (!avatarUrl || avatarUrl.startsWith('https://ui-avatars.com')) {
+      const name = profile?.full_name || "User";
+      return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff&bold=true`;
+    }
+    if (avatarUrl.startsWith('/uploads/')) {
+      return `${BASE_URL}${avatarUrl}`;
+    }
+    return avatarUrl;
   };
 
   if (loading) {
@@ -267,7 +307,6 @@ export default function ProfilePage() {
           <div className="absolute inset-0 bg-black/10 backdrop-blur-[1px]"></div>
         </div>
         <div className="px-6 sm:px-8 pb-8">
-          {/* Avatar and Basic Info Header */}
           <div className="flex flex-col sm:flex-row items-center sm:items-end gap-4 -mt-14 mb-8 relative z-10">
             <div className="relative group">
               <div
@@ -276,28 +315,87 @@ export default function ProfilePage() {
                 style={{ backgroundImage: `url("${getCurrentAvatarUrl()}")` }}
               />
               <div className="absolute inset-0 rounded-2xl bg-black/0 group-hover:bg-black/30 transition-all duration-300 flex items-center justify-center">
-                <span className="material-symbols-outlined text-white text-3xl opacity-0 group-hover:opacity-100 transition-opacity">photo_camera</span>
+                {uploading ? (
+                  <span className="material-symbols-outlined text-white text-3xl animate-spin">progress_activity</span>
+                ) : (
+                  <span className="material-symbols-outlined text-white text-3xl opacity-0 group-hover:opacity-100 transition-opacity">photo_camera</span>
+                )}
               </div>
               <div 
                 className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl bg-primary border-3 border-white dark:border-gray-800 flex items-center justify-center cursor-pointer shadow-lg hover:scale-110 transition-transform"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
               >
-                <span className="material-symbols-outlined text-white text-sm">edit</span>
+                {uploading ? (
+                  <span className="material-symbols-outlined text-white text-sm animate-spin">progress_activity</span>
+                ) : (
+                  <span className="material-symbols-outlined text-white text-sm">edit</span>
+                )}
               </div>
-              {dropdownOpen && (
+              
+              {/* Avatar Message */}
+              {avatarMessage.text && (
+                <div className={`absolute top-full mt-2 start-0 z-50 px-4 py-2.5 rounded-lg shadow-xl text-sm font-medium flex items-center gap-2 min-w-[220px] ${
+                  avatarMessage.type === "error" 
+                    ? "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 border border-red-200 dark:border-red-800" 
+                    : "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                }`}>
+                  <span className="material-symbols-outlined text-lg">
+                    {avatarMessage.type === "error" ? "error" : "check_circle"}
+                  </span>
+                  {avatarMessage.text}
+                </div>
+              )}
+              
+              {!avatarMessage.text && dropdownOpen && (
                 <div className="absolute top-full mt-2 start-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl z-50 py-1.5 min-w-[180px] w-max">
-                  <button onClick={handleAvatarClick} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                  <button 
+                    onClick={handleAvatarClick} 
+                    disabled={uploading}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors disabled:opacity-50"
+                  >
                     <span className="material-symbols-outlined text-lg text-primary">photo_camera</span>
-                    {t("changePhoto") || "Change Photo"}
+                    {uploading ? "Uploading..." : (t("changePhoto") || "Change Photo")}
                   </button>
-                  {avatarUrl && (
-                    <button onClick={handleRemoveAvatar} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                  {hasCustomAvatar && (
+                    <button 
+                      onClick={() => setShowRemoveConfirm(true)} 
+                      disabled={uploading}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+                    >
                       <span className="material-symbols-outlined text-lg">delete</span>
                       {t("removePhoto") || "Remove Photo"}
                     </button>
                   )}
                 </div>
               )}
+              
+              {/* Inline Confirmation Dialog */}
+              {showRemoveConfirm && (
+                <div className="absolute top-full mt-2 start-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl z-50 p-4 min-w-[260px]">
+                  <div className="flex items-start gap-3 mb-3">
+                    <span className="material-symbols-outlined text-xl text-amber-600 dark:text-amber-400 mt-0.5">warning</span>
+                    <p className="text-sm text-gray-700 dark:text-gray-200 font-medium">
+                      Are you sure you want to remove your photo?
+                    </p>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      onClick={() => setShowRemoveConfirm(false)}
+                      className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleRemoveAvatar}
+                      disabled={uploading}
+                      className="px-3 py-1.5 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              )}
+              
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
             </div>
             <div className="text-center sm:text-start mb-2 sm:mb-0 flex-1">

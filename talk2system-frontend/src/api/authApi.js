@@ -41,6 +41,7 @@ const STORAGE_KEYS = [
   "user_status",
   "user_full_name",
   "user_created_at",
+  "user_avatar",  
 ];
 
 export function loginWithGoogle() {
@@ -64,6 +65,8 @@ export function saveSession(data, rememberMe = true) {
   storage.setItem("user_status", data.status);
   storage.setItem("user_full_name", data.full_name);
   storage.setItem("user_created_at", data.created_at || "");
+  storage.setItem("user_avatar", data.avatar_url || "");  
+  window.dispatchEvent(new CustomEvent("avatar-updated", { detail: data.avatar_url }));
 }
 
 function clearSession() {
@@ -144,6 +147,7 @@ export function getCurrentUser() {
     status: storage.getItem("user_status"),
     full_name: storage.getItem("user_full_name"),
     created_at: storage.getItem("user_created_at"),
+    avatar_url: storage.getItem("user_avatar"), 
   };
 }
 
@@ -162,6 +166,8 @@ export async function fetchProfile() {
   if (!res.ok) throw new Error("Failed to fetch profile");
   const storage = getTokenStorage();
   storage.setItem("user_full_name", data.full_name || "");
+  storage.setItem("user_avatar", data.avatar_url || "");
+  window.dispatchEvent(new CustomEvent("avatar-updated", { detail: data.avatar_url }));
   return data;
 }
 
@@ -187,6 +193,45 @@ export async function updateProfile(data) {
   }));
   
   return responseData;
+}
+
+export async function uploadAvatar(file) {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${BASE_URL}/api/auth/upload-avatar`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || "Failed to upload avatar");
+  const storage = getTokenStorage();
+  storage.setItem("user_avatar", data.avatar_url);
+  window.dispatchEvent(new CustomEvent("avatar-updated", { detail: data.avatar_url }));
+  return data;
+}
+
+export async function deleteAvatar() {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+  const response = await fetch(`${BASE_URL}/api/auth/avatar`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || "Failed to delete avatar");
+  const storage = getTokenStorage();
+  storage.setItem("user_avatar", data.avatar_url);
+  window.dispatchEvent(new CustomEvent("avatar-updated", { detail: data.avatar_url }));
+  return data;
 }
 
 export async function changePassword(data) {
