@@ -27,8 +27,9 @@ import AddProject from "../pages/projects/AddProjectDetailsPage";
 import AddParticipant from "../pages/projects/AddParticipantPage";
 import EmptyProjectsPage from "../pages/projects/EmptyProjectsPage";
 import AdminAddProject from "../pages/projects/AdminAddProjectPage";
-import AdminSystemProjectsPage from "../pages/projects/AdminSystemProjectsPage"; 
+import AdminSystemProjectsPage from "../pages/projects/AdminSystemProjectsPage";
 import AllUsersPage from "../pages/admin/AllUsersPage";
+import PendingInvitationsPage from "../pages/projects/PendingInvitationsPage";
 
 //sessions
 import SessionDetailsPage from "../pages/sessions/SessionDetailsPage";
@@ -123,6 +124,7 @@ export default function AppRoutes() {
 
         <Route path="/projects">
           <Route index element={<ProjectsPage />} />
+          <Route path="pending-invitations" element={<PendingInvitationsPage />} />
           <Route path="system-projects" element={
             <ProtectedRoute requireAdmin><AdminSystemProjectsPage /></ProtectedRoute>
           } />

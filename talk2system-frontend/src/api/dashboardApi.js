@@ -16,6 +16,15 @@ export async function fetchUserDashboardStats() {
   return data;
 }
 
+export async function fetchUserMomentum(weeks = 8) {
+  const res = await fetch(`${BASE_URL}/api/dashboard/user-momentum?weeks=${weeks}`, {
+    headers: authHeaders(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to fetch momentum data");
+  return data;
+}
+
 export async function fetchAdminDashboardStats() {
   const res = await fetch(`${BASE_URL}/api/dashboard/admin-stats`, {
     headers: authHeaders(),

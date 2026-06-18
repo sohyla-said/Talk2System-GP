@@ -1,13 +1,19 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getCurrentUser } from "../../api/authApi";
-import { fetchUserDashboardStats, fetchUserActivityFeed } from "../../api/dashboardApi";
+import { fetchUserDashboardStats, fetchUserActivityFeed, fetchUserMomentum } from "../../api/dashboardApi";
 import {
   getRecentWeeks, getRecentMonths, formatWeekLabel, formatMonthLabel,
-  exportUserActivityAsCSV,
+  // exportUserActivityAsCSV, // CSV export disabled for now — keep import ready for when it's needed again
 } from "../../utils/feedFilterUtils";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+function urgencyColor(days) {
+  if (days >= 14) return "text-red-500 dark:text-red-400";
+  if (days >= 7)  return "text-orange-500 dark:text-orange-400";
+  return "text-amber-500 dark:text-amber-400";
+}
+
 function timeAgo(iso) {
   if (!iso) return "—";
   const sec = Math.floor((Date.now() - new Date(iso)) / 1000);
@@ -42,6 +48,18 @@ function getActivityUrl({ type, project_id, session_id }) {
       return null;
   }
 }
+
+const FEED_PAGE_SIZE = 10;
+const LIST_PREVIEW_COUNT = 6;
+
+const MOMENTUM_RANGES = [4, 8, 12, 26];
+
+const MOMENTUM_SERIES = [
+  { key: "sessions",     label: "Sessions",     color: "#8b5cf6", field: "sessions_created" },
+  { key: "requirements", label: "Requirements", color: "#10b981", field: "requirements_extracted" },
+  { key: "artifacts",    label: "Artifacts",    color: "#f59e0b", field: "artifacts_generated" },
+  { key: "approvals",    label: "Approvals",    color: "#3b82f6", field: "approvals_given" },
+];
 
 const CHART_COLORS = [
   "#6366f1","#f59e0b","#10b981","#3b82f6","#ec4899",
@@ -157,6 +175,89 @@ function DonutChart({ segments, size = 180, thickness = 32, sublabel }) {
   );
 }
 
+// ─── Line Chart ───────────────────────────────────────────────────────────────
+function LineChart({ labels, series, height = 220 }) {
+  const width     = 600;
+  const padLeft   = 46;
+  const padRight  = 16;
+  const padTop    = 16;
+  const padBottom = 28;
+  const innerW    = width - padLeft - padRight;
+  const innerH    = height - padTop - padBottom;
+
+  // round the axis max up to a multiple of tickCount so ticks land on whole numbers
+  const tickCount = 4;
+  const rawMax    = Math.max(1, ...series.flatMap(s => s.values));
+  const niceMax   = Math.max(tickCount, Math.ceil(rawMax / tickCount) * tickCount);
+  const ticks     = Array.from({ length: tickCount + 1 }, (_, i) => Math.round((niceMax / tickCount) * i));
+
+  const n     = labels.length;
+  const stepX = n > 1 ? innerW / (n - 1) : 0;
+
+  const toPoint = (val, i) => [
+    padLeft + i * stepX,
+    padTop + innerH - (val / niceMax) * innerH,
+  ];
+
+  return (
+    <div className="w-full">
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ height }}>
+        {/* y gridlines + value labels */}
+        {ticks.map((t, i) => {
+          const y = padTop + innerH - (t / niceMax) * innerH;
+          return (
+            <g key={i}>
+              <line x1={padLeft} y1={y} x2={width - padRight} y2={y}
+                stroke="currentColor" className="text-gray-100 dark:text-gray-800" strokeWidth={1} />
+              <text x={padLeft - 8} y={y} textAnchor="end" dominantBaseline="middle"
+                className="fill-gray-400" fontSize="10">{t}</text>
+            </g>
+          );
+        })}
+
+        {/* y-axis title */}
+        <text x={14} y={padTop + innerH / 2} textAnchor="middle" className="fill-gray-400" fontSize="10"
+          transform={`rotate(-90 14 ${padTop + innerH / 2})`}>Count</text>
+
+        {series.map((s, si) => {
+          const points = s.values.map((v, i) => toPoint(v, i));
+          const path   = points.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x},${y}`).join(" ");
+          return (
+            <g key={si}>
+              <path d={path} fill="none" stroke={s.color} strokeWidth={2}
+                strokeLinecap="round" strokeLinejoin="round" />
+              {points.map(([x, y], i) => (
+                <circle key={i} cx={x} cy={y} r={2.5} fill={s.color}>
+                  <title>{`${formatWeekLabel(labels[i])}: ${s.values[i]} ${s.name}`}</title>
+                </circle>
+              ))}
+            </g>
+          );
+        })}
+
+        {/* x-axis title */}
+        <text x={padLeft + innerW / 2} y={height - 6} textAnchor="middle" className="fill-gray-400" fontSize="10">
+          Week
+        </text>
+      </svg>
+
+      <div className="flex items-center gap-4 mt-2 flex-wrap">
+        {series.map(s => (
+          <div key={s.name} className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+            <span className="text-[11px] text-gray-500 dark:text-gray-400">{s.name}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex justify-between mt-1" style={{ paddingLeft: padLeft, paddingRight: padRight }}>
+        <span className="text-[10px] text-gray-400">{formatWeekLabel(labels[0])}</span>
+        <span className="text-[10px] text-gray-400">{formatWeekLabel(labels[labels.length - 1])}</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function UserDashboardPage() {
   const navigate   = useNavigate();
@@ -172,6 +273,17 @@ export default function UserDashboardPage() {
   const [feedEntries,     setFeedEntries]     = useState(null);
   const [feedLoading,     setFeedLoading]     = useState(false);
   const [feedError,       setFeedError]       = useState(null);
+  const [feedPage,        setFeedPage]        = useState(1);
+
+  const [momentumWeeks,   setMomentumWeeks]   = useState(8);
+  const [momentum,        setMomentum]        = useState(null);
+  const [momentumLoading, setMomentumLoading] = useState(true);
+  const [momentumError,   setMomentumError]   = useState(null);
+  const [momentumMetric,  setMomentumMetric]  = useState(MOMENTUM_SERIES[0].key);
+
+  const [showAllPendingProjects, setShowAllPendingProjects] = useState(false);
+  const [showAllPendingSessions, setShowAllPendingSessions] = useState(false);
+  const [showAllStaleSessions,   setShowAllStaleSessions]   = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -191,6 +303,7 @@ export default function UserDashboardPage() {
   }, []);
 
   useEffect(() => {
+    setFeedPage(1);
     if (feedFilterType === "all") {
       setFeedEntries(null);
       setFeedError(null);
@@ -212,6 +325,23 @@ export default function UserDashboardPage() {
     })();
     return () => { cancelled = true; };
   }, [feedFilterType, feedFilterValue]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setMomentumLoading(true);
+        setMomentumError(null);
+        const data = await fetchUserMomentum(momentumWeeks);
+        if (!cancelled) setMomentum(data);
+      } catch (e) {
+        if (!cancelled) setMomentumError(e.message);
+      } finally {
+        if (!cancelled) setMomentumLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [momentumWeeks]);
 
   // ── Derived percentages ────────────────────────────────────────────────────
   const pct = (num, denom) => (denom > 0 ? Math.round((num / denom) * 100) : 0);
@@ -258,7 +388,7 @@ export default function UserDashboardPage() {
           {/* PM alert — pending invitations */}
           {!loading && stats?.pending_invitations > 0 && (
             <button
-              onClick={() => navigate("/projects")}
+              onClick={() => navigate("/projects/pending-invitations")}
               className="flex items-center gap-2 text-sm font-semibold bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700 px-3 py-2 rounded-xl hover:bg-amber-100 dark:hover:bg-amber-900/40 transition"
             >
               <span className="material-symbols-outlined text-[18px]">mark_email_unread</span>
@@ -358,7 +488,10 @@ export default function UserDashboardPage() {
                     Projects ({stats.projects_pending_approval.length})
                   </p>
                   <ul className="grid grid-cols-2 sm:grid-cols-3 gap-1">
-                    {stats.projects_pending_approval.map((p) => (
+                    {(showAllPendingProjects
+                      ? stats.projects_pending_approval
+                      : stats.projects_pending_approval.slice(0, LIST_PREVIEW_COUNT)
+                    ).map((p) => (
                       <li key={p.id}>
                         <button
                           onClick={() => navigate(`/projects/${p.id}`)}
@@ -366,10 +499,19 @@ export default function UserDashboardPage() {
                         >
                           <span className="material-symbols-outlined text-[14px] text-red-500 shrink-0">folder_open</span>
                           <span className="text-xs font-medium text-gray-800 dark:text-gray-100 truncate flex-1">{p.name}</span>
+                          <span className={`text-[11px] font-bold shrink-0 ${urgencyColor(p.days_waiting)}`}>{p.days_waiting}d</span>
                         </button>
                       </li>
                     ))}
                   </ul>
+                  {stats.projects_pending_approval.length > LIST_PREVIEW_COUNT && (
+                    <button
+                      onClick={() => setShowAllPendingProjects(v => !v)}
+                      className="mt-1.5 text-[11px] font-semibold text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 transition"
+                    >
+                      {showAllPendingProjects ? "Show less" : `+${stats.projects_pending_approval.length - LIST_PREVIEW_COUNT} more`}
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -379,7 +521,10 @@ export default function UserDashboardPage() {
                     Sessions ({stats.sessions_pending_approval.length})
                   </p>
                   <ul className="grid grid-cols-2 sm:grid-cols-3 gap-1">
-                    {stats.sessions_pending_approval.map((s) => (
+                    {(showAllPendingSessions
+                      ? stats.sessions_pending_approval
+                      : stats.sessions_pending_approval.slice(0, LIST_PREVIEW_COUNT)
+                    ).map((s) => (
                       <li key={s.id}>
                         <button
                           onClick={() => navigate(`/projects/${s.project_id}/sessions/${s.id}/sessiondetails`)}
@@ -387,17 +532,86 @@ export default function UserDashboardPage() {
                         >
                           <span className="material-symbols-outlined text-[14px] text-red-500 shrink-0">mic</span>
                           <span className="text-xs font-medium text-gray-800 dark:text-gray-100 truncate flex-1">{s.name}</span>
+                          <span className={`text-[11px] font-bold shrink-0 ${urgencyColor(s.days_waiting)}`}>{s.days_waiting}d</span>
                         </button>
                       </li>
                     ))}
                   </ul>
+                  {stats.sessions_pending_approval.length > LIST_PREVIEW_COUNT && (
+                    <button
+                      onClick={() => setShowAllPendingSessions(v => !v)}
+                      className="mt-1.5 text-[11px] font-semibold text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 transition"
+                    >
+                      {showAllPendingSessions ? "Show less" : `+${stats.sessions_pending_approval.length - LIST_PREVIEW_COUNT} more`}
+                    </button>
+                  )}
                 </div>
               )}
 
             </div>
           </div>
         )}
-        
+
+        {/* ── Momentum ── */}
+        <div className="mb-6 bg-white dark:bg-[#1C192B] rounded-2xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Momentum</p>
+            <div className="flex items-center gap-2">
+              {MOMENTUM_RANGES.map(w => (
+                <button
+                  key={w}
+                  onClick={() => setMomentumWeeks(w)}
+                  className={`text-[11px] font-semibold px-3 py-1 rounded-full border transition ${
+                    momentumWeeks === w
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-transparent text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-indigo-400"
+                  }`}
+                >
+                  {w}W
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap mb-4">
+            {MOMENTUM_SERIES.map(s => {
+              const active = momentumMetric === s.key;
+              return (
+                <button
+                  key={s.key}
+                  onClick={() => setMomentumMetric(s.key)}
+                  className={`flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1 rounded-full border transition ${
+                    active ? "text-white border-transparent" : "bg-transparent text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-gray-400"
+                  }`}
+                  style={active ? { backgroundColor: s.color } : undefined}
+                >
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: active ? "#ffffff" : s.color }} />
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {momentumLoading ? (
+            <Skeleton className="h-48 w-full" />
+          ) : momentumError ? (
+            <div className="flex flex-col items-center gap-2 py-8 text-red-400">
+              <span className="material-symbols-outlined text-3xl">error</span>
+              <p className="text-xs font-medium">{momentumError}</p>
+            </div>
+          ) : momentum ? (
+            (() => {
+              const selected = MOMENTUM_SERIES.find(s => s.key === momentumMetric);
+              return (
+                <LineChart
+                  labels={momentum.weeks}
+                  series={[{ name: selected.label, color: selected.color, values: momentum[selected.field] }]}
+                />
+              );
+            })()
+          ) : null}
+        </div>
+
         {/* ── Project charts row: status + domain ── */}
         {!loading && stats?.total_projects > 0 && (
           <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -492,11 +706,8 @@ export default function UserDashboardPage() {
             </div>
 
             <ul className="grid grid-cols-2 sm:grid-cols-3 gap-1">
-              {stats.stale_sessions.map((s) => {
-                const daysColor =
-                  s.days_stale >= 14 ? "text-red-500 dark:text-red-400" :
-                  s.days_stale >= 7  ? "text-orange-500 dark:text-orange-400" :
-                                       "text-amber-500 dark:text-amber-400";
+              {(showAllStaleSessions ? stats.stale_sessions : stats.stale_sessions.slice(0, LIST_PREVIEW_COUNT)).map((s) => {
+                const daysColor = urgencyColor(s.days_stale);
                 const statusLabel =
                   s.status === "In Progress" ? "In Progress" :
                   s.status === "processing"   ? "Processing"  : "Pending";
@@ -524,6 +735,14 @@ export default function UserDashboardPage() {
                 );
               })}
             </ul>
+            {stats.stale_sessions.length > LIST_PREVIEW_COUNT && (
+              <button
+                onClick={() => setShowAllStaleSessions(v => !v)}
+                className="mt-1.5 text-[11px] font-semibold text-orange-500 hover:text-orange-600 dark:text-orange-400 dark:hover:text-orange-300 transition"
+              >
+                {showAllStaleSessions ? "Show less" : `+${stats.stale_sessions.length - LIST_PREVIEW_COUNT} more`}
+              </button>
+            )}
           </div>
         )}
 
@@ -650,6 +869,36 @@ export default function UserDashboardPage() {
           </div>
         )}
 
+        {/* ── Approval Contribution ── */}
+        {!loading && stats?.approvals_given_total > 0 && (
+          <div className="mb-6 bg-white dark:bg-[#1C192B] rounded-2xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Your Approval Contribution</p>
+              <span className="text-xs font-bold text-gray-800 dark:text-gray-100">{stats.approvals_given_total} total</span>
+            </div>
+            <div className="flex flex-col gap-3">
+              {[
+                { label: "Transcripts",    key: "transcript",   color: "bg-teal-500"   },
+                { label: "Requirements",   key: "requirements", color: "bg-green-500"  },
+                { label: "UML Diagrams",   key: "uml",           color: "bg-indigo-500" },
+                { label: "SRS Documents",  key: "srs",           color: "bg-amber-500"  },
+              ].map(({ label, key, color }) => {
+                const count  = stats.approvals_by_feature?.[key] ?? 0;
+                const pctVal = pct(count, stats.approvals_given_total);
+                return (
+                  <div key={key} className="flex items-center gap-3">
+                    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 w-32 shrink-0">{label}</span>
+                    <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                      <div className={`h-full ${color} rounded-full transition-all duration-700`} style={{ width: `${pctVal}%` }} />
+                    </div>
+                    <span className="text-xs text-gray-400 w-20 text-right shrink-0">{count} ({pctVal}%)</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* ── Task Type Distribution (Done vs Failed) ── */}
         {!loading && (stats?.failed_vs_done_task_type_distribution?.done_labels?.length > 0 || stats?.failed_vs_done_task_type_distribution?.failed_labels?.length > 0) && (
           <div className="mb-6 bg-white dark:bg-[#1C192B] rounded-2xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
@@ -758,7 +1007,7 @@ export default function UserDashboardPage() {
                   ))}
                 </select>
               )}
-              {/* Export button */}
+              {/* Export button — disabled for now, keep logic for later
               {(() => {
                 const displayFeed = feedEntries ?? stats?.recent_activity ?? [];
                 return displayFeed.length > 0 && !loading && !feedLoading ? (
@@ -771,6 +1020,7 @@ export default function UserDashboardPage() {
                   </button>
                 ) : null;
               })()}
+              */}
             </div>
           </div>
 
@@ -823,9 +1073,14 @@ export default function UserDashboardPage() {
               </div>
             );
 
+            const totalPages  = Math.max(1, Math.ceil(displayFeed.length / FEED_PAGE_SIZE));
+            const currentPage = Math.min(feedPage, totalPages);
+            const pagedFeed   = displayFeed.slice((currentPage - 1) * FEED_PAGE_SIZE, currentPage * FEED_PAGE_SIZE);
+
             return (
-              <ul className="flex flex-col divide-y divide-gray-100 dark:divide-gray-800 max-h-[420px] overflow-y-auto pr-1">
-                {displayFeed.map((item, i) => {
+              <>
+              <ul className="flex flex-col divide-y divide-gray-100 dark:divide-gray-800">
+                {pagedFeed.map((item, i) => {
                   const meta = ACTIVITY_META[item.type] ?? ACTIVITY_META.project_joined;
                   const url  = getActivityUrl(item);
                   const Inner = (
@@ -873,6 +1128,27 @@ export default function UserDashboardPage() {
                   );
                 })}
               </ul>
+
+              {displayFeed.length > FEED_PAGE_SIZE && (
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <button
+                    disabled={currentPage === 1}
+                    onClick={() => setFeedPage(p => Math.max(1, p - 1))}
+                    className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 disabled:opacity-40 disabled:cursor-not-allowed hover:text-indigo-600 dark:hover:text-indigo-400 transition"
+                  >
+                    ← Previous
+                  </button>
+                  <span className="text-[11px] text-gray-400">Page {currentPage} of {totalPages}</span>
+                  <button
+                    disabled={currentPage === totalPages}
+                    onClick={() => setFeedPage(p => Math.min(totalPages, p + 1))}
+                    className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 disabled:opacity-40 disabled:cursor-not-allowed hover:text-indigo-600 dark:hover:text-indigo-400 transition"
+                  >
+                    Next →
+                  </button>
+                </div>
+              )}
+              </>
             );
           })()}
         </div>
