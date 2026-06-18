@@ -11,6 +11,7 @@ class Session(Base):
     title = Column(String, nullable=False)
     project_id = Column(Integer, ForeignKey("projects.id"))
     status = Column(String, default="in_progress")
+    pending_since = Column(DateTime, nullable=True)
     audio_file_path = Column(String, nullable=True)
     transcript_text = Column(Text, nullable=True)
     translation_notified = Column(Boolean, default=False, nullable=False, server_default="false")

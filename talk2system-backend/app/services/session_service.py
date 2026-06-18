@@ -99,6 +99,13 @@ class SessionService:
         if not session:
             return False
 
+        is_pending = status in ("pending_approval", "pending approval")
+        was_pending = session.status in ("pending_approval", "pending approval")
+        if is_pending and not was_pending:
+            session.pending_since = datetime.utcnow()
+        elif not is_pending:
+            session.pending_since = None
+
         session.status = status
         db.commit()
         return True
@@ -130,6 +137,7 @@ class SessionService:
             raise ValueError("Session is already completed")
 
         session.status = "completed"
+        session.pending_since = None
         db.commit()
         db.refresh(session)
 

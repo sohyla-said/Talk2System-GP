@@ -2,6 +2,7 @@ from pydantic import BaseModel
 
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
+from datetime import datetime
 import os
 import uuid
 
@@ -122,6 +123,7 @@ async def transcribe(
         transcript_text = save_transcription(db, session.id, diarization)
         session.transcript_text = transcript_text
         session.status = "pending_approval"
+        session.pending_since = datetime.utcnow()
 
         # Persist the language detected by AssemblyAI immediately
         if detected_language:

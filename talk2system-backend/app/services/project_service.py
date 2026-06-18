@@ -301,6 +301,7 @@ class ProjectService:
             raise ValueError("Project is already completed")
 
         project.project_status = "completed"
+        project.pending_since = None
         db.commit()
         db.refresh(project)
 

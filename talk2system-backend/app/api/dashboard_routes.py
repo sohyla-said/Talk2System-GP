@@ -20,6 +20,15 @@ def get_user_dashboard_stats(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@router.get("/user-momentum")
+def get_user_dashboard_momentum(
+    weeks: int = Query(8, ge=4, le=26),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return DashboardService.get_user_momentum(db, current_user, weeks=weeks)
+
+
 @router.get("/admin-stats")
 def get_admin_dashboard_stats(
     db: Session = Depends(get_db),

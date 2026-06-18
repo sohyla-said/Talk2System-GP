@@ -18,6 +18,7 @@ from app.models.invitation import Invitation
 from app.models.background_task import BackgroundTask
 from app.models.audit_log import AuditLog
 from app.models.approval import Approval
+from app.models.project_approval import ProjectApproval
 
 class DashboardService:
 
@@ -140,6 +141,12 @@ class DashboardService:
             if pm_project_ids else 0
         )
 
+        # 6b) approval contribution — approvals this user has given, by feature
+        user_approvals = db.query(Approval).filter(Approval.user_id == user.id).all()
+        user_project_approvals = db.query(ProjectApproval).filter(ProjectApproval.user_id == user.id).all()
+        approvals_given_total = len(user_approvals) + len(user_project_approvals)
+        approvals_by_feature = dict(Counter(a.feature for a in user_approvals))
+
         # 7) Recent activity feed
         recent_activity = _build_activity_feed(db, user, project_ids, session_ids)
 
@@ -170,15 +177,35 @@ class DashboardService:
                     "days_stale":   (datetime.utcnow() - s.created_at).days,
                 })
 
-        # 9) Sessions and projects pending admin approval
-        projects_pending = [
-            {"id": p.id, "name": p.name}
-            for p in user_projects if p.project_status == "pending_approval"
-        ]
-        sessions_pending = [
-            {"id": s.id, "name": s.title, "project_id": s.project_id}
-            for s in user_sesions if s.status == "pending_approval" or s.status == "pending approval"
-        ]
+        # 9) Sessions and projects pending user approval — oldest first, so the
+        # longest-waiting items surface at the top and get attention first.
+        projects_pending = sorted(
+            [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    # pending_since marks the actual transition into pending_approval;
+                    # created_at is only a fallback for rows that predate that field.
+                    "days_waiting": (datetime.utcnow() - (p.pending_since or p.created_at)).days if p.created_at else 0,
+                }
+                for p in user_projects if p.project_status == "pending_approval"
+            ],
+            key=lambda x: x["days_waiting"],
+            reverse=True,
+        )
+        sessions_pending = sorted(
+            [
+                {
+                    "id": s.id,
+                    "name": s.title,
+                    "project_id": s.project_id,
+                    "days_waiting": (datetime.utcnow() - (s.pending_since or s.created_at)).days if s.created_at else 0,
+                }
+                for s in user_sesions if s.status == "pending_approval" or s.status == "pending approval"
+            ],
+            key=lambda x: x["days_waiting"],
+            reverse=True,
+        )
 
         return {
         "total_projects": total_projects,
@@ -218,11 +245,65 @@ class DashboardService:
         "is_pm": any(m.role == "project_manager" for m in projects_memberships),
         "pending_invitations": pending_invitations,
 
+        "approvals_given_total": approvals_given_total,
+        "approvals_by_feature": approvals_by_feature,
+
         "projects_pending_approval": projects_pending,
         "sessions_pending_approval": sessions_pending,
         "stale_sessions": stale_sessions,
         "recent_activity": recent_activity,
     }
+
+    @staticmethod
+    def get_user_momentum(db: Session, user: User, weeks: int = 8):
+        if user.role == "admin":
+            raise HTTPException(403, "Admins must use /api/dashboard/admin-stats")
+
+        session_ids = [m.session_id for m in db.query(SessionMembership).filter(SessionMembership.user_id == user.id).all()]
+
+        now = datetime.utcnow()
+        current_week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        week_starts = [current_week_start - timedelta(weeks=i) for i in range(weeks - 1, -1, -1)]
+        cutoff = week_starts[0]
+
+        def _weekly_series(rows):
+            counts = {r.week.strftime("%Y-%m-%d"): r.count for r in rows}
+            return [counts.get(w.strftime("%Y-%m-%d"), 0) for w in week_starts]
+
+        sessions_rows = (
+            db.query(func.date_trunc("week", SessionModel.created_at).label("week"), func.count(SessionModel.id).label("count"))
+            .filter(SessionModel.id.in_(session_ids), SessionModel.created_at >= cutoff)
+            .group_by("week").all()
+            if session_ids else []
+        )
+
+        requirements_rows = (
+            db.query(func.date_trunc("week", SessionRequirement.created_at).label("week"), func.count(SessionRequirement.id).label("count"))
+            .filter(SessionRequirement.session_id.in_(session_ids), SessionRequirement.created_at >= cutoff)
+            .group_by("week").all()
+            if session_ids else []
+        )
+
+        artifacts_rows = (
+            db.query(func.date_trunc("week", Artifact.created_at).label("week"), func.count(Artifact.id).label("count"))
+            .filter(Artifact.session_id.in_(session_ids), Artifact.created_at >= cutoff)
+            .group_by("week").all()
+            if session_ids else []
+        )
+
+        approvals_rows = (
+            db.query(func.date_trunc("week", Approval.aproved_at).label("week"), func.count(Approval.id).label("count"))
+            .filter(Approval.user_id == user.id, Approval.aproved_at >= cutoff)
+            .group_by("week").all()
+        )
+
+        return {
+            "weeks": [w.strftime("%Y-%m-%d") for w in week_starts],
+            "sessions_created": _weekly_series(sessions_rows),
+            "requirements_extracted": _weekly_series(requirements_rows),
+            "artifacts_generated": _weekly_series(artifacts_rows),
+            "approvals_given": _weekly_series(approvals_rows),
+        }
 
     @staticmethod
     def get_admin_stats(db: Session, current_user: User):
@@ -782,5 +863,6 @@ def _empty_user_stats():
         "usecase_count": 0, "class_diagram_count": 0, "sequence_count": 0, "srs_format_distribution": {},
         "total_runs": 0, "llm_runs": 0, "hybrid_runs": 0,
         "is_pm": False, "pending_invitations": 0,
+        "approvals_given_total": 0, "approvals_by_feature": {},
         "stale_sessions": [], "recent_activity": [],
     }

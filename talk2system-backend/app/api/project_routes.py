@@ -51,9 +51,10 @@ class InvitationResponse(BaseModel):
     id:                 int
     project_id:         int
     invitee_user_id:    int
-    invitee_email:      Optional[str] = None     
-    invitee_full_name:  Optional[str] = None     
+    invitee_email:      Optional[str] = None
+    invitee_full_name:  Optional[str] = None
     project_domain:     Optional[str] = None
+    project_name:       Optional[str] = None
     status:             str
     created_at:         datetime
 
@@ -269,6 +270,7 @@ def pending_requests(
     result = []
     for inv in invitations:
         invitee = db.query(User).filter(User.id == inv.invitee_user_id).first()
+        project = db.query(Project).filter(Project.id == inv.project_id).first()
         result.append(
             InvitationResponse(
                 id=inv.id,
@@ -277,6 +279,7 @@ def pending_requests(
                 invitee_email=invitee.email if invitee else None,
                 invitee_full_name=invitee.full_name if invitee else None,
                 project_domain=inv.project_domain,
+                project_name=project.name if project else None,
                 status=inv.status,
                 created_at=inv.created_at,
             )

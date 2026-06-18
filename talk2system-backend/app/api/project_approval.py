@@ -1,4 +1,5 @@
 from typing import List, Optional
+from datetime import datetime
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -132,6 +133,12 @@ def update_project_status(
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(404, "Project not found")
+
+    if status == "pending_approval" and project.project_status != "pending_approval":
+        project.pending_since = datetime.utcnow()
+    elif status != "pending_approval":
+        project.pending_since = None
+
     project.project_status = status
     db.commit()
     return {"project_id": project_id, "status": project.project_status}
