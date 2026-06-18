@@ -401,6 +401,11 @@ def change_project_manager(
     new_pm_user = db.query(User).filter(User.email == new_pm_email.lower().strip()).first()
     if not new_pm_user:
         raise HTTPException(404, f"User '{new_pm_email}' not found")
+    if new_pm_user.role == "admin":
+        raise HTTPException(
+            400,
+            "Cannot assign an admin as Project Manager. Please select a regular user."
+        )
 
     # Only active users can be PM
     if new_pm_user.status != "active":

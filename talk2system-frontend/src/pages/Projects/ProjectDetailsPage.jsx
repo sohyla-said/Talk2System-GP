@@ -355,14 +355,21 @@ export default function ProjectDetailsPage() {
               Rejecting <span className="font-bold text-gray-700 dark:text-gray-200">{rejectModal.req?.invitee_full_name || "this user"}</span> from joining the project.
             </p>
 
-            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Reason for rejection <span className="text-gray-400 font-normal">(optional)</span></label>
+            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Reason for rejection <span className="text-red-500">*</span></label>
             <textarea
               value={rejectModal.reason}
               onChange={(e) => setRejectModal(prev => ({ ...prev, reason: e.target.value }))}
-              placeholder="e.g., Project is currently full..."
+              placeholder="Please provide a reason for rejecting this request..."
               rows={3}
-              className="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#231e3d] text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none mb-5"
+              required
+              className="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#231e3d] text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none mb-1"
             />
+            {!rejectModal.reason.trim() && (
+              <p className="text-xs text-red-500 mb-5">Reason is required to reject a join request.</p>
+            )}
+            {rejectModal.reason.trim() && (
+              <div className="mb-5"></div>
+            )}
 
             <div className="flex justify-end gap-2">
               <button 
@@ -373,7 +380,12 @@ export default function ProjectDetailsPage() {
               </button>
               <button 
                 onClick={() => handleReject(rejectModal.req.id, rejectModal.req.invitee_full_name, rejectModal.reason)} 
-                className="px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition"
+                disabled={!rejectModal.reason.trim()}
+                className={`px-4 py-2.5 rounded-lg text-white text-sm font-bold transition ${
+                  rejectModal.reason.trim() 
+                    ? "bg-red-600 hover:bg-red-700" 
+                    : "bg-gray-300 dark:bg-gray-600 cursor-not-allowed opacity-50"
+                }`}
               >
                 Reject User
               </button>
