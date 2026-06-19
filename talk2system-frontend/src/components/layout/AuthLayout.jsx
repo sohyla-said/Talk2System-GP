@@ -33,16 +33,26 @@ export default function AuthLayout() {
           to="/"
           className="flex items-center gap-3 text-[#100d1c] dark:text-white hover:opacity-90 transition-opacity"
         >
+          {/* Light Mode Logo */}
           <img
-          src="/logo.png"
-          alt="Talk2System Logo"
-          className="h-12 w-auto object-contain"
-          onError={(e) => {
-            e.target.onerror = null;
-            e.target.style.display = 'none';
-            console.error('Logo failed to load from /logo.png');
-          }}
-        />
+            src="/logo.png"
+            alt="Talk2System Logo"
+            className="h-12 w-auto object-contain block dark:hidden"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.style.display = 'none';
+            }}
+          />
+          {/* Dark Mode Logo */}
+          <img
+            src="/Darkmode_logo.png"
+            alt="Talk2System Logo"
+            className="h-12 w-auto object-contain hidden dark:block"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.style.display = 'none';
+            }}
+          />
 
         </NavLink>
 

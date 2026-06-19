@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+import os
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File,status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field,EmailStr, validator
 from app.db.session import get_db
@@ -74,6 +75,20 @@ class ResetPasswordRequest(BaseModel):
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters")
         return v
+
+class CreateAdminRequest(BaseModel):
+    email: EmailStr
+    password: str
+    full_name: str | None = None
+    secret_key: str
+
+class CreateAdminResponse(BaseModel):
+    id: int
+    email: str
+    full_name: str | None
+    role: str
+    status: str
+    created_at: datetime
 
 @router.post("/signup", response_model=AuthResponse, status_code=201)
 def signup(data: SignupRequest, db: Session = Depends(get_db)):
@@ -226,3 +241,64 @@ def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db))
     except Exception as e:
         print(f"Reset password error: {e}")
         raise HTTPException(status_code=500, detail="Failed to reset password")
+
+@router.post(
+    "/create-admin",
+    response_model=CreateAdminResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create admin account (private endpoint)",
+    description="Private endpoint for creating admin accounts. Each key is single-use.",
+)
+async def create_admin_account(
+    body: CreateAdminRequest,
+    db: Session = Depends(get_db),
+):
+    # Parse valid keys from env
+    raw_keys = os.getenv("ADMIN_CREATE_SECRET", "")
+    valid_keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
+
+    if not valid_keys:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin creation is disabled. No secret keys configured.",
+        )
+    # Check if the provided key is in the allowed list
+    if body.secret_key not in valid_keys:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid secret key. Access denied.",
+        )
+    # Check if THIS SPECIFIC KEY was already used
+    already_used = db.query(User).filter(
+        User.status_reason == f"admin-invite:{body.secret_key}"
+    ).first()
+    if already_used:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This secret key has already been used. Each key can only create one account.",
+        )
+    # Check if email already exists
+    existing_user = db.query(User).filter(User.email == body.email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"An account with email '{body.email}' already exists.",
+        )
+    # Validate password strength
+    if len(body.password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Password must be at least 8 characters long.",
+        )
+    admin_user = User(
+        email=body.email,
+        hashed_password=auth_service.hash_password(body.password),
+        full_name=body.full_name,
+        role="admin",
+        status="active",
+        status_reason=f"admin-invite:{body.secret_key}",
+    )
+    db.add(admin_user)
+    db.commit()
+    db.refresh(admin_user)
+    return admin_user

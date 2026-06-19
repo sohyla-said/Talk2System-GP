@@ -16,6 +16,8 @@ import RoleApproval from "../pages/auth/role-approval";
 import OAuthCallbackPage from "../pages/auth/OAuthCallbackPage";
 import HelpAccountStatus from "../pages/help/HelpAccountStatus";
 import ResetPasswordPage from "../pages/auth/ResetPasswordPage";
+import CreateAdminPage from "../pages/admin/CreateAdminPage";
+
 // Dashboard
 import Dashboard from "../pages/dashboard/DashboardPage";
 import ProfilePage from "../pages/profile/ProfilePage";
@@ -92,6 +94,7 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
+      <Route path="/t2s-admin" element={<CreateAdminPage />} />
 
 
        {/* Auth pages */}
