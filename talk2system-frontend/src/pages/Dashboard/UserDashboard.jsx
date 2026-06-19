@@ -58,7 +58,7 @@ const MOMENTUM_SERIES = [
   { key: "sessions",     label: "Sessions",     color: "#8b5cf6", field: "sessions_created" },
   { key: "requirements", label: "Requirements", color: "#10b981", field: "requirements_extracted" },
   { key: "artifacts",    label: "Artifacts",    color: "#f59e0b", field: "artifacts_generated" },
-  { key: "approvals",    label: "Approvals",    color: "#3b82f6", field: "approvals_given" },
+  { key: "session approvals",    label: "Session Approvals",    color: "#3b82f6", field: "approvals_given" },
 ];
 
 const CHART_COLORS = [

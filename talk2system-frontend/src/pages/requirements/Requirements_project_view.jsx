@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import RequirementsApprovalModal from "../../components/modals/RequirementsApprovalModal";
 import RequirementsEditModal from "../../components/modals/RequirementsEditModal";
+import ConfirmModal from "../../components/modals/ConfirmModal";
+import Toast from "../../components/Toast";
 import { getToken } from "../../api/authApi";
 export default function RequirementsProjectView() {
   const [approved, setApproved] = useState(false);
@@ -48,6 +50,18 @@ export default function RequirementsProjectView() {
     actors: [],
     features: []
   });
+  // section/count pending bulk-delete confirmation, or null when no modal is open
+  const [confirmDeleteState, setConfirmDeleteState] = useState(null);
+
+  // ── Toast notifications ──────────────────────────────────────────────────
+  const [toast, setToast] = useState(null); // { message, type: "error"|"warning"|"info"|"success" }
+  const showToast = (message, type = "error") => setToast({ message, type });
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   // to track if the versions changed after polling or not
   const latestVersionIdRef = useRef(null);
 
@@ -424,16 +438,20 @@ const toggleSelectionMode = (sectionType) => {
     });
   };
 
-  // delete all currently selected items in one shot for that section.
-  const handleBulkDelete = async (sectionType) => {
-    // reads selected ids
+  // opens the confirm modal for deleting the selected items in a section.
+  const handleBulkDelete = (sectionType) => {
     const selected = selectedItems[sectionType] || [];
     if (!selected.length) return;
+    setConfirmDeleteState({ sectionType, count: selected.length });
+  };
 
-    // ask for user confirmation
-    const confirmDelete = window.confirm(`Delete ${selected.length} selected item(s)?`);
-    if (!confirmDelete) return;
+  // runs after the user confirms deletion in the modal.
+  const confirmBulkDelete = async () => {
+    if (!confirmDeleteState) return;
+    const { sectionType } = confirmDeleteState;
+    setConfirmDeleteState(null);
 
+    const selected = selectedItems[sectionType] || [];
     // builds updatedSection by filtering out selected IDs from requirements[sectionType]
     const updatedSection = (requirements[sectionType] || []).filter(
       (item) => !selected.includes(item.id)
@@ -495,6 +513,7 @@ const toggleSelectionMode = (sectionType) => {
     }
   } catch (err) {
     console.error(err);
+    showToast(err.message || "Failed to approve requirements");
   }
   };
 
@@ -560,6 +579,7 @@ const toggleSelectionMode = (sectionType) => {
 
     } catch (err) {
       console.error(err);
+      showToast(err.message || "Failed to update requirements");
     }
   };
 
@@ -1111,6 +1131,19 @@ const toggleSelectionMode = (sectionType) => {
         sectionData={editingSection ? requirements[editingSection] : null}
         sectionType={editingSection}
       />
+
+      {/* Bulk Delete Confirmation */}
+      <ConfirmModal
+        open={!!confirmDeleteState}
+        title="Delete selected item(s)?"
+        message={confirmDeleteState ? `Delete ${confirmDeleteState.count} selected item(s)? This cannot be undone.` : ""}
+        confirmLabel="Delete"
+        danger
+        onConfirm={confirmBulkDelete}
+        onCancel={() => setConfirmDeleteState(null)}
+      />
+
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </>
   );
 }

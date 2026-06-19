@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useContext } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { getToken } from "../../api/authApi";
 import { ExtractionContext } from "../../App";
+import Toast from "../../components/Toast";
 
 export default function RequirementsChoicePage() {
 	const navigate = useNavigate();
@@ -28,6 +29,15 @@ export default function RequirementsChoicePage() {
 	// own button, can still be recognized and reflected in the button state.
 	const [lastFailedEngine, setLastFailedEngine] = useState(null);
 	const [sessionName, setSessionName] = useState(null);
+
+	// ── Toast notifications ──────────────────────────────────────────────────
+	const [toast, setToast] = useState(null); // { message, type: "error"|"warning"|"info"|"success" }
+	const showToast = (message, type = "error") => setToast({ message, type });
+	useEffect(() => {
+		if (!toast) return;
+		const t = setTimeout(() => setToast(null), 5000);
+		return () => clearTimeout(t);
+	}, [toast]);
 
 	const {
 		projectId,
@@ -293,7 +303,7 @@ export default function RequirementsChoicePage() {
 		const srcRunId = type === "llm" ? llmRunId : hybridRunId;
 
 		if (!projectId || !sessionId || !srcRunId) {
-			alert("Missing project/session/run information. Please extract requirements again.");
+			showToast("Missing project/session/run information. Please extract requirements again.");
 			return;
 		}
 
@@ -334,7 +344,7 @@ export default function RequirementsChoicePage() {
 			});
 		} catch (error) {
 			console.error(error);
-			alert(error.message);
+			showToast(error.message);
 		} finally {
 			setSubmittingType(null);
 		}
@@ -342,7 +352,7 @@ export default function RequirementsChoicePage() {
 
 	const handleRegenerate = async (engine) => {
 		if (!projectId || !sessionId) {
-			alert("Missing project/session information. Please try again.");
+			showToast("Missing project/session information. Please try again.");
 			return;
 		}
 
@@ -358,7 +368,7 @@ export default function RequirementsChoicePage() {
 			setRegeneratingTaskId(taskId);
 		} catch (error) {
 			console.error(error);
-			alert(error.message || "Failed to start requirement extraction");
+			showToast(error.message || "Failed to start requirement extraction");
 			setRegeneratingType(null);
 		}
 	};
@@ -409,6 +419,7 @@ export default function RequirementsChoicePage() {
 	}
 
 	return (
+		<>
 		<div className="w-full max-w-7xl mx-auto p-4 space-y-4">
 			<div className="rounded-xl border border-[#d3cee8]/50 bg-white dark:bg-background-dark p-5">
 				<h1 className="text-slate-900 dark:text-white text-3xl font-black leading-tight tracking-[-0.02em]">
@@ -496,6 +507,8 @@ export default function RequirementsChoicePage() {
 				)}
 			</div>
 		</div>
+		<Toast toast={toast} onDismiss={() => setToast(null)} />
+		</>
 	);
 }
 
