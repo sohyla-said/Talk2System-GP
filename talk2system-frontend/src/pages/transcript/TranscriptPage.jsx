@@ -60,6 +60,15 @@ export default function TranscriptPage() {
   // background translation is kicked off — whichever happens first.
   const translationTriggeredRef = useRef(false);
 
+  // ── Toast notifications ──────────────────────────────────────────────────
+  const [toast, setToast] = useState(null); // { message, type: "error"|"warning"|"info"|"success" }
+  const showToast = (message, type = "error") => setToast({ message, type });
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   // ── Multi-select & delete ────────────────────────────────────────────────
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -388,7 +397,7 @@ export default function TranscriptPage() {
 
   } catch (error) {
     console.error("Error saving transcript edit:", error);
-    alert(error.message);
+    showToast(error.message);
   } finally {
     setShowEditModal(false);
     setEditingSpeaker(null);
@@ -448,8 +457,9 @@ export default function TranscriptPage() {
         }
 
         if (pendingNavigation === "req" && !data.all_members_approved) {
-          alert(
-            `Your approval is saved. Waiting for others: ${data.approved_members_count}/${data.total_members_count}.`
+          showToast(
+            `Your approval is saved. Waiting for others: ${data.approved_members_count}/${data.total_members_count}.`,
+            "info"
           );
           setPendingNavigation(null);
           return;
@@ -462,7 +472,7 @@ export default function TranscriptPage() {
         }
       } catch (error) {
         console.error(error);
-        alert(error.message);
+        showToast(error.message);
       }
     };
     approveTranscript();
@@ -481,8 +491,9 @@ export default function TranscriptPage() {
   const handleGenerate = (type , forceReExtract = false) => {
     if (type === "req") {
       if (!transcriptApproval.all_members_approved) {
-        alert(
-          `All session members must approve the transcript first (${transcriptApproval.approved_members_count}/${transcriptApproval.total_members_count}).`
+        showToast(
+          `All session members must approve the transcript first (${transcriptApproval.approved_members_count}/${transcriptApproval.total_members_count}).`,
+          "warning"
         );
         return;
       }
@@ -509,19 +520,18 @@ export default function TranscriptPage() {
   };
 
   const extractRequirements = async (engine) => {
-    if (!projectId) { alert("Project ID could not be resolved."); return; }
+    if (!projectId) { showToast("Project ID could not be resolved."); return; }
 
     // Block if translation is still running in the background.
-    // AFTER:
     if (isTranslating) {
-      alert("The transcript is being translated in the background. Please wait a moment and try again.");
+      showToast("The transcript is being translated in the background. Please wait a moment and try again.", "info");
       return;
     }
 
     // If this is a non-English session but translation hasn't been fetched/cached yet,
     // trigger it now and block extraction until it finishes.
     if (shouldAutoTranslate && !translationData) {
-      alert("Translation is not ready yet. Retrying translation — please wait a moment and try again.");
+      showToast("Translation is not ready yet. Retrying translation — please wait a moment and try again.", "warning");
       runBackgroundTranslation(); // re-trigger in case it silently failed
       return;
     }
@@ -531,9 +541,9 @@ export default function TranscriptPage() {
     // translationData is still null (e.g. translation failed silently).
     const transcriptText = getTranscriptTextForExtraction();
     if (transcriptText === null) {
-      alert(
-        "Translation is not ready yet. Please wait a moment and try again. " +
-        "If this persists, refresh the page."
+      showToast(
+        "Translation is not ready yet. Please wait a moment and try again. If this persists, refresh the page.",
+        "warning"
       );
       return;
     }
@@ -545,7 +555,7 @@ export default function TranscriptPage() {
       setShowEngineModal(false);
     } catch (error) {
       console.error(error);
-      alert(error.message || "Failed to start requirement extraction");
+      showToast(error.message || "Failed to start requirement extraction");
     } finally {
       setIsSubmittingReq(false);
     }
@@ -587,7 +597,7 @@ export default function TranscriptPage() {
       setSelectedIds(new Set());
       setSelectionMode(false);
     } catch (err) {
-      alert(err.message);
+      showToast(err.message);
     } finally {
       setIsDeleting(false);
     }
@@ -1060,6 +1070,33 @@ export default function TranscriptPage() {
         onConfirm={handleEngineConfirm}
         isLoading={isSubmittingReq}
       />
+
+      {/* ── Inline toast ── */}
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-50 flex items-start gap-3 rounded-xl px-5 py-4 shadow-lg min-w-[300px] max-w-sm border bg-white dark:bg-background-dark ${
+          toast.type === "error"   ? "border-red-200 dark:border-red-800/50" :
+          toast.type === "warning" ? "border-amber-200 dark:border-amber-800/50" :
+          toast.type === "success" ? "border-green-200 dark:border-green-800/50" :
+                                     "border-blue-200 dark:border-blue-800/50"
+        }`}>
+          <span className={`material-symbols-outlined shrink-0 text-xl mt-0.5 ${
+            toast.type === "error"   ? "text-red-500 dark:text-red-400" :
+            toast.type === "warning" ? "text-amber-500 dark:text-amber-400" :
+            toast.type === "success" ? "text-green-600 dark:text-green-400" :
+                                       "text-blue-500 dark:text-blue-400"
+          }`}>
+            {toast.type === "error" ? "error" : toast.type === "warning" ? "warning" : toast.type === "success" ? "check_circle" : "info"}
+          </span>
+          <p className="flex-1 text-sm text-slate-900 dark:text-white leading-snug">{toast.message}</p>
+          <button
+            onClick={() => setToast(null)}
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 shrink-0 transition-colors"
+            aria-label="Dismiss"
+          >
+            <span className="material-symbols-outlined text-base leading-none">close</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

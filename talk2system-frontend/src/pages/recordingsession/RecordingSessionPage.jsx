@@ -8,6 +8,15 @@ export default function RecordingSessionPage() {
   const [minutes, setMinutes] = useState(0);
   const [seconds, setSeconds] = useState(0);
   const [sessionId, setSessionId] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
+
+  const showToast = (message, type = "error") => setToast({ message, type });
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -76,13 +85,13 @@ export default function RecordingSessionPage() {
   };
 
   const stopRecording = () => {
-    const confirmed = window.confirm(
-      "Are you sure you want to stop recording and proceed to the transcript page?"
-    );
-    if (confirmed) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
+    setShowStopConfirm(true);
+  };
+
+  const handleConfirmStop = () => {
+    setShowStopConfirm(false);
+    mediaRecorderRef.current.stop();
+    setIsRecording(false);
   };
 
   const handleStop = async () => {
@@ -127,7 +136,7 @@ export default function RecordingSessionPage() {
       navigate(`/transcript/${data.session_id}`);
     } catch (err) {
       console.error(err);
-      alert("Upload failed")
+      showToast("Upload failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -319,6 +328,53 @@ export default function RecordingSessionPage() {
           </main>
         </div>
       </div>
+      {/* Stop-recording confirmation modal */}
+      {showStopConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowStopConfirm(false)} />
+          <div className="relative w-full max-w-md rounded-2xl bg-white dark:bg-gray-800 p-8 shadow-2xl border border-gray-200 dark:border-gray-700">
+            <div className="flex flex-col items-center text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 mb-6">
+                <span className="material-symbols-outlined text-4xl">stop_circle</span>
+              </div>
+              <h3 className="text-xl font-bold text-[#100d1c] dark:text-white mb-3">Stop Recording?</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
+                Are you sure you want to stop recording and proceed to the transcript page?
+              </p>
+            </div>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleConfirmStop}
+                className="inline-flex w-full justify-center items-center gap-2 rounded-lg bg-red-500 hover:bg-red-600 px-4 py-3 text-sm font-bold text-white transition-colors"
+              >
+                <span className="material-symbols-outlined text-lg">stop</span>
+                Stop &amp; Continue
+              </button>
+              <button
+                onClick={() => setShowStopConfirm(false)}
+                className="inline-flex w-full justify-center items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-3 text-sm font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                Keep Recording
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-start gap-3 rounded-xl px-5 py-4 shadow-lg min-w-[300px] max-w-sm border bg-white dark:bg-background-dark border-red-200 dark:border-red-800/50">
+          <span className="material-symbols-outlined shrink-0 text-xl mt-0.5 text-red-500 dark:text-red-400">error</span>
+          <p className="flex-1 text-sm text-slate-900 dark:text-white leading-snug">{toast.message}</p>
+          <button
+            onClick={() => setToast(null)}
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 shrink-0 transition-colors"
+            aria-label="Dismiss"
+          >
+            <span className="material-symbols-outlined text-base leading-none">close</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

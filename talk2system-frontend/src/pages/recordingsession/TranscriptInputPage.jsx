@@ -13,11 +13,20 @@ const TranscriptInputPage = () => {
   const [submitted, setSubmitted] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState(null);
   const [showEngineModal, setShowEngineModal] = useState(false);
+  const [toast, setToast] = useState(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const navigate = useNavigate();
   const { id: projectId } = useParams();
-const { startExtraction } = useContext(ExtractionContext);
+  const { startExtraction } = useContext(ExtractionContext);
+
+  const showToast = (message, type = "error") => setToast({ message, type });
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   // const today = new Date().toLocaleDateString('en-US', {
   //   year: 'numeric', month: 'long', day: 'numeric'
@@ -82,7 +91,7 @@ const { startExtraction } = useContext(ExtractionContext);
 
     const token = getToken();
     if (!token) {
-      alert("You are not logged in. Please log in again.");
+      showToast("You are not logged in. Please log in again.");
       navigate("/login");
       return;
     }
@@ -138,7 +147,7 @@ const { startExtraction } = useContext(ExtractionContext);
 
     } catch (error) {
       console.error(error);
-      alert(error.message);
+      showToast(error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -183,7 +192,7 @@ const { startExtraction } = useContext(ExtractionContext);
         }
       } catch (error) {
         console.error(error);
-        alert(error.message);
+        showToast(error.message);
       }
     };
 
@@ -384,6 +393,26 @@ const { startExtraction } = useContext(ExtractionContext);
         onConfirm={handleSubmit}
         isLoading={isSubmitting}
       />
+
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-50 flex items-start gap-3 rounded-xl px-5 py-4 shadow-lg min-w-[300px] max-w-sm border bg-white dark:bg-[#1a1830] ${
+          toast.type === "error" ? "border-red-200 dark:border-red-800/50" : "border-blue-200 dark:border-blue-800/50"
+        }`}>
+          <span className={`material-symbols-outlined shrink-0 text-xl mt-0.5 ${
+            toast.type === "error" ? "text-red-500 dark:text-red-400" : "text-blue-500 dark:text-blue-400"
+          }`}>
+            {toast.type === "error" ? "error" : "info"}
+          </span>
+          <p className="flex-1 text-sm text-slate-900 dark:text-white leading-snug">{toast.message}</p>
+          <button
+            onClick={() => setToast(null)}
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 shrink-0 transition-colors"
+            aria-label="Dismiss"
+          >
+            <span className="material-symbols-outlined text-base leading-none">close</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };
