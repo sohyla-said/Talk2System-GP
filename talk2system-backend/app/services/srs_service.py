@@ -820,8 +820,7 @@ def run_async_srs_task(
             db=db, project_id=project_id, session_id=session_id,
             notification_type="srs_generated",
             title="SRS Document Ready",
-            message=f"Your SRS document ({format_version}) has been generated. [project_id:{project_id}]"
-                    + (f" [session_id:{session_id}]" if session_id else ""),
+            message=f"Your SRS document ({format_version}) has been generated.",
         )
 
     except Exception as exc:
@@ -837,8 +836,7 @@ def run_async_srs_task(
                 db=db, project_id=project_id, session_id=session_id,
                 notification_type="srs_generation_failed",
                 title="SRS Generation Failed",
-                message=f"SRS document generation failed. [project_id:{project_id}]"
-                        + (f" [session_id:{session_id}]" if session_id else ""),
+                message="SRS document generation failed.",
             )
         except Exception:
             logger.exception("Failed to send SRS failure notification for task %s", task_id)
@@ -849,6 +847,25 @@ def run_async_srs_task(
 def _notify_srs_members(db, project_id, session_id, notification_type, title, message):
     project = db.query(Project).filter(Project.id == project_id).first()
     project_name = project.name if project else None
+
+    session_title = None
+    if session_id:
+        from app.models.session import Session as SessionModel
+        session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+        session_title = session.title if session else None
+    context = ""
+    if session_title and project_name:
+        context = f" for session '{session_title}' in {project_name}"
+    elif session_title:
+        context = f" for session '{session_title}'"
+    elif project_name:
+        context = f" in {project_name}"
+    if context:
+        stripped = message.rstrip()
+        if stripped.endswith("."):
+            message = stripped[:-1] + context + "."
+        else:
+            message = stripped + context
 
     if session_id:
         memberships = db.query(SessionMembership).filter(

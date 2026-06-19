@@ -172,7 +172,7 @@ def delete_project(
         notification_service.create_notification(
             db,
             user_id=user_id,
-            notification_type="project_deleted",
+            notification_type="admin_deleted_project",
             title="Project Deleted",
             message=f"The project '{project_name}' has been deleted.",
             actor_name=current_user.full_name if current_user.role != "admin" else "System Admin",

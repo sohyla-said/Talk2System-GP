@@ -5,31 +5,46 @@ import { handleNotificationNav } from "../utils/notificationNavigation";
 import { getToken } from "../api/authApi";
 
 const ICON_MAP = {
+  /* ─── Join Requests ────────────────────────────────────── */
   join_accepted: { icon: "check_circle", color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-200 dark:border-emerald-800" },
   join_rejected: { icon: "cancel", color: "text-red-500", bg: "bg-red-50 dark:bg-red-900/20", border: "border-red-200 dark:border-red-800" },
+  join_requested: { icon: "group_add", color: "text-teal-500", bg: "bg-teal-50 dark:bg-teal-900/20", border: "border-teal-200 dark:border-teal-800" },
+  
+  /* ─── Project Membership ───────────────────────────────── */
   added_to_project: { icon: "person_add", color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-900/20", border: "border-blue-200 dark:border-blue-800" },
   admin_assigned_pm: { icon: "admin_panel_settings", color: "text-purple-500", bg: "bg-purple-50 dark:bg-purple-900/20", border: "border-purple-200 dark:border-purple-800" },
   admin_removed_participant: { icon: "person_remove", color: "text-red-500", bg: "bg-red-50 dark:bg-red-900/20", border: "border-red-200 dark:border-red-800" },
   admin_replaced_pm: { icon: "swap_horiz", color: "text-amber-500", bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800" },
+  
+  /* ─── Projects ────────────────────────────────── */
   admin_deleted_project: { icon: "delete_forever", color: "text-red-600", bg: "bg-red-50 dark:bg-red-900/20", border: "border-red-200 dark:border-red-800" },
-  join_requested: { icon: "group_add", color: "text-teal-500", bg: "bg-teal-50 dark:bg-teal-900/20", border: "border-teal-200 dark:border-teal-800" },
+  project_suspended:         { icon: "pause_circle",     color: "text-yellow-500",  bg: "bg-yellow-50 dark:bg-yellow-900/20",  border: "border-yellow-200 dark:border-yellow-800" },
+  project_resumed:           { icon: "play_circle",      color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20",border: "border-emerald-200 dark:border-emerald-800" },
+  
+  /* ─── Account Status ───────────────────────────────────── */
   account_suspended: { icon: "lock_person", color: "text-orange-500", bg: "bg-orange-50 dark:bg-orange-900/20", border: "border-orange-200 dark:border-orange-800" },
   account_restored: { icon: "lock_open", color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-200 dark:border-emerald-800" },
+  
+  /* ─── Requirements ─────────────────────────────────────── */
   requirements_extracted:         { icon: "task_alt",  color: "text-violet-500", bg: "bg-violet-50 dark:bg-violet-900/20", border: "border-violet-200 dark:border-violet-800" },
   requirements_extracted_both:    { icon: "compare",   color: "text-violet-500", bg: "bg-violet-50 dark:bg-violet-900/20", border: "border-violet-200 dark:border-violet-800" },
   requirements_extraction_failed: { icon: "error",     color: "text-red-500",    bg: "bg-red-50 dark:bg-red-900/20",       border: "border-red-200 dark:border-red-800" },
+  
+  /* ─── Transcription ────────────────────────────────────── */
   transcription_done: { icon: "fact_check", color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-200 dark:border-emerald-800" },
+  
+  /* ─── SRS Document ─────────────────────────────────────── */
   srs_generated:       { icon: "description",     color: "text-indigo-500", bg: "bg-indigo-50 dark:bg-indigo-900/20", border: "border-indigo-200 dark:border-indigo-800" },
   srs_generation_failed: { icon: "error",         color: "text-red-500",    bg: "bg-red-50 dark:bg-red-900/20",       border: "border-red-200 dark:border-red-800" },
+  /* ─── UML Diagrams ─────────────────────────────────────── */ 
   uml_generated:       { icon: "account_tree",    color: "text-purple-500", bg: "bg-purple-50 dark:bg-purple-900/20", border: "border-purple-200 dark:border-purple-800" },
   uml_generation_failed: { icon: "error",         color: "text-red-500",    bg: "bg-red-50 dark:bg-red-900/20",       border: "border-red-200 dark:border-red-800" },
-  // Leave request notifications
+  /* ─── Leave Requests ───────────────────────────────────── */
   leave_request_received:    { icon: "exit_to_app",      color: "text-orange-500",  bg: "bg-orange-50 dark:bg-orange-900/20",  border: "border-orange-200 dark:border-orange-800" },
   pm_leave_request_received: { icon: "manage_accounts",  color: "text-amber-500",   bg: "bg-amber-50 dark:bg-amber-900/20",    border: "border-amber-200 dark:border-amber-800" },
   leave_approved:            { icon: "check_circle",     color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20",border: "border-emerald-200 dark:border-emerald-800" },
   leave_rejected:            { icon: "cancel",           color: "text-red-500",     bg: "bg-red-50 dark:bg-red-900/20",        border: "border-red-200 dark:border-red-800" },
-  project_suspended:         { icon: "pause_circle",     color: "text-yellow-500",  bg: "bg-yellow-50 dark:bg-yellow-900/20",  border: "border-yellow-200 dark:border-yellow-800" },
-  project_resumed:           { icon: "play_circle",      color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20",border: "border-emerald-200 dark:border-emerald-800" },
+
 };
 
 const TYPE_CATEGORIES = {
@@ -89,35 +104,31 @@ const TYPE_TO_CATEGORY = Object.entries(TYPE_CATEGORIES).reduce((acc, [key, val]
   val.types.forEach((t) => (acc[t] = key));
   return acc;
 }, {});
+const DATE_PRESET_LABELS = {
+  "7d":  "Last 7 days",
+  "30d": "Last 30 days",
+  "3m":  "Last 3 months",
+  "6m":  "Last 6 months",
+  "1y":  "This year",
+};
 
-function isToday(dateStr) {
-  const d = new Date(dateStr);
-  const now = new Date();
-  return d.toDateString() === now.toDateString();
+const MONTH_LABELS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function getDateFilterLabel({ dateMode, datePreset, dateMonth, dateYear, dateFrom, dateTo }) {
+  if (dateMode === "preset" && datePreset) return DATE_PRESET_LABELS[datePreset] || datePreset;
+  if (dateMode === "month_year") {
+    const parts = [];
+    if (dateMonth) parts.push(MONTH_LABELS[Number(dateMonth) - 1]);
+    if (dateYear) parts.push(dateYear);
+    return parts.join(" ") || "Date";
+  }
+  if (dateMode === "range") {
+    if (dateFrom && dateTo) return `From (${dateFrom}) To (${dateTo})`;
+    if (dateFrom) return dateFrom;
+    return "Date";
+  }
+  return "Date";
 }
-
-function isThisWeek(dateStr) {
-  const d = new Date(dateStr);
-  const now = new Date();
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - now.getDay());
-  startOfWeek.setHours(0, 0, 0, 0);
-  return d >= startOfWeek;
-}
-
-function isThisMonth(dateStr) {
-  const d = new Date(dateStr);
-  const now = new Date();
-  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-}
-
-const TIME_FILTERS = [
-  { key: "all", label: "All Time" },
-  { key: "today", label: "Today", fn: isToday },
-  { key: "this_week", label: "This Week", fn: isThisWeek },
-  { key: "this_month", label: "This Month", fn: isThisMonth },
-  { key: "older", label: "Older", fn: (d) => !isThisMonth(d) },
-];
 
 function renderMessage(message) {
   if (!message) return null;
@@ -202,7 +213,13 @@ export default function NotificationsPage() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // all | unread | read
-  const [timeFilter, setTimeFilter] = useState("all");
+  const [dateMode, setDateMode]     = useState("none");
+  const [datePreset, setDatePreset] = useState("");
+  const [dateMonth, setDateMonth]   = useState("");
+  const [dateYear, setDateYear]     = useState("");
+  const [dateFrom, setDateFrom]     = useState("");
+  const [dateTo, setDateTo]         = useState("");
+  const [showToDate, setShowToDate] = useState(false);
   const [typeFilter, setTypeFilter] = useState("all"); // "all" | category key
   const [projectFilter, setProjectFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
@@ -251,6 +268,11 @@ export default function NotificationsPage() {
     return Array.from(map, ([id, name]) => ({ id, name }));
   }, [notifications]);
 
+  const uniqueYears = useMemo(() => {
+    const years = notifications.map((n) => new Date(n.created_at).getFullYear());
+    return [...new Set(years)].sort((a, b) => b - a);
+  }, [notifications]);
+
   const categoryCounts = useMemo(() => {
     const counts = { all: notifications.length };
     Object.entries(TYPE_CATEGORIES).forEach(([key, cat]) => {
@@ -270,22 +292,37 @@ export default function NotificationsPage() {
     return counts;
   }, [notifications, uniqueProjects]);
 
+  const hasActiveDateFilter = dateMode !== "none" && (
+    (dateMode === "preset" && datePreset) ||
+    (dateMode === "month_year" && (dateMonth || dateYear)) ||
+    (dateMode === "range" && (dateFrom || dateTo))
+  );
+
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (statusFilter !== "all") count++;
-    if (timeFilter !== "all") count++;
+    if (hasActiveDateFilter) count++;
     if (typeFilter !== "all") count++;
     if (projectFilter !== "all") count++;
     if (searchQuery) count++;
     return count;
-  }, [statusFilter, timeFilter, typeFilter, projectFilter, searchQuery]);
+  }, [statusFilter, hasActiveDateFilter, typeFilter, projectFilter, searchQuery]);
 
+  const clearDateFilter = () => {
+    setDateMode("none");
+    setDatePreset("");
+    setDateMonth("");
+    setDateYear("");
+    setDateFrom("");
+    setDateTo("");
+    setShowToDate(false);
+  };
   const clearAllFilters = () => {
     setSearchQuery("");
     setStatusFilter("all");
-    setTimeFilter("all");
     setTypeFilter("all");
     setProjectFilter("all");
+    clearDateFilter();
   };
 
   const filteredNotifications = useMemo(() => {
@@ -294,10 +331,33 @@ export default function NotificationsPage() {
       if (statusFilter === "unread" && n.is_read) return false;
       if (statusFilter === "read" && !n.is_read) return false;
 
-      // Time filter
-      if (timeFilter !== "all") {
-        const tf = TIME_FILTERS.find((t) => t.key === timeFilter);
-        if (tf?.fn && !tf.fn(n.created_at)) return false;
+      // Date filter
+      if (dateMode === "preset" && datePreset) {
+        const now = new Date();
+        const cutoffs = {
+          "7d":  new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+          "30d": new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
+          "3m":  new Date(now.getFullYear(), now.getMonth() - 3, now.getDate()),
+          "6m":  new Date(now.getFullYear(), now.getMonth() - 6, now.getDate()),
+          "1y":  new Date(now.getFullYear(), 0, 1),
+        };
+        const cutoff = cutoffs[datePreset];
+        if (cutoff && new Date(n.created_at) < cutoff) return false;
+      }
+      if (dateMode === "month_year") {
+        if (dateMonth && new Date(n.created_at).getMonth() + 1 !== Number(dateMonth)) return false;
+        if (dateYear && new Date(n.created_at).getFullYear() !== Number(dateYear)) return false;
+      }
+      if (dateMode === "range") {
+        if (dateFrom && dateTo) {
+          if (new Date(n.created_at) < new Date(dateFrom)) return false;
+          if (new Date(n.created_at) > new Date(dateTo + "T23:59:59")) return false;
+        } else if (dateFrom) {
+          const d = new Date(n.created_at);
+          const start = new Date(dateFrom);
+          const end = new Date(dateFrom + "T23:59:59");
+          if (d < start || d > end) return false;
+        }
       }
 
       // Type filter
@@ -329,7 +389,7 @@ export default function NotificationsPage() {
 
       return true;
     });
-  }, [notifications, statusFilter, timeFilter, typeFilter, projectFilter, searchQuery]);
+  }, [notifications, statusFilter, dateMode, datePreset, dateMonth, dateYear, dateFrom, dateTo, typeFilter, projectFilter, searchQuery]);
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
@@ -409,10 +469,10 @@ export default function NotificationsPage() {
                     </button>
                   </span>
                 )}
-                {timeFilter !== "all" && (
+                {hasActiveDateFilter && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-xs font-medium">
-                    {TIME_FILTERS.find((t) => t.key === timeFilter)?.label}
-                    <button onClick={() => setTimeFilter("all")} className="hover:text-amber-500">
+                    {getDateFilterLabel({ dateMode, datePreset, dateMonth, dateYear, dateFrom, dateTo })}
+                    <button onClick={clearDateFilter} className="hover:text-amber-500">
                       <span className="material-symbols-outlined text-xs">close</span>
                     </button>
                   </span>
@@ -470,26 +530,156 @@ export default function NotificationsPage() {
               </div>
             </div>
 
-            {/* TIME FILTER */}
+            {/* DATE FILTER */}
             <div>
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Time Period</p>
               <div className="flex flex-wrap gap-2">
-                {TIME_FILTERS.map((tf) => (
-                  <FilterChip
-                    key={tf.key}
-                    label={tf.label}
-                    icon={tf.key === "all" ? "schedule" : tf.key === "today" ? "today" : tf.key === "this_week" ? "date_range" : tf.key === "this_month" ? "calendar_month" : "history"}
-                    color="text-amber-600 dark:text-amber-400"
-                    active={timeFilter === tf.key}
-                    onClick={() => setTimeFilter(tf.key)}
-                    count={
-                      tf.key === "all"
-                        ? notifications.length
-                        : notifications.filter((n) => tf.fn?.(n.created_at)).length
-                    }
-                  />
-                ))}
+                <button
+                  onClick={() => dateMode === "none" ? setDateMode("preset") : clearDateFilter()}
+                  className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-semibold transition-all ${
+                    dateMode !== "none"
+                      ? "border-amber-400 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400"
+                      : "text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[14px]">calendar_month</span>
+                  Date
+                </button>
               </div>
+
+              {dateMode !== "none" && (
+                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-white/5">
+
+                  <div className="flex gap-1 mb-4 p-1 bg-gray-100 dark:bg-[#100d1c] rounded-lg w-fit">
+                    {[
+                      { id: "preset",     label: "Presets",      icon: "bolt" },
+                      { id: "month_year", label: "Month / Year", icon: "calendar_view_month" },
+                      { id: "range",      label: "Date",         icon: "calendar_today" },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => { setDateMode(tab.id); setDatePreset(""); setDateMonth(""); setDateYear(""); setDateFrom(""); setDateTo(""); setShowToDate(false); }}
+                        className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-semibold transition-all ${
+                          dateMode === tab.id
+                            ? "bg-white dark:bg-[#1a162e] text-amber-600 dark:text-amber-400 shadow-sm"
+                            : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-[13px]">{tab.icon}</span>
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {dateMode === "preset" && (
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { value: "7d",  label: "Last 7 days" },
+                        { value: "30d", label: "Last 30 days" },
+                        { value: "3m",  label: "Last 3 months" },
+                        { value: "6m",  label: "Last 6 months" },
+                        { value: "1y",  label: "This year" },
+                      ].map((p) => (
+                        <button
+                          key={p.value}
+                          onClick={() => setDatePreset(datePreset === p.value ? "" : p.value)}
+                          className={`h-8 px-4 rounded-full text-xs font-semibold border transition-all ${
+                            datePreset === p.value
+                              ? "border-amber-400 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400"
+                              : "border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-amber-400/40 hover:text-amber-600 dark:hover:text-amber-400"
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {dateMode === "month_year" && (
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Month</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {MONTH_LABELS.map((m, i) => (
+                            <button
+                              key={i + 1}
+                              onClick={() => setDateMonth(dateMonth === String(i + 1) ? "" : String(i + 1))}
+                              className={`h-8 w-12 rounded-lg text-xs font-semibold border transition-all ${
+                                dateMonth === String(i + 1)
+                                  ? "border-amber-400 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400"
+                                  : "border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-amber-400/40 hover:text-amber-600 dark:hover:text-amber-400"
+                              }`}
+                            >
+                              {m}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {uniqueYears.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Year</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {uniqueYears.map((y) => (
+                              <button
+                                key={y}
+                                onClick={() => setDateYear(dateYear === String(y) ? "" : String(y))}
+                                className={`h-8 px-4 rounded-lg text-xs font-semibold border transition-all ${
+                                  dateYear === String(y)
+                                    ? "border-amber-400 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400"
+                                    : "border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-amber-400/40 hover:text-amber-600 dark:hover:text-amber-400"
+                                }`}
+                              >
+                                {y}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {dateMode === "range" && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="date"
+                        value={dateFrom}
+                        onChange={(e) => { setDateFrom(e.target.value); if (dateTo && e.target.value > dateTo) { setDateTo(""); setShowToDate(false); } }}
+                        className="h-8 px-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#100d1c] text-xs text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-amber-400/20 focus:border-amber-400 cursor-pointer"
+                      />
+                      {!showToDate && dateFrom && (
+                        <button
+                          type="button"
+                          onClick={() => setShowToDate(true)}
+                          className="inline-flex items-center gap-0.5 text-xs text-amber-500 hover:text-amber-600 font-medium transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">add</span>
+                          to
+                        </button>
+                      )}
+                      {showToDate && (
+                        <>
+                          <span className="material-symbols-outlined text-gray-300 dark:text-gray-600 text-[18px]">arrow_forward</span>
+                          <input
+                            type="date"
+                            value={dateTo}
+                            min={dateFrom || undefined}
+                            onChange={(e) => setDateTo(e.target.value)}
+                            className="h-8 px-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#100d1c] text-xs text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-amber-400/20 focus:border-amber-400 cursor-pointer"
+                          />
+                          <button
+                            onClick={() => { setDateTo(""); setShowToDate(false); }}
+                            className="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">close</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                </div>
+              )}
             </div>
 
             {/* TYPE FILTER */}

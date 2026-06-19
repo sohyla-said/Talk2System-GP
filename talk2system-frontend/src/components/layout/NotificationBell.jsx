@@ -5,26 +5,47 @@ import { handleNotificationNav } from "../../utils/notificationNavigation";
 import { getToken } from "../../api/authApi";
 
 const ICON_MAP = {
+  /* ─── Join Requests ────────────────────────────────────── */
   join_accepted: { icon: "check_circle", color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20" },
   join_rejected: { icon: "cancel", color: "text-red-500", bg: "bg-red-50 dark:bg-red-900/20" },
+  join_requested: { icon: "group_add", color: "text-teal-500", bg: "bg-teal-50 dark:bg-teal-900/20" },
+  
+  /* ─── Project Membership ───────────────────────────────── */
   added_to_project: { icon: "person_add", color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-900/20" },
   admin_assigned_pm: { icon: "admin_panel_settings", color: "text-purple-500", bg: "bg-purple-50 dark:bg-purple-900/20" },
-  admin_added_participant: { icon: "group_add", color: "text-indigo-500", bg: "bg-indigo-50 dark:bg-indigo-900/20" },
-  admin_removed_participant: { icon: "person_remove", color: "text-orange-500", bg: "bg-orange-50 dark:bg-orange-900/20" },
-  admin_removed_you: { icon: "person_remove", color: "text-red-500", bg: "bg-red-50 dark:bg-red-900/20" },
+  admin_removed_participant: { icon: "person_remove", color: "text-red-500", bg: "bg-red-50 dark:bg-red-900/20" },
   admin_replaced_pm: { icon: "swap_horiz", color: "text-amber-500", bg: "bg-amber-50 dark:bg-amber-900/20" },
+  
+  /* ─── Projects ────────────────────────────────── */
   admin_deleted_project: { icon: "delete_forever", color: "text-red-600", bg: "bg-red-50 dark:bg-red-900/20" },
-  join_requested: { icon: "group_add", color: "text-teal-500", bg: "bg-teal-50 dark:bg-teal-900/20" },
+  project_suspended:         { icon: "pause_circle",     color: "text-yellow-500",  bg: "bg-yellow-50 dark:bg-yellow-900/20",  border: "border-yellow-200 dark:border-yellow-800" },
+  project_resumed:           { icon: "play_circle",      color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20",border: "border-emerald-200 dark:border-emerald-800" },
+  
+  /* ─── Account Status ───────────────────────────────────── */
   account_suspended: { icon: "lock_person", color: "text-orange-500", bg: "bg-orange-50 dark:bg-orange-900/20", border: "border-orange-200 dark:border-orange-800" },
   account_restored: { icon: "lock_open", color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-200 dark:border-emerald-800" },
+  
+  /* ─── Transcription ────────────────────────────────────── */
+  transcription_done: { icon: "fact_check", color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-200 dark:border-emerald-800" } ,
+  
+  /* ─── Requirements ─────────────────────────────────────── */
   requirements_extracted:       { icon: "task_alt",   color: "text-violet-500", bg: "bg-violet-50 dark:bg-violet-900/20" },
   requirements_extracted_both:  { icon: "compare",    color: "text-violet-500", bg: "bg-violet-50 dark:bg-violet-900/20" },
   requirements_extraction_failed: { icon: "error",    color: "text-red-500",    bg: "bg-red-50 dark:bg-red-900/20" },
-  transcription_done: { icon: "fact_check", color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-200 dark:border-emerald-800" } ,
+  
+  /* ─── SRS Document ─────────────────────────────────────── */
   srs_generated:       { icon: "description",     color: "text-indigo-500", bg: "bg-indigo-50 dark:bg-indigo-900/20", border: "border-indigo-200 dark:border-indigo-800" },
   srs_generation_failed: { icon: "error",         color: "text-red-500",    bg: "bg-red-50 dark:bg-red-900/20",       border: "border-red-200 dark:border-red-800" },
+  
+  /* ─── UML Diagrams ─────────────────────────────────────── */
   uml_generated:       { icon: "account_tree",    color: "text-purple-500", bg: "bg-purple-50 dark:bg-purple-900/20", border: "border-purple-200 dark:border-purple-800" },
   uml_generation_failed: { icon: "error",         color: "text-red-500",    bg: "bg-red-50 dark:bg-red-900/20",       border: "border-red-200 dark:border-red-800" },
+  
+  /* ─── Leave Requests ───────────────────────────────────── */
+  leave_request_received:    { icon: "exit_to_app",      color: "text-orange-500",  bg: "bg-orange-50 dark:bg-orange-900/20",  border: "border-orange-200 dark:border-orange-800" },
+  pm_leave_request_received: { icon: "manage_accounts",  color: "text-amber-500",   bg: "bg-amber-50 dark:bg-amber-900/20",    border: "border-amber-200 dark:border-amber-800" },
+  leave_approved:            { icon: "check_circle",     color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20",border: "border-emerald-200 dark:border-emerald-800" },
+  leave_rejected:            { icon: "cancel",           color: "text-red-500",     bg: "bg-red-50 dark:bg-red-900/20",        border: "border-red-200 dark:border-red-800" },
 };
 function renderBellMessage(message) {
   if (!message) return null;
