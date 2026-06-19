@@ -45,21 +45,21 @@ describe('Sessions Module — /api/sessions', () => {
       createdSessionId = session.id;
     });
 
-    // ⚠️  KNOWN SECURITY GAP — endpoint has no auth guard, so unauthenticated
-    // requests currently succeed with 200. Test documents current backend behaviour.
-    test('TC-SESS-02 [SECURITY]: Session creation without token succeeds (no auth guard)', async () => {
+    // Regression test for the TC-13 vulnerability (see README): endpoint previously
+    // accepted unauthenticated requests. Backend now enforces auth — must stay 401/403.
+    test('TC-SESS-02 [SECURITY]: Session creation without token is rejected (401/403)', async () => {
       const body = new SessionCreateRequest('Unauthorized Session Attempt', []);
       const res  = await apiClient.post(`/api/sessions/project/${PROJECT_ID}`, body);
-      expect(res.status).toBe(200);
+      expect([401, 403]).toContain(res.status);
     });
 
-    // ⚠️  KNOWN GAP — no role check on this endpoint; participants can create sessions
-    test('TC-SESS-03: Participant role can create a session (no role guard)', async () => {
+    // Backend enforces project_manager role for session creation — participants get 403.
+    test('TC-SESS-03: Participant role cannot create a session (403)', async () => {
       const body = new SessionCreateRequest('Participant Attempt Session', []);
       const res  = await apiClient.post(`/api/sessions/project/${PROJECT_ID}`, body, {
         headers: authHeader(userToken)
       });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(403);
     });
 
     test('TC-SESS-04: Missing title field returns 4xx', async () => {
@@ -97,10 +97,10 @@ describe('Sessions Module — /api/sessions', () => {
       expect(Array.isArray(res.data)).toBe(true);
     });
 
-    // ⚠️  KNOWN GAP — endpoint has no auth guard; returns 200 without a token
-    test('TC-SESS-07: Unauthenticated request succeeds (no auth guard on list endpoint)', async () => {
+    // Backend enforces auth on the list endpoint — unauthenticated requests are rejected.
+    test('TC-SESS-07: Unauthenticated request is rejected (401/403)', async () => {
       const res = await apiClient.get(`/api/sessions/project/${PROJECT_ID}`);
-      expect(res.status).toBe(200);
+      expect([401, 403]).toContain(res.status);
     });
 
   });
