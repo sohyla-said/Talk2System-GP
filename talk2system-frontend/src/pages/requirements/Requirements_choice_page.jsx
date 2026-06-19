@@ -443,7 +443,7 @@ export default function RequirementsChoicePage() {
 								<span className="material-symbols-outlined">info</span>
 							</div>
 							<h3 className="text-slate-900 dark:text-white text-xl font-bold mb-2">No requirements extracted yet</h3>
-							<p className="text-slate-500 dark:text-slate-400 mb-4">
+							<p className="text-red-500 mb-4">
 								LLM requirement extraction failed.
 							</p>
 							<button
