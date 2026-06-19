@@ -16,7 +16,7 @@ class EmailService:
         self.username = os.getenv("EMAIL_USER")
         self.password = os.getenv("EMAIL_PASS")
         self.from_name = os.getenv("APP_NAME", "Talk2System")
-        self.frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+        self.frontend_url = os.getenv("FRONTEND_URL", "https://talk2system.app")
 
     def _connect(self):
         server = smtplib.SMTP(self.host, self.port)

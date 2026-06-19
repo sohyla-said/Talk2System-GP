@@ -34,7 +34,8 @@
     "globals": "^16.5.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",
-    "vite": "npm:rolldown-vite@7.2.5"
+    "vite": "npm:rolldown-vite@7.2.5",
+    "vite-plugin-mkcert": "^2.1.0"
   },
   "overrides": {
     "vite": "npm:rolldown-vite@7.2.5"
