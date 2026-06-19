@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useContext } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { getToken } from "../../api/authApi";
+import { ExtractionContext } from "../../App";
 
 export default function RequirementsChoicePage() {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const { sessionId } = useParams();
+	const { startExtraction, taskStatus, taskOutput, activeSessionId, activeTaskId } = useContext(ExtractionContext);
 
 	const STORAGE_KEY = `extractionState_session_${sessionId}`;
 
@@ -20,6 +22,11 @@ export default function RequirementsChoicePage() {
 	});
 	const [submittingType, setSubmittingType] = useState(null);
 	const [regeneratingType, setRegeneratingType] = useState(null);
+	const [regeneratingTaskId, setRegeneratingTaskId] = useState(null);
+	// Engine that last failed — kept around (even after regeneratingType/Id are
+	// cleared) so a retry triggered from the global toast, instead of this page's
+	// own button, can still be recognized and reflected in the button state.
+	const [lastFailedEngine, setLastFailedEngine] = useState(null);
 	const [sessionName, setSessionName] = useState(null);
 
 	const {
@@ -231,39 +238,55 @@ export default function RequirementsChoicePage() {
 		return formatTranscriptForBackend(segments);
 	};
 
-	const mergeExtractionResponse = (engine, responseData) => {
-		setExtractionState((prev) => {
-			const next = { ...prev };
+	// When the background task we started for `regeneratingType` finishes, merge the
+	// new run id into extractionState. Updating hybridRunId/llmRunId re-triggers the
+	// comparison-fetch effect below, which asks the backend to recompute the
+	// authoritative diff against the other (already-succeeded) engine.
+	// Matched by task id (not engine) because a failed task's task_output carries
+	// no `engine` field on the backend — only error_message is set on failure.
+	useEffect(() => {
+		if (!regeneratingType || !regeneratingTaskId) return;
+		if (activeTaskId !== regeneratingTaskId) return;
 
-			if (engine === "llm") {
-				next.llmRunId = responseData.LLM_run_id ?? prev.llmRunId;
-				next.llmData = responseData.LLM_data ?? prev.llmData;
-				next.llmOnlyData = responseData.LLM_only_data ?? prev.llmOnlyData;
-			} else {
-				next.hybridRunId = responseData.Hybrid_run_id ?? prev.hybridRunId;
-				next.hybridData = responseData.Hybrid_data ?? prev.hybridData;
-				next.hybridOnlyData = responseData.Hybrid_only_data ?? prev.hybridOnlyData;
-			}
+		if (taskStatus === "done") {
+			setExtractionState((prev) => {
+				const next = { ...prev };
+				if (regeneratingType === "llm") {
+					next.llmRunId = taskOutput?.run_id ?? prev.llmRunId;
+				} else {
+					next.hybridRunId = taskOutput?.run_id ?? prev.hybridRunId;
+				}
+				try {
+					localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+				} catch (e) {}
+				return next;
+			});
+			setLastFailedEngine(null);
+			setRegeneratingType(null);
+			setRegeneratingTaskId(null);
+		} else if (taskStatus === "failed") {
+			// No alert here — the global ExtractionToast (App.jsx) already surfaces
+			// this failure with the error message and a Retry button. Just release the
+			// local "Regenerating..." state, but remember which engine failed so a
+			// retry triggered from that toast (see effect below) is still recognized.
+			setLastFailedEngine(regeneratingType);
+			setRegeneratingType(null);
+			setRegeneratingTaskId(null);
+		}
+	}, [taskStatus, taskOutput, activeTaskId, regeneratingType, regeneratingTaskId]);
 
-			const currentLlm = normalizeGrouped(next.llmData || next.LLM_data);
-			const currentHybrid = normalizeGrouped(next.hybridData || next.Hybrid_data);
-			const comparison = compareGroupedRequirements(currentHybrid, currentLlm);
+	// A retry clicked on the global toast restarts the SAME engine via App.jsx's
+	// startExtraction directly, bypassing handleRegenerate entirely — so this page
+	// never finds out by itself. Once that retry shows up as a fresh "pending" task
+	// for this session, adopt it so the regenerate button reflects it too.
+	useEffect(() => {
+		if (!lastFailedEngine || regeneratingType) return;
+		if (taskStatus !== "pending" || !activeTaskId) return;
+		if (String(activeSessionId) !== String(sessionId)) return;
 
-			next.commonData = comparison.commonData;
-			next.common_data = comparison.commonData;
-			next.llmOnlyData = comparison.llmOnlyData;
-			next.LLM_only_data = comparison.llmOnlyData;
-			next.hybridOnlyData = comparison.hybridOnlyData;
-			next.Hybird_only_data = comparison.hybridOnlyData;
-			next.Hybrid_only_data = comparison.hybridOnlyData;
-
-			try {
-				localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-			} catch (e) {}
-
-			return next;
-		});
-	};
+		setRegeneratingType(lastFailedEngine);
+		setRegeneratingTaskId(activeTaskId);
+	}, [taskStatus, activeTaskId, activeSessionId, lastFailedEngine, regeneratingType, sessionId]);
 
 	const handlePrefer = async (type) => {
 		const selectedData = type === "llm" ? normalizedLlm : normalizedHybrid;
@@ -324,37 +347,18 @@ export default function RequirementsChoicePage() {
 		}
 
 		setRegeneratingType(engine);
+		setLastFailedEngine(null);
 		try {
 			// fetchTranscriptText always checks for a translation first,
 			// so this correctly uses English text even for non-English sessions.
 			const resolvedTranscriptText = await fetchTranscriptText();
-			const response = await fetch(
-				`http://127.0.0.1:8000/api/projects/${projectId}/session/${sessionId}/extract-requirements-async`,
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${getToken()}`
-					},
-					body: JSON.stringify({
-						transcript: resolvedTranscriptText,
-						engine
-					})
-				}
-			);
-
-			const data = await response.json();
-			if (!response.ok) {
-				throw new Error(
-					typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail)
-				);
-			}
-
-			mergeExtractionResponse(engine, data);
+			// Fire-and-forget: this only starts the background task. Completion is
+			// tracked globally (ExtractionContext) and merged in by the effect above.
+			const taskId = await startExtraction(sessionId, projectId, resolvedTranscriptText, engine);
+			setRegeneratingTaskId(taskId);
 		} catch (error) {
 			console.error(error);
-			alert(error.message);
-		} finally {
+			alert(error.message || "Failed to start requirement extraction");
 			setRegeneratingType(null);
 		}
 	};
@@ -448,7 +452,7 @@ export default function RequirementsChoicePage() {
 							</p>
 							<button
 								onClick={() => handleRegenerate("llm")}
-								disabled={regeneratingType === "llm"}
+								disabled={!!regeneratingType}
 								className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-bold text-white transition-colors hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
 							>
 								<span className="material-symbols-outlined text-lg">refresh</span>
@@ -481,7 +485,7 @@ export default function RequirementsChoicePage() {
 							</p>
 							<button
 								onClick={() => handleRegenerate("hybrid")}
-								disabled={regeneratingType === "hybrid"}
+								disabled={!!regeneratingType}
 								className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-bold text-white transition-colors hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
 							>
 								<span className="material-symbols-outlined text-lg">refresh</span>
@@ -678,64 +682,3 @@ function normalizeGrouped(grouped) {
 	};
 }
 
-function compareGroupedRequirements(hybridGrouped, llmGrouped) {
-	const hybridFunctional = Array.isArray(hybridGrouped.functional_requirements)
-		? hybridGrouped.functional_requirements
-		: [];
-	const hybridNonFunctional = Array.isArray(hybridGrouped.nonfunctional_requirements)
-		? hybridGrouped.nonfunctional_requirements
-		: [];
-	const llmFunctional = Array.isArray(llmGrouped.functional_requirements)
-		? llmGrouped.functional_requirements
-		: [];
-	const llmNonFunctional = Array.isArray(llmGrouped.nonfunctional_requirements)
-		? llmGrouped.nonfunctional_requirements
-		: [];
-
-	const hybridFunctionalMap = new Map(hybridFunctional.map((item) => [item.text.trim().toLowerCase(), item]));
-	const hybridNonFunctionalMap = new Map(hybridNonFunctional.map((item) => [item.text.trim().toLowerCase(), item]));
-
-	const commonFunctional = [];
-	const llmOnlyFunctional = [];
-	for (const item of llmFunctional) {
-		const key = item.text.trim().toLowerCase();
-		if (hybridFunctionalMap.has(key)) {
-			commonFunctional.push(item);
-		} else {
-			llmOnlyFunctional.push(item);
-		}
-	}
-
-	const commonNonFunctional = [];
-	const llmOnlyNonFunctional = [];
-	for (const item of llmNonFunctional) {
-		const key = item.text.trim().toLowerCase();
-		if (hybridNonFunctionalMap.has(key)) {
-			commonNonFunctional.push(item);
-		} else {
-			llmOnlyNonFunctional.push(item);
-		}
-	}
-
-	const hybridOnlyFunctional = hybridFunctional.filter(
-		(item) => !commonFunctional.some((commonItem) => commonItem.text.trim().toLowerCase() === item.text.trim().toLowerCase())
-	);
-	const hybridOnlyNonFunctional = hybridNonFunctional.filter(
-		(item) => !commonNonFunctional.some((commonItem) => commonItem.text.trim().toLowerCase() === item.text.trim().toLowerCase())
-	);
-
-	return {
-		commonData: {
-			functional_requirements: commonFunctional,
-			nonfunctional_requirements: commonNonFunctional
-		},
-		llmOnlyData: {
-			functional_requirements: llmOnlyFunctional,
-			nonfunctional_requirements: llmOnlyNonFunctional
-		},
-		hybridOnlyData: {
-			functional_requirements: hybridOnlyFunctional,
-			nonfunctional_requirements: hybridOnlyNonFunctional
-		}
-	};
-}

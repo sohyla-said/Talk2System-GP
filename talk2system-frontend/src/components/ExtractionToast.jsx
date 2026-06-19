@@ -18,14 +18,34 @@ export default function ExtractionToast({
   const engine       = taskOutput?.engine;          // "hybrid" | "llm" | "both" | "gemini"
   const isBoth       = engine === "both";
 
+  // single-engine completion can also be a regeneration of a previously-failed
+  // engine, triggered from the choice page for an existing comparison. That state
+  // is persisted (by Requirements_choice_page) under this same key, so its presence
+  // tells us to route back to the choice page instead of the single-result view.
+  const choiceStorageKey = sessionId ? `extractionState_session_${sessionId}` : null;
+  const readChoiceState = () => {
+    if (!choiceStorageKey) return null;
+    try {
+      const raw = localStorage.getItem(choiceStorageKey);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+  const priorChoiceState = !isBoth ? readChoiceState() : null;
+  const isEngineRegeneration =
+    !isBoth && !!priorChoiceState && (priorChoiceState.hybridRunId || priorChoiceState.llmRunId);
+  const isChoiceFlow = isBoth || isEngineRegeneration;
+
   // ─── Navigation handlers ─────────────────────────────────────────────────
 
-  // single-engine (hybrid or llm): go straight to the requirements view.
-  // Requirements_session_view fetches the latest version on mount via
-  // fetchLatestRequirements(), so no state needs to be passed.
+  // single-engine, fresh extraction (no prior comparison in progress): go
+  // straight to the requirements view. Requirements_session_view fetches the
+  // latest version on mount via fetchLatestRequirements(), so no state needs
+  // to be passed.
   const goToRequirements = () => {
     navigate(`/transcript/${sessionId}/requirements`, {
-      state: { 
+      state: {
         projectId,
         requirementId: taskOutput.session_req_id,
         groupedData: taskOutput.data,
@@ -35,24 +55,37 @@ export default function ExtractionToast({
     onDismiss();
   };
 
-  // both-engine: go to the choice page, passing the full extraction result
-  // as router state — exactly mirroring what the sync flow does today.
+  // both-engine, or a single-engine regeneration of a failed engine for an
+  // existing comparison: go to the choice page, merging the newly-finished
+  // engine's run id with whatever the other engine's run id already was.
   const goToChoicePage = () => {
-    navigate(`/transcript/${sessionId}/requirements/choice`, {
-      state: {
-        projectId,
-        hybridRunId:    taskOutput.Hybrid_run_id,
-        llmRunId:       taskOutput.LLM_run_id,
-      },
-    });
+    const prior = priorChoiceState || {};
+    const state = {
+      ...prior,
+      projectId,
+      hybridRunId: isBoth
+        ? taskOutput.Hybrid_run_id
+        : (engine === "hybrid" ? taskOutput.run_id : prior.hybridRunId),
+      llmRunId: isBoth
+        ? taskOutput.LLM_run_id
+        : (engine === "llm" ? taskOutput.run_id : prior.llmRunId),
+    };
+    if (choiceStorageKey) {
+      try {
+        localStorage.setItem(choiceStorageKey, JSON.stringify(state));
+      } catch {}
+    }
+    navigate(`/transcript/${sessionId}/requirements/choice`, { state });
     onDismiss();
   };
 
-  const handleView = isBoth ? goToChoicePage : goToRequirements;
-  const viewLabel  = isBoth ? "Compare" : "View";
+  const handleView = isChoiceFlow ? goToChoicePage : goToRequirements;
+  const viewLabel  = isChoiceFlow ? "Compare" : "View";
   const doneSubtitle = isBoth
     ? "Both engines finished. Compare results."
-    : "Extraction completed successfully.";
+    : isEngineRegeneration
+      ? "Engine finished. View the updated comparison."
+      : "Extraction completed successfully.";
 
   // Auto-open compare page once both-engine extraction is done.
   // useEffect(() => {

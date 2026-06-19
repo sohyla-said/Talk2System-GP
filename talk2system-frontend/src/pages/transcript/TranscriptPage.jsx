@@ -506,6 +506,19 @@ export default function TranscriptPage() {
         navigate(`/projects/${projectId}/session/${sessionId}/requirements/${existingRequirementId}`);
         return;
       }
+      // An unfinished comparison (started but no engine chosen yet) is persisted
+      // by Requirements_choice_page and only cleared once the user picks one.
+      // Resume it instead of burning two more engine runs on a fresh extraction.
+      if (!forceReExtract) {
+        try {
+          const stored = localStorage.getItem(`extractionState_session_${sessionId}`);
+          const pending = stored ? JSON.parse(stored) : null;
+          if (pending && (pending.hybridRunId || pending.llmRunId)) {
+            navigate(`/transcript/${sessionId}/requirements/choice`, { state: pending });
+            return;
+          }
+        } catch {}
+      }
     }
     if (type === "sum") {
       navigate(`/summary/${sessionId}`);

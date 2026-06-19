@@ -27,7 +27,7 @@ function AppInner() {
   const [taskStatus, setTaskStatus]           = useState(null);
   const lastCallRef = useRef(null);
 
-  const { trackTask, cancelTracking } = useExtractionTask({
+  const { taskId: activeTaskId, trackTask, cancelTracking } = useExtractionTask({
     onDone: (data) => {
       setTaskOutput(data.task_output ?? null);
       setTaskStatus("done");
@@ -71,6 +71,7 @@ function AppInner() {
     setTaskStatus("pending");
     setToastVisible(true);
     trackTask(data.task_id);
+    return data.task_id;
   };
 
   const handleRetry = () => {
@@ -196,7 +197,7 @@ function AppInner() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <ExtractionContext.Provider value={{ startExtraction }}>
+    <ExtractionContext.Provider value={{ startExtraction, taskStatus, taskOutput, activeSessionId, activeProjectId, activeTaskId }}>
     <UmlContext.Provider value={{ startUmlGeneration, umlTaskStatus, umlProjectId, umlSessionId }}>
     <SrsContext.Provider value={{ startSrsGeneration }}>
       <AppRoutes />
