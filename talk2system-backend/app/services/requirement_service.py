@@ -591,6 +591,7 @@ def run_async_extraction_task(task_id: int, project_id: int, session_id: int, tr
             )
             task.task_output = {
                 "engine":         engine,
+                "run_id":         preferred_run_id,
                 "session_req_id": saved.get("session_req_id"),
                 "data": grouped,
                 "preferred_type": engine,
