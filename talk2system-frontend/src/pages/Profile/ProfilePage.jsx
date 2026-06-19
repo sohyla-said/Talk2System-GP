@@ -106,7 +106,7 @@ export default function ProfilePage() {
         });
         setFormData({ full_name: localUser.full_name || "" });
       } else {
-        setMessage("Failed to load profile data. Please try refreshing the page.");
+                setMessage(t("failedToLoadProfile") || "Failed to load profile data. Please try refreshing the page.");
       }
     } finally {
       setLoading(false);
@@ -134,12 +134,12 @@ export default function ProfilePage() {
     e.preventDefault();
     
     if (passwordData.new_password !== passwordData.confirm_password) {
-      setPasswordMessage("New passwords do not match");
+      setPasswordMessage(t("passwordsDoNotMatch") || "New passwords do not match");
       return;
     }
     
     if (passwordData.new_password.length < 8) {
-      setPasswordMessage("Password must be at least 8 characters");
+      setPasswordMessage(t("passwordMinLength") || "Password must be at least 8 characters");
       return;
     }
     
@@ -202,13 +202,13 @@ export default function ProfilePage() {
     if (!file) return;
     
     if (file.size > 2 * 1024 * 1024) { 
-      setAvatarMessage({ text: "Image must be less than 2MB", type: "error" }); 
+            setAvatarMessage({ text: t("imageTooLarge") || "Image must be less than 2MB", type: "error" });
       return; 
     }
     
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
-      setAvatarMessage({ text: "Please upload a valid image file (JPG, PNG, GIF, or WebP)", type: "error" });
+      setAvatarMessage({ text: t("invalidImageType") || "Please upload a valid image file (JPG, PNG, GIF, or WebP)", type: "error" });
       return;
     }
 
@@ -218,9 +218,9 @@ export default function ProfilePage() {
       const result = await uploadAvatar(file);
       setAvatarUrl(result.avatar_url);
       setDropdownOpen(false);
-      setAvatarMessage({ text: "Photo uploaded successfully!", type: "success" });
+      setAvatarMessage({ text: t("photoUploaded") || "Photo uploaded successfully!", type: "success" });
     } catch (error) {
-      setAvatarMessage({ text: error.message || "Failed to upload avatar", type: "error" });
+      setAvatarMessage({ text: error.message || t("failedToUploadAvatar") || "Failed to upload avatar", type: "error" });
     } finally {
       setUploading(false);
     }
@@ -235,9 +235,9 @@ export default function ProfilePage() {
       const result = await deleteAvatar();
       setAvatarUrl(result.avatar_url);
       setDropdownOpen(false);
-      setAvatarMessage({ text: "Photo removed successfully!", type: "success" });
+      setAvatarMessage({ text: t("photoRemoved") || "Photo removed successfully!", type: "success" });
     } catch (error) {
-      setAvatarMessage({ text: error.message || "Failed to delete avatar", type: "error" });
+      setAvatarMessage({ text: error.message || t("failedToDeleteAvatar") || "Failed to delete avatar", type: "error" });
     }
   };
 
@@ -258,7 +258,7 @@ export default function ProfilePage() {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <span className="material-symbols-outlined animate-spin text-5xl text-primary">progress_activity</span>
-        <p className="text-sm text-gray-500 dark:text-gray-400 animate-pulse">Loading profile...</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 animate-pulse">{t("loadingProfile") || "Loading profile..."}</p>
       </div>
     );
   }
@@ -267,12 +267,12 @@ export default function ProfilePage() {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <span className="material-symbols-outlined text-5xl text-gray-400">error</span>
-        <p className="text-sm text-gray-500 dark:text-gray-400">Unable to load profile</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">{t("unableToLoadProfile") || "Unable to load profile"}</p>
         <button 
           onClick={loadProfile}
           className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90"
         >
-          Try Again
+          {t("tryAgain") || "Try Again"}
         </button>
       </div>
     );
@@ -286,7 +286,7 @@ export default function ProfilePage() {
         <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">
           {t("myProfile") || "My Profile"}
         </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage your personal information and preferences.</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t("profileSubtitle") || "Manage your personal information and preferences."}</p>
       </div>
 
       {message && (
@@ -354,7 +354,7 @@ export default function ProfilePage() {
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors disabled:opacity-50"
                   >
                     <span className="material-symbols-outlined text-lg text-primary">photo_camera</span>
-                    {uploading ? "Uploading..." : (t("changePhoto") || "Change Photo")}
+                    {uploading ? (t("uploading") || "Uploading...") : (t("changePhoto") || "Change Photo")}
                   </button>
                   {hasCustomAvatar && (
                     <button 
@@ -375,7 +375,7 @@ export default function ProfilePage() {
                   <div className="flex items-start gap-3 mb-3">
                     <span className="material-symbols-outlined text-xl text-amber-600 dark:text-amber-400 mt-0.5">warning</span>
                     <p className="text-sm text-gray-700 dark:text-gray-200 font-medium">
-                      Are you sure you want to remove your photo?
+                      {t("confirmRemovePhoto") || "Are you sure you want to remove your photo?"}
                     </p>
                   </div>
                   <div className="flex gap-2 justify-end">
@@ -383,14 +383,14 @@ export default function ProfilePage() {
                       onClick={() => setShowRemoveConfirm(false)}
                       className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                     >
-                      Cancel
+                      {t("cancel") || "Cancel"}
                     </button>
                     <button
                       onClick={handleRemoveAvatar}
                       disabled={uploading}
                       className="px-3 py-1.5 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
                     >
-                      Remove
+                      {t("remove") || "Remove"}
                     </button>
                   </div>
                 </div>
@@ -503,7 +503,7 @@ export default function ProfilePage() {
             </div>
             <div>
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t("changePassword") || "Change Password"}</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Update your password to keep your account secure</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{t("updatePasswordSecure") || "Update your password to keep your account secure"}</p>
             </div>
           </div>
           {!showChangePassword && (
@@ -549,7 +549,7 @@ export default function ProfilePage() {
                     type="button"
                     onClick={() => setShowCurrentPassword(!showCurrentPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    aria-label={showCurrentPassword ? "Hide password" : "Show password"}
+                    aria-label={showCurrentPassword ? (t("hidePassword") || "Hide password") : (t("showPassword") || "Show password")}
                   >
                     {showCurrentPassword ? <EyeOffIcon /> : <EyeIcon />}
                   </button>
@@ -572,7 +572,7 @@ export default function ProfilePage() {
                     type="button"
                     onClick={() => setShowNewPassword(!showNewPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    aria-label={showNewPassword ? "Hide password" : "Show password"}
+                    aria-label={showNewPassword ? (t("hidePassword") || "Hide password") : (t("showPassword") || "Show password")}
                   >
                     {showNewPassword ? <EyeOffIcon /> : <EyeIcon />}
                   </button>
@@ -595,7 +595,7 @@ export default function ProfilePage() {
                     type="button"
                     onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    aria-label={showConfirmNewPassword ? "Hide password" : "Show password"}
+                    aria-label={showConfirmNewPassword ? (t("hidePassword") || "Hide password") : (t("showPassword") || "Show password")}
                   >
                     {showConfirmNewPassword ? <EyeOffIcon /> : <EyeIcon />}
                   </button>
