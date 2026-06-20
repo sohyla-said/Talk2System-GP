@@ -830,15 +830,36 @@ function ProjectCard({ project, isSuspended, viewMode = "grid", onNavigate, onLe
   const isProjectSuspended = normalizeStatus(project.project_status) === "suspended";
   const hasPendingLeave = project.has_pending_leave_request;
 
-  const leaveBtn = hasPendingLeave ? (
-    <span title="Leave request pending" className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed">
-      <span className="material-symbols-outlined text-base">hourglass_empty</span>
-    </span>
-  ) : (
-    <button onClick={onLeave} title="Leave project" className="w-8 h-8 flex items-center justify-center rounded-full bg-red-50 dark:bg-red-900/20 text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 hover:text-red-500 transition-colors">
-      <span className="material-symbols-outlined text-base">exit_to_app</span>
-    </button>
-  );
+  const renderLeaveAction = (compact) => {
+    if (hasPendingLeave) {
+      return (
+        <span
+          title="Your leave request is awaiting approval"
+          className={`inline-flex items-center justify-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 font-bold cursor-not-allowed ${
+            compact ? "h-8 px-3 text-xs" : "w-full h-9 text-xs"
+          }`}
+        >
+          <span className="material-symbols-outlined text-base">hourglass_empty</span>
+          <span className={compact ? "hidden lg:inline" : ""}>
+            {compact ? "Pending" : "Leave Request Pending"}
+          </span>
+        </span>
+      );
+    }
+    return (
+      <button
+        onClick={onLeave}
+        title="Leave this project"
+        aria-label="Leave project"
+        className={`inline-flex items-center justify-center gap-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 font-bold hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors ${
+          compact ? "h-8 px-3 text-xs" : "w-full h-9 text-xs"
+        }`}
+      >
+        <span className="material-symbols-outlined text-base">exit_to_app</span>
+        <span className={compact ? "hidden lg:inline" : ""}>Leave Project</span>
+      </button>
+    );
+  };
 
   const statusBadge = (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0 ${
@@ -883,7 +904,7 @@ function ProjectCard({ project, isSuspended, viewMode = "grid", onNavigate, onLe
           {new Date(project.created_at).toLocaleDateString()}
         </p>
 
-        <div onClick={(e) => e.stopPropagation()} className="flex-shrink-0">{leaveBtn}</div>
+        <div onClick={(e) => e.stopPropagation()} className="flex-shrink-0">{renderLeaveAction(true)}</div>
       </div>
     );
   }
@@ -920,12 +941,16 @@ function ProjectCard({ project, isSuspended, viewMode = "grid", onNavigate, onLe
           {roleBadge}
         </div>
 
-        <div className="flex items-center justify-between mt-1">
-          <p className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
-            <span className="material-symbols-outlined text-sm">calendar_today</span>
-            {t("created")} {new Date(project.created_at).toLocaleDateString()}
-          </p>
-          <div onClick={(e) => e.stopPropagation()}>{leaveBtn}</div>
+        <p className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 mt-1">
+          <span className="material-symbols-outlined text-sm">calendar_today</span>
+          {t("created")} {new Date(project.created_at).toLocaleDateString()}
+        </p>
+
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="pt-3 mt-1 border-t border-gray-100 dark:border-white/10"
+        >
+          {renderLeaveAction(false)}
         </div>
       </div>
     </div>
