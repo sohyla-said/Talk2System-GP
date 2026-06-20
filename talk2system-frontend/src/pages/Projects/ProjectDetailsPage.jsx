@@ -5,6 +5,25 @@ import { fetchProject, fetchMyRole, fetchPendingRequests, acceptInvitation, reje
 
 const BASE_URL = "http://127.0.0.1:8000";
 
+const formatSessionStatus = (status) =>
+  (status || "pending").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+// Mirrors the 4 values produced by the backend: project_approval_service.compute_project_status,
+// project_service.complete_project, admin_routes suspend/unsuspend, plus legacy "Active" rows.
+const PROJECT_STATUS_LABELS = {
+  in_progress:      "In Progress",
+  pending_approval: "Pending Approval",
+  suspended:        "Suspended",
+  completed:        "Completed",
+};
+
+const formatProjectStatus = (status) => {
+  if (!status) return "";
+  let key = status.trim().toLowerCase().replace(/\s+/g, "_");
+  if (key === "active") key = "in_progress";
+  return PROJECT_STATUS_LABELS[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
 export default function ProjectDetailsPage() {
   const navigate    = useNavigate();
   const { id: projectId } = useParams();
@@ -13,6 +32,8 @@ export default function ProjectDetailsPage() {
   const [sessions, setSessions]   = useState([]);
   const [sessionPage, setSessionPage] = useState(1);
   const SESSIONS_PER_PAGE = 6;
+  const [sessionSearchQuery, setSessionSearchQuery] = useState("");
+  const [sessionStatusFilter, setSessionStatusFilter] = useState("all");
   const [myRole, setMyRole]       = useState(null);
   const [loading, setLoading]     = useState(true);
   const [pmName, setPmName]       = useState(null);
@@ -163,6 +184,25 @@ export default function ProjectDetailsPage() {
       setIsCompleting(false);
     }
   };
+  const uniqueSessionStatuses = useMemo(() => {
+    const statuses = sessions.map((s) => s.status?.toLowerCase()).filter(Boolean);
+    return [...new Set(statuses)];
+  }, [sessions]);
+
+  const filteredSessions = useMemo(() => {
+    let result = sessions;
+    if (sessionSearchQuery.trim()) {
+      const q = sessionSearchQuery.toLowerCase().trim();
+      result = result.filter((s) => (s.title || `Session #${s.id}`).toLowerCase().includes(q));
+    }
+    if (sessionStatusFilter !== "all") {
+      result = result.filter((s) => (s.status || "").toLowerCase() === sessionStatusFilter);
+    }
+    return result;
+  }, [sessions, sessionSearchQuery, sessionStatusFilter]);
+
+  useEffect(() => { setSessionPage(1); }, [sessionSearchQuery, sessionStatusFilter]);
+
   const filteredLogs = auditLogs.filter((log) => {
     if (!logSearchQuery.trim()) return true;
     const query = logSearchQuery.toLowerCase();
@@ -911,7 +951,7 @@ export default function ProjectDetailsPage() {
           </div>
           <div className="flex gap-3 px-4 pt-1 pb-4 overflow-x-auto">
             <span className="flex h-7 items-center rounded-full bg-primary/10 px-3 text-primary text-xs font-medium">Created: {project?.created_at ? new Date(project.created_at).toLocaleDateString() : "—"}</span>
-            <span className="flex h-7 items-center rounded-full bg-primary/10 px-3 text-primary text-xs font-medium">Status: {project?.project_status}</span>
+            <span className="flex h-7 items-center rounded-full bg-primary/10 px-3 text-primary text-xs font-medium">Status: {formatProjectStatus(project?.project_status)}</span>
             {project?.domain && (<span className="flex h-7 items-center rounded-full bg-primary/10 px-3 text-primary text-xs font-medium">Domain: {project.domain}</span>)}
           </div>
           <div className="border-b border-gray-200 dark:border-gray-700 px-4 mb-2">
@@ -921,10 +961,87 @@ export default function ProjectDetailsPage() {
               ))}
             </div>
           </div>
+          {sessions.length > 0 && (
+            <div className="mx-4 mt-2 mb-1 bg-white dark:bg-[#1C192B] rounded-xl border border-gray-200 dark:border-white/10 shadow-sm p-4">
+
+              {/* Search */}
+              <div className="relative mb-3">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[18px] pointer-events-none">search</span>
+                <input
+                  type="text"
+                  placeholder="Search sessions by title…"
+                  value={sessionSearchQuery}
+                  onChange={(e) => setSessionSearchQuery(e.target.value)}
+                  className="w-full h-10 pl-10 pr-10 rounded-lg bg-gray-50 dark:bg-[#100d1c] border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                />
+                {sessionSearchQuery && (
+                  <button
+                    onClick={() => setSessionSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">close</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Status pills + count */}
+              <div className="flex flex-wrap items-center gap-2">
+                {uniqueSessionStatuses.length > 1 && (
+                  <>
+                    <button
+                      onClick={() => setSessionStatusFilter("all")}
+                      className={`inline-flex items-center h-8 px-3 rounded-full border text-xs font-semibold transition-all ${
+                        sessionStatusFilter === "all"
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#100d1c] text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-white/20"
+                      }`}
+                    >
+                      All
+                    </button>
+                    {uniqueSessionStatuses.map((s) => {
+                      const dotColor =
+                        s === "completed" ? "bg-indigo-500" :
+                        s === "in_progress" ? "bg-emerald-500" :
+                        "bg-amber-500";
+                      return (
+                        <button
+                          key={s}
+                          onClick={() => setSessionStatusFilter(s)}
+                          className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-semibold transition-all ${
+                            sessionStatusFilter === s
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#100d1c] text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-white/20"
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                          {formatSessionStatus(s)}
+                        </button>
+                      );
+                    })}
+                  </>
+                )}
+
+                <div className="ml-auto flex items-center gap-3">
+                  {(sessionSearchQuery || sessionStatusFilter !== "all") && (
+                    <button
+                      onClick={() => { setSessionSearchQuery(""); setSessionStatusFilter("all"); }}
+                      className="text-xs font-semibold text-primary hover:text-primary/70 transition-colors"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                  <span className="text-xs text-gray-400 dark:text-gray-500 font-medium tabular-nums">
+                    {filteredSessions.length} / {sessions.length}
+                  </span>
+                </div>
+              </div>
+
+            </div>
+          )}
           {(() => {
-            const totalSessionPages = Math.max(1, Math.ceil(sessions.length / SESSIONS_PER_PAGE));
+            const totalSessionPages = Math.max(1, Math.ceil(filteredSessions.length / SESSIONS_PER_PAGE));
             const safeSessionPage = Math.min(sessionPage, totalSessionPages);
-            const paginatedSessions = sessions.slice(
+            const paginatedSessions = filteredSessions.slice(
               (safeSessionPage - 1) * SESSIONS_PER_PAGE,
               safeSessionPage * SESSIONS_PER_PAGE
             );
@@ -940,7 +1057,11 @@ export default function ProjectDetailsPage() {
             return (
               <div className="p-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {sessions.length === 0 ? (<p className="text-gray-400 col-span-3">No sessions yet.</p>) : (
+                  {filteredSessions.length === 0 ? (
+                    <p className="text-gray-400 col-span-3">
+                      {sessions.length === 0 ? "No sessions yet." : "No sessions match your search or filter."}
+                    </p>
+                  ) : (
                     paginatedSessions.map((session) => (
                       <div
                         key={session.id}
@@ -963,7 +1084,7 @@ export default function ProjectDetailsPage() {
                             ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
                             : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
                         }`}>
-                          {(session.status || "pending").replace(/_/g, " ")}
+                          {formatSessionStatus(session.status)}
                         </span>
                       </div>
                     ))
@@ -973,7 +1094,7 @@ export default function ProjectDetailsPage() {
                 {totalSessionPages > 1 && (
                   <div className="flex items-center justify-between mt-6 px-1">
                     <span className="text-sm text-gray-500 dark:text-gray-400">
-                      {(safeSessionPage - 1) * SESSIONS_PER_PAGE + 1}–{Math.min(safeSessionPage * SESSIONS_PER_PAGE, sessions.length)} of {sessions.length}
+                      {(safeSessionPage - 1) * SESSIONS_PER_PAGE + 1}–{Math.min(safeSessionPage * SESSIONS_PER_PAGE, filteredSessions.length)} of {filteredSessions.length}
                     </span>
                     <div className="flex items-center gap-1">
                       <button

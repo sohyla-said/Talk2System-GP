@@ -126,12 +126,19 @@ class ProjectApprovalService:
                 continue
             latest_vid = ProjectApprovalService._latest_version_id(db, project_id, feature)
             total = ProjectApprovalService._members_count(db, project_id)
+            active_member_ids = {
+                m.user_id for m in db.query(ProjectMembership).filter(
+                    ProjectMembership.project_id == project_id,
+                    ProjectMembership.left_at.is_(None),
+                ).all()
+            }
             approved_count = (
                 db.query(ProjectApproval)
                 .filter(
                     ProjectApproval.project_id == project_id,
                     ProjectApproval.feature == feature,
                     ProjectApproval.version_id == latest_vid,
+                    ProjectApproval.user_id.in_(active_member_ids),
                 )
                 .count()
             )
@@ -194,6 +201,12 @@ class ProjectApprovalService:
         feature: str, version_id: Optional[int]
     ) -> Dict:
         total = ProjectApprovalService._members_count(db, project_id)
+        active_member_ids = {
+            m.user_id for m in db.query(ProjectMembership).filter(
+                ProjectMembership.project_id == project_id,
+                ProjectMembership.left_at.is_(None),
+            ).all()
+        }
         approvals = (
             db.query(ProjectApproval)
             .filter(
@@ -203,7 +216,7 @@ class ProjectApprovalService:
             )
             .all()
         )
-        approved_ids = {a.user_id for a in approvals}
+        approved_ids = {a.user_id for a in approvals if a.user_id in active_member_ids}
         approved_count = len(approved_ids)
         current_user_approved = user_id in approved_ids
         all_approved = total > 0 and approved_count == total

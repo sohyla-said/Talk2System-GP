@@ -10,6 +10,7 @@ from app.models.project import Project
 from app.models.project_membership import ProjectMembership
 from app.models.invitation import Invitation
 from app.services import notification_service
+from app.services.project_approval_service import ProjectApprovalService
 from app.models.audit_log import AuditLog
 from app.models.session import Session as SessionModel
 from app.models.notification import Notification
@@ -450,7 +451,7 @@ def change_project_manager(
 
     # If the project was suspended due to a PM leave request, restore to its pre-suspension status
     if project.project_status == "suspended":
-        project.project_status = project.pre_suspension_status or "in_progress"
+        project.project_status = ProjectApprovalService.compute_project_status(db, project_id)
         project.pre_suspension_status = None
         active_participants = db.query(ProjectMembership).filter(
             ProjectMembership.project_id == project_id,

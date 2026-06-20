@@ -8,8 +8,10 @@ from app.dependencies.auth import get_current_user
 from app.models.user import User
 from app.models.project import Project
 from app.models.project_membership import ProjectMembership
+from app.models.project_approval import ProjectApproval
 from app.models.invitation import Invitation
 from app.services.project_service import ProjectService
+from app.services.project_approval_service import ProjectApprovalService
 from app.models.audit_log import AuditLog
 from app.models.artifact import Artifact
 from app.models.session import Session as SessionModel
@@ -815,6 +817,10 @@ def approve_leave_request(
         entity_id=leave_req.user_id,
         details={"label": f"PM approved leave for {leave_req.user.email if leave_req.user else leave_req.user_id}"},
     )
+    new_status = ProjectApprovalService.compute_project_status(db, project_id)
+    project = ProjectService.get_project(db, project_id)
+    if project and project.project_status not in ("suspended", "completed"):
+        project.project_status = new_status
     db.commit()
     return {"message": "Leave request approved"}
 
