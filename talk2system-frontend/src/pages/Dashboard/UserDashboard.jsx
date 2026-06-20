@@ -284,6 +284,7 @@ export default function UserDashboardPage() {
   const [showAllPendingProjects, setShowAllPendingProjects] = useState(false);
   const [showAllPendingSessions, setShowAllPendingSessions] = useState(false);
   const [showAllStaleSessions,   setShowAllStaleSessions]   = useState(false);
+  const [showAllAwaitingApproval, setShowAllAwaitingApproval] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -470,14 +471,14 @@ export default function UserDashboardPage() {
           </div>
         </div>
 
-        {/* ── Pending approval section ── */}
-        {!loading && !isSuspended && (
+        {/* ── Pending approval section (PM only — delays in projects they manage) ── */}
+        {!loading && !isSuspended && stats?.is_pm && (
           stats?.projects_pending_approval?.length > 0 || stats?.sessions_pending_approval?.length > 0
         ) && (
           <div className="mb-6 bg-white dark:bg-[#1C192B] rounded-2xl border border-red-200 dark:border-red-700/40 px-4 py-3 shadow-sm">
             <div className="flex items-center gap-2 mb-2">
               <span className="material-symbols-outlined text-[16px] text-red-500">pending_actions</span>
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Pending Approval</p>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Pending Approval · Your Managed Projects</p>
             </div>
 
             <div className="flex flex-col gap-3">
@@ -552,6 +553,80 @@ export default function UserDashboardPage() {
           </div>
         )}
 
+        {/* ── Awaiting your approval — items where YOU specifically haven't
+             approved the latest version yet, regardless of whether the
+             session/project is pending for other reasons too. Sole-blocker
+             items (everyone else already approved) get danger styling and
+             sort first, since those are entirely on this user. ── */}
+        {!loading && !isSuspended && stats?.awaiting_my_approval?.length > 0 && (
+          <div className="mb-6 bg-white dark:bg-[#1C192B] rounded-2xl border border-gray-100 dark:border-gray-800 px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="material-symbols-outlined text-[16px] text-indigo-500">fact_check</span>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Awaiting Your Approval</p>
+              <span className="ml-auto text-[11px] font-semibold bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded-full">
+                {stats.awaiting_my_approval_count}
+              </span>
+              {stats.sole_blocker_count > 0 && (
+                <span className="text-[11px] font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[12px]">warning</span>
+                  {stats.sole_blocker_count} sole blocker{stats.sole_blocker_count !== 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+
+            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {(showAllAwaitingApproval
+                ? stats.awaiting_my_approval
+                : stats.awaiting_my_approval.slice(0, LIST_PREVIEW_COUNT)
+              ).map((item) => {
+                const url = item.type === "session"
+                  ? `/projects/${item.project_id}/sessions/${item.id}/sessiondetails`
+                  : `/projects/${item.id}`;
+                const featureLabel = item.features
+                  .map(f => f === "uml" ? "UML" : f === "srs" ? "SRS" : f.charAt(0).toUpperCase() + f.slice(1))
+                  .join(", ");
+                return (
+                  <li key={`${item.type}-${item.id}`}>
+                    <button
+                      onClick={() => navigate(url)}
+                      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition text-left ${
+                        item.is_sole_blocker
+                          ? "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-700/30 hover:bg-red-100 dark:hover:bg-red-900/20"
+                          : "bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-700/30 hover:bg-amber-100 dark:hover:bg-amber-900/20"
+                      }`}
+                    >
+                      <span className={`material-symbols-outlined text-[14px] shrink-0 ${item.is_sole_blocker ? "text-red-500" : "text-amber-500"}`}>
+                        {item.type === "session" ? "mic" : "folder_open"}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-800 dark:text-gray-100 truncate">{item.name}</p>
+                        <p className="text-[11px] text-gray-400 truncate">{featureLabel}</p>
+                      </div>
+                      {item.is_sole_blocker ? (
+                        <span className="text-[10px] font-bold shrink-0 text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 rounded-full">
+                          Only you left
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-semibold shrink-0 text-amber-600 dark:text-amber-400">
+                          Review needed
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            {stats.awaiting_my_approval.length > LIST_PREVIEW_COUNT && (
+              <button
+                onClick={() => setShowAllAwaitingApproval(v => !v)}
+                className="mt-1.5 text-[11px] font-semibold text-indigo-500 hover:text-indigo-600 dark:text-indigo-400 dark:hover:text-indigo-300 transition"
+              >
+                {showAllAwaitingApproval ? "Show less" : `+${stats.awaiting_my_approval.length - LIST_PREVIEW_COUNT} more`}
+              </button>
+            )}
+          </div>
+        )}
+
         {/* ── Momentum ── */}
         <div className="mb-6 bg-white dark:bg-[#1C192B] rounded-2xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
@@ -611,6 +686,58 @@ export default function UserDashboardPage() {
             })()
           ) : null}
         </div>
+
+        {/* ── Stale sessions (PM only) ── */}
+        {!loading && !isSuspended && stats?.is_pm && stats?.stale_sessions?.length > 0 && (
+          <div className="mb-6 bg-white dark:bg-[#1C192B] rounded-2xl border border-orange-200 dark:border-orange-700/40 px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="material-symbols-outlined text-[16px] text-orange-500">schedule</span>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Stale Sessions · Your Managed Projects</p>
+              <span className="ml-auto text-[11px] font-semibold bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2 py-0.5 rounded-full">
+                {stats.stale_sessions.length} session{stats.stale_sessions.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+
+            <ul className="grid grid-cols-2 sm:grid-cols-3 gap-1">
+              {(showAllStaleSessions ? stats.stale_sessions : stats.stale_sessions.slice(0, LIST_PREVIEW_COUNT)).map((s) => {
+                const daysColor = urgencyColor(s.days_stale);
+                const statusLabel =
+                  s.status === "In Progress" ? "In Progress" :
+                  s.status === "processing"   ? "Processing"  : "Pending";
+                const statusColor =
+                  s.status === "In Progress" ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" :
+                  s.status === "processing"   ? "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400" :
+                                                "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400";
+                return (
+                  <li key={s.session_id}>
+                    <button
+                      onClick={() => navigate(`/projects/${s.project_id}/sessions/${s.session_id}/sessiondetails`)}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-700/30 hover:bg-orange-100 dark:hover:bg-orange-900/20 transition text-left"
+                    >
+                      <span className="material-symbols-outlined text-[14px] text-orange-400 shrink-0">mic</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{s.title}</p>
+                        <p className="text-[11px] text-gray-400 truncate">{s.project_name}</p>
+                      </div>
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${statusColor}`}>
+                        {statusLabel}
+                      </span>
+                      <span className={`text-[11px] font-bold shrink-0 ${daysColor}`}>{s.days_stale}d</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            {stats.stale_sessions.length > LIST_PREVIEW_COUNT && (
+              <button
+                onClick={() => setShowAllStaleSessions(v => !v)}
+                className="mt-1.5 text-[11px] font-semibold text-orange-500 hover:text-orange-600 dark:text-orange-400 dark:hover:text-orange-300 transition"
+              >
+                {showAllStaleSessions ? "Show less" : `+${stats.stale_sessions.length - LIST_PREVIEW_COUNT} more`}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* ── Project charts row: status + domain ── */}
         {!loading && stats?.total_projects > 0 && (
@@ -694,57 +821,7 @@ export default function UserDashboardPage() {
         )}
 
 
-        {/* ── Stale sessions (PM only) ── */}
-        {!loading && !isSuspended && stats?.is_pm && stats?.stale_sessions?.length > 0 && (
-          <div className="mb-6 bg-white dark:bg-[#1C192B] rounded-2xl border border-orange-200 dark:border-orange-700/40 px-4 py-3 shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="material-symbols-outlined text-[16px] text-orange-500">schedule</span>
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Stale Sessions</p>
-              <span className="ml-auto text-[11px] font-semibold bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2 py-0.5 rounded-full">
-                {stats.stale_sessions.length} session{stats.stale_sessions.length !== 1 ? "s" : ""}
-              </span>
-            </div>
-
-            <ul className="grid grid-cols-2 sm:grid-cols-3 gap-1">
-              {(showAllStaleSessions ? stats.stale_sessions : stats.stale_sessions.slice(0, LIST_PREVIEW_COUNT)).map((s) => {
-                const daysColor = urgencyColor(s.days_stale);
-                const statusLabel =
-                  s.status === "In Progress" ? "In Progress" :
-                  s.status === "processing"   ? "Processing"  : "Pending";
-                const statusColor =
-                  s.status === "In Progress" ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" :
-                  s.status === "processing"   ? "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400" :
-                                                "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400";
-                return (
-                  <li key={s.session_id}>
-                    <button
-                      onClick={() => navigate(`/projects/${s.project_id}/sessions/${s.session_id}/sessiondetails`)}
-                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-700/30 hover:bg-orange-100 dark:hover:bg-orange-900/20 transition text-left"
-                    >
-                      <span className="material-symbols-outlined text-[14px] text-orange-400 shrink-0">mic</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{s.title}</p>
-                        <p className="text-[11px] text-gray-400 truncate">{s.project_name}</p>
-                      </div>
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${statusColor}`}>
-                        {statusLabel}
-                      </span>
-                      <span className={`text-[11px] font-bold shrink-0 ${daysColor}`}>{s.days_stale}d</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-            {stats.stale_sessions.length > LIST_PREVIEW_COUNT && (
-              <button
-                onClick={() => setShowAllStaleSessions(v => !v)}
-                className="mt-1.5 text-[11px] font-semibold text-orange-500 hover:text-orange-600 dark:text-orange-400 dark:hover:text-orange-300 transition"
-              >
-                {showAllStaleSessions ? "Show less" : `+${stats.stale_sessions.length - LIST_PREVIEW_COUNT} more`}
-              </button>
-            )}
-          </div>
-        )}
+        
 
         {/* ── Artifact status + type distribution row ── */}
         {!loading && stats?.total_artifacts > 0 && (

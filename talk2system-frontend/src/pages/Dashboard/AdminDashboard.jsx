@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getCurrentUser } from "../../api/authApi";
-import { fetchAdminDashboardStats, fetchActivityFeed } from "../../api/dashboardApi";
+import { fetchAdminDashboardStats, fetchActivityFeed, fetchUsersWorkloadReport } from "../../api/dashboardApi";
 import {
   getRecentWeeks, getRecentMonths, formatWeekLabel, formatMonthLabel,
   exportAuditFeedAsCSV,
@@ -19,6 +19,8 @@ function timeAgo(iso) {
 }
 
 const pct = (num, denom) => (denom > 0 ? Math.round((num / denom) * 100) : 0);
+
+const FEED_PAGE_SIZE = 6;
 
 const CHART_COLORS = [
   "#6366f1","#f59e0b","#10b981","#3b82f6","#ec4899",
@@ -105,68 +107,42 @@ function DonutChart({ segments, size = 160, thickness = 28, sublabel }) {
   );
 }
 
-// ─── BarChart (grouped) ───────────────────────────────────────────────────────
-function BarChart({ labels, datasets, height = 120, highlightIndex = null }) {
-  const maxVal = Math.max(...datasets.flatMap(d => d.values), 1);
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-end gap-1 relative" style={{ height }}>
-        {labels.map((label, i) => (
-          <div
-            key={i}
-            className="flex-1 flex items-end gap-0.5 min-w-0 relative group transition-opacity duration-300"
-            style={{ opacity: highlightIndex !== null && i !== highlightIndex ? 0.25 : 1 }}
-          >
-            {datasets.map((ds, di) => {
-              const val = ds.values[i] || 0;
-              const barHeight = (val / maxVal) * height;
-              return (
-                <div key={di} className="flex-1 flex flex-col items-center relative">
-                  <div
-                    className="flex-1 rounded-t transition-all duration-700 w-full flex items-end justify-center pb-1"
-                    style={{
-                      height: `${barHeight}px`,
-                      backgroundColor: ds.color,
-                      minHeight: val > 0 ? 2 : 0,
-                    }}
-                    title={`${ds.label}: ${val}`}
-                  >
-                    {val > 0 && barHeight > 20 && (
-                      <span className="text-[9px] font-bold text-white drop-shadow-sm">{val}</span>
-                    )}
-                  </div>
-                  {val > 0 && barHeight <= 20 && (
-                    <span className="text-[9px] font-bold text-gray-700 dark:text-gray-300 mt-0.5">{val}</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-      <div className="flex gap-1">
-        {labels.map((label, i) => (
-          <div key={i} className="flex-1 text-center min-w-0">
-            <span
-              className={`text-[9px] truncate block transition-colors duration-300 ${
-                highlightIndex !== null && i === highlightIndex
-                  ? "text-gray-700 dark:text-gray-200 font-semibold"
-                  : "text-gray-400"
-              }`}
-            >
-              {label.slice(-5)}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ─── SectionTitle ─────────────────────────────────────────────────────────────
 function SectionTitle({ children }) {
   return (
     <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">{children}</h3>
+  );
+}
+
+// ─── MiniStat (used by the per-user workload panel) ───────────────────────────
+function MiniStat({ icon, color, label, value, sub }) {
+  const colorMap = {
+    blue:   "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400",
+    purple: "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400",
+    teal:   "bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400",
+    gray:   "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400",
+  };
+  return (
+    <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-800">
+      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${colorMap[color] ?? colorMap.gray}`}>
+        <span className="material-symbols-outlined text-[14px]">{icon}</span>
+      </div>
+      <p className="text-[10px] text-gray-400">{label}</p>
+      <p className="text-base font-bold text-gray-800 dark:text-gray-100">{value}</p>
+      {sub && <p className="text-[10px] text-gray-400 truncate">{sub}</p>}
+    </div>
+  );
+}
+
+// ─── BacklogPill ────────────────────────────────────────────────────────────
+function BacklogPill({ label, value, danger }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={`text-sm font-bold tabular-nums ${danger && value > 0 ? "text-red-500" : "text-gray-700 dark:text-gray-200"}`}>
+        {value}
+      </span>
+      <span className="text-[11px] text-gray-400">{label}</span>
+    </div>
   );
 }
 
@@ -188,14 +164,41 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
 
-  const [selectedGrowthMonth,  setSelectedGrowthMonth]  = useState("");
-  const [selectedSessionWeek,  setSelectedSessionWeek]  = useState("");
+  const [selectedGrowthMonth,  setSelectedGrowthMonth]  = useState(getRecentMonths(1)[0]);
+  const [selectedSessionWeek,  setSelectedSessionWeek]  = useState(getRecentWeeks(1)[0]);
 
   const [feedFilterType,  setFeedFilterType]  = useState("all");
   const [feedFilterValue, setFeedFilterValue] = useState("");
   const [feedEntries,     setFeedEntries]     = useState(null);
   const [feedLoading,     setFeedLoading]     = useState(false);
   const [feedError,       setFeedError]       = useState(null);
+  const [feedPage,        setFeedPage]        = useState(1);
+
+  const [workload,        setWorkload]        = useState(null);
+  const [workloadLoading, setWorkloadLoading]  = useState(true);
+  const [workloadError,   setWorkloadError]    = useState(null);
+  const [workloadSearch,  setWorkloadSearch]   = useState("");
+  const [selectedWorkloadUserId, setSelectedWorkloadUserId] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setWorkloadLoading(true);
+        setWorkloadError(null);
+        const data = await fetchUsersWorkloadReport();
+        if (!cancelled) {
+          setWorkload(data);
+          if (data.length > 0) setSelectedWorkloadUserId(data[0].user_id);
+        }
+      } catch (e) {
+        if (!cancelled) setWorkloadError(e.message);
+      } finally {
+        if (!cancelled) setWorkloadLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -213,6 +216,19 @@ export default function AdminDashboard() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Guard against client/server clock skew at a month or week boundary —
+  // fall back to the latest available period instead of pointing at a missing option.
+  useEffect(() => {
+    const months = stats?.platform_growth?.months;
+    if (months?.length && !months.includes(selectedGrowthMonth)) {
+      setSelectedGrowthMonth(months[months.length - 1]);
+    }
+    const weeks = stats?.sessions_per_week?.weeks;
+    if (weeks?.length && !weeks.includes(selectedSessionWeek)) {
+      setSelectedSessionWeek(weeks[weeks.length - 1]);
+    }
+  }, [stats]);
 
   useEffect(() => {
     if (feedFilterType === "all") {
@@ -237,6 +253,12 @@ export default function AdminDashboard() {
     return () => { cancelled = true; };
   }, [feedFilterType, feedFilterValue]);
 
+  // Reset to page 1 whenever the feed filter changes so pagination doesn't
+  // point at a page that no longer exists for the new result set.
+  useEffect(() => {
+    setFeedPage(1);
+  }, [feedFilterType, feedFilterValue]);
+
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background-light dark:bg-background-dark">
@@ -252,8 +274,14 @@ export default function AdminDashboard() {
 
   // Derived totals
   const availableUsers    = stats ? (stats.user_status_distribution?.values ?? []).reduce((a, b) => a + b, 0) : 0;
-  const totalSessions  = stats ? (stats.sessions_per_week?.counts ?? []).reduce((a, b) => a + b, 0) : 0;
   const totalTasksDone = stats ? (stats.task_completion_time ?? []).reduce((s, t) => s + t.sample_count, 0) : 0;
+
+  const filteredWorkloadUsers = (workload ?? []).filter(u =>
+    !workloadSearch
+    || u.name?.toLowerCase().includes(workloadSearch.toLowerCase())
+    || u.email?.toLowerCase().includes(workloadSearch.toLowerCase())
+  );
+  const selectedWorkloadUser = (workload ?? []).find(u => u.user_id === selectedWorkloadUserId) ?? null;
 
   return (
     <div className="flex min-h-screen font-display bg-background-light dark:bg-background-dark text-gray-900 dark:text-gray-100">
@@ -312,9 +340,9 @@ export default function AdminDashboard() {
               loading={loading}
               icon="mic"
               iconBg="bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400"
-              label="Sessions (6 weeks)"
-              value={totalSessions || undefined}
-              sub={stats?.sessions_per_week?.weeks?.length > 0 ? `across ${stats.sessions_per_week.weeks.length} weeks` : undefined}
+              label="Sessions"
+              value={stats?.total_sessions || undefined}
+              sub={stats?.projects_with_sessions > 0 ? `across ${stats.projects_with_sessions} project${stats.projects_with_sessions !== 1 ? "s" : ""}` : undefined}
             />
 
             <StatCard
@@ -329,7 +357,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* ── Platform Growth + Sessions per week*/}  
+        {/* ── Platform Growth + Sessions per week*/}
         <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
 
           <Card>
@@ -341,55 +369,33 @@ export default function AdminDashboard() {
                   onChange={e => setSelectedGrowthMonth(e.target.value)}
                   className="text-[11px] bg-white dark:bg-[#1C192B] border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-0.5 text-gray-500 dark:text-gray-400 focus:outline-none focus:border-primary shrink-0"
                 >
-                  <option value="">All months</option>
-                  {stats.platform_growth.months.map(m => (
-                    <option key={m} value={m}>{m}</option>
+                  {[...stats.platform_growth.months].reverse().map(m => (
+                    <option key={m} value={m}>{formatMonthLabel(m)}</option>
                   ))}
                 </select>
               )}
             </div>
-            <p className="text-[11px] text-gray-400 mb-4">New users &amp; projects per month (last 12 months)</p>
+            <p className="text-[12px] text-gray-400 mb-4">New users &amp; projects for the selected month</p>
             {loading ? (
               <Skeleton className="h-32 w-full" />
-            ) : stats?.platform_growth?.months?.length > 0 ? (
-              <>
-                {selectedGrowthMonth && (() => {
-                  const idx   = stats.platform_growth.months.indexOf(selectedGrowthMonth);
-                  const users = stats.platform_growth.new_users[idx]    ?? 0;
-                  const projs = stats.platform_growth.new_projects[idx] ?? 0;
-                  return (
-                    <div className="flex items-center gap-6 mb-4 px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
-                      <div className="flex flex-col items-center">
-                        <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400 tabular-nums">{users}</span>
-                        <span className="text-[10px] text-gray-400 mt-0.5">New Users</span>
-                      </div>
-                      <div className="w-px h-10 bg-gray-200 dark:bg-gray-700" />
-                      <div className="flex flex-col items-center">
-                        <span className="text-2xl font-black text-emerald-500 dark:text-emerald-400 tabular-nums">{projs}</span>
-                        <span className="text-[10px] text-gray-400 mt-0.5">New Projects</span>
-                      </div>
-                    </div>
-                  );
-                })()}
-                <BarChart
-                  labels={stats.platform_growth.months}
-                  height={120}
-                  highlightIndex={selectedGrowthMonth ? stats.platform_growth.months.indexOf(selectedGrowthMonth) : null}
-                  datasets={[
-                    { label: "New Users",    values: stats.platform_growth.new_users,    color: "#6366f1" },
-                    { label: "New Projects", values: stats.platform_growth.new_projects, color: "#10b981" },
-                  ]}
-                />
-                <div className="flex items-center gap-4 mt-3">
-                  {[{ label: "New Users", color: "#6366f1" }, { label: "New Projects", color: "#10b981" }].map(({ label, color }) => (
-                    <div key={label} className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: color }} />
-                      <span className="text-[11px] text-gray-400">{label}</span>
-                    </div>
-                  ))}
+            ) : stats?.platform_growth?.months?.length > 0 ? (() => {
+              const idx   = stats.platform_growth.months.indexOf(selectedGrowthMonth);
+              const users = stats.platform_growth.new_users[idx]    ?? 0;
+              const projs = stats.platform_growth.new_projects[idx] ?? 0;
+              return (
+                <div className="flex items-center gap-6 px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
+                  <div className="flex flex-col items-center">
+                    <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400 tabular-nums">{users}</span>
+                    <span className="text-[10px] text-gray-400 mt-0.5">New Users</span>
+                  </div>
+                  <div className="w-px h-10 bg-gray-200 dark:bg-gray-700" />
+                  <div className="flex flex-col items-center">
+                    <span className="text-2xl font-black text-emerald-500 dark:text-emerald-400 tabular-nums">{projs}</span>
+                    <span className="text-[10px] text-gray-400 mt-0.5">New Projects</span>
+                  </div>
                 </div>
-              </>
-            ) : (
+              );
+            })() : (
               <EmptyState icon="bar_chart" label="No growth data yet" />
             )}
           </Card>
@@ -403,47 +409,271 @@ export default function AdminDashboard() {
                   onChange={e => setSelectedSessionWeek(e.target.value)}
                   className="text-[11px] bg-white dark:bg-[#1C192B] border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-0.5 text-gray-500 dark:text-gray-400 focus:outline-none focus:border-primary shrink-0"
                 >
-                  <option value="">All weeks</option>
-                  {stats.sessions_per_week.weeks.map(w => (
-                    <option key={w} value={w}>{w}</option>
+                  {[...stats.sessions_per_week.weeks].reverse().map(w => (
+                    <option key={w} value={w}>{formatWeekLabel(w)}</option>
                   ))}
                 </select>
               )}
             </div>
-            <p className="text-[11px] text-gray-400 mb-4">Last 6 weeks</p>
+            <p className="text-[12px] text-gray-400 mb-4">Sessions created in the selected week</p>
             {loading ? (
               <Skeleton className="h-32 w-full" />
-            ) : stats?.sessions_per_week?.weeks?.length > 0 ? (
-              <>
-                {selectedSessionWeek && (() => {
-                  const idx   = stats.sessions_per_week.weeks.indexOf(selectedSessionWeek);
-                  const count = stats.sessions_per_week.counts[idx] ?? 0;
-                  return (
-                    <div className="flex items-center gap-4 mb-4 px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
-                      <div className="flex flex-col items-center">
-                        <span className="text-2xl font-black text-purple-600 dark:text-purple-400 tabular-nums">{count}</span>
-                        <span className="text-[10px] text-gray-400 mt-0.5">Sessions this week</span>
-                      </div>
-                    </div>
-                  );
-                })()}
-                <BarChart
-                  labels={stats.sessions_per_week.weeks}
-                  height={120}
-                  highlightIndex={selectedSessionWeek ? stats.sessions_per_week.weeks.indexOf(selectedSessionWeek) : null}
-                  datasets={[{ label: "Sessions", values: stats.sessions_per_week.counts, color: "#8b5cf6" }]}
-                />
-              </>
-            ) : (
+            ) : stats?.sessions_per_week?.weeks?.length > 0 ? (() => {
+              const idx   = stats.sessions_per_week.weeks.indexOf(selectedSessionWeek);
+              const count = stats.sessions_per_week.counts[idx] ?? 0;
+              return (
+                <div className="flex items-center gap-4 px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
+                  <div className="flex flex-col items-center">
+                    <span className="text-2xl font-black text-purple-600 dark:text-purple-400 tabular-nums">{count}</span>
+                    <span className="text-[10px] text-gray-400 mt-0.5">Sessions this week</span>
+                  </div>
+                </div>
+              );
+            })() : (
               <EmptyState icon="mic" label="No sessions this period" />
             )}
           </Card>
 
         </div>
 
-        {/* Projects per PM ── */}
-        <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* ── Per-User Engagement & Workload ── */}
+        <div className="mb-6">
+          <SectionTitle>Per-User Engagement &amp; Workload</SectionTitle>
+          <Card>
+            {workloadLoading ? (
+              <div className="flex flex-col gap-3">
+                {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+              </div>
+            ) : workloadError ? (
+              <div className="flex flex-col items-center gap-2 py-8 text-red-400">
+                <span className="material-symbols-outlined text-3xl">error</span>
+                <p className="text-xs font-medium">{workloadError}</p>
+              </div>
+            ) : (workload ?? []).length === 0 ? (
+              <EmptyState icon="groups" label="No active users yet" />
+            ) : (
+              <div className="flex flex-col md:flex-row gap-6">
 
+                {/* User picker / filter */}
+                <div className="md:w-64 shrink-0 flex flex-col gap-2">
+                  <div className="relative">
+                    <span className="material-symbols-outlined text-[16px] text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2">search</span>
+                    <input
+                      type="text"
+                      value={workloadSearch}
+                      onChange={e => setWorkloadSearch(e.target.value)}
+                      placeholder="Filter active users…"
+                      className="w-full text-xs bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg pl-8 pr-2.5 py-2 text-gray-700 dark:text-gray-200 placeholder:text-gray-400 focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1 max-h-[380px] overflow-y-auto pr-1">
+                    {filteredWorkloadUsers.length === 0 ? (
+                      <p className="text-[11px] text-gray-400 text-center py-4">No matches</p>
+                    ) : filteredWorkloadUsers.map(u => {
+                      const active  = u.user_id === selectedWorkloadUserId;
+                      const flagged = u.sole_blocker_count > 0;
+                      return (
+                        <button
+                          key={u.user_id}
+                          onClick={() => setSelectedWorkloadUserId(u.user_id)}
+                          className={`flex items-center gap-2 text-left px-2.5 py-2 rounded-lg border transition ${
+                            active
+                              ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-700"
+                              : "bg-transparent border-transparent hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{u.name}</p>
+                            <p className="text-[10px] text-gray-400 truncate">{u.email}</p>
+                          </div>
+                          {flagged && (
+                            <span className="material-symbols-outlined text-[14px] text-red-500 shrink-0" title="Sole blocker on at least one item">warning</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Metrics panel */}
+                <div className="flex-1 min-w-0 md:border-l md:border-gray-100 md:dark:border-gray-800 md:pl-6">
+                  {!selectedWorkloadUser ? (
+                    <EmptyState icon="person_search" label="Select a user to view their workload" />
+                  ) : (
+                    <div className="flex flex-col gap-5">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                          <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{selectedWorkloadUser.name}</p>
+                          <p className="text-[11px] text-gray-400">{selectedWorkloadUser.email}</p>
+                        </div>
+                        <span className="text-[11px] text-gray-400">
+                          Last active {timeAgo(selectedWorkloadUser.last_activity_at)}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <MiniStat
+                          icon="folder_open" color="blue"
+                          label="Active Projects"
+                          value={selectedWorkloadUser.active_projects_as_pm + selectedWorkloadUser.active_projects_as_participant}
+                          sub={`${selectedWorkloadUser.active_projects_as_pm} as PM · ${selectedWorkloadUser.active_projects_as_participant} as participant`}
+                        />
+                        <MiniStat
+                          icon="mic" color="purple"
+                          label="Concurrent In-Progress"
+                          value={selectedWorkloadUser.concurrent_in_progress_sessions}
+                          sub={`${selectedWorkloadUser.concurrent_in_progress_as_owner} as owner`}
+                        />
+                        <MiniStat
+                          icon="groups" color="teal"
+                          label="Session Participation in their projects"
+                          value={selectedWorkloadUser.participation_rate_pct != null ? `${selectedWorkloadUser.participation_rate_pct}%` : "—"}
+                          sub={`${selectedWorkloadUser.sessions_joined_in_my_projects}/${selectedWorkloadUser.sessions_held_in_my_projects} sessions joined vs. sessions held `}
+                        />
+                        <MiniStat
+                          icon="logout" color="gray"
+                          label="Projects Left"
+                          value={selectedWorkloadUser.projects_left_count}
+                          sub="historical churn"
+                        />
+                      </div>
+
+                      {/* PM backlog — delays in projects they manage */}
+                      <div>
+                        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                          Delays In Their Managed Projects
+                        </p>
+                        {!selectedWorkloadUser.is_pm ? (
+                          <p className="text-xs text-gray-400">Not a PM in any project</p>
+                        ) : selectedWorkloadUser.pm_backlog.total === 0 ? (
+                          <p className="text-xs text-gray-400">No pending backlog</p>
+                        ) : (
+                          <div className="flex items-center gap-5 flex-wrap">
+                            <BacklogPill label="Transcripts" value={selectedWorkloadUser.pm_backlog.sessions} />
+                            <BacklogPill label="Requirements" value={selectedWorkloadUser.pm_backlog.requirements} />
+                            <BacklogPill label="Artifacts" value={selectedWorkloadUser.pm_backlog.artifacts} />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Awaiting their own approval — distinct from the backlog above */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                            Awaiting Their Approval
+                          </p>
+                          {selectedWorkloadUser.sole_blocker_count > 0 && (
+                            <span className="text-[10px] font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[11px]">warning</span>
+                              Sole blocker on {selectedWorkloadUser.sole_blocker_count}
+                            </span>
+                          )}
+                        </div>
+                        {selectedWorkloadUser.awaiting_my_approval.total === 0 ? (
+                          <p className="text-xs text-gray-400">Fully caught up on approvals</p>
+                        ) : (
+                          <div className="flex items-center gap-5 flex-wrap">
+                            <BacklogPill label="Transcripts" value={selectedWorkloadUser.awaiting_my_approval.sessions} danger={selectedWorkloadUser.sole_blocker_count > 0} />
+                            <BacklogPill label="Requirements" value={selectedWorkloadUser.awaiting_my_approval.requirements} danger={selectedWorkloadUser.sole_blocker_count > 0} />
+                            <BacklogPill label="Artifacts" value={selectedWorkloadUser.awaiting_my_approval.artifacts} danger={selectedWorkloadUser.sole_blocker_count > 0} />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-6 text-[11px] text-gray-400 pt-2 border-t border-gray-100 dark:border-gray-800">
+                        <span>Last session joined: {timeAgo(selectedWorkloadUser.last_session_joined_at)}</span>
+                        <span>Last approval given: {timeAgo(selectedWorkloadUser.last_approval_at)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            )}
+          </Card>
+        </div>
+
+
+        {/* ── Most Active Users + Inactive Users + Projects per PM ── */}
+        <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+
+          <Card>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Most Active Users </p>
+            <p className="text-[12px] text-gray-400 mb-4">By sessions participation &amp; approvals made</p>
+            {loading ? (
+              <div className="flex flex-col gap-3">
+                {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+              </div>
+            ) : stats?.most_active_users?.length > 0 ? (
+              <div className="flex flex-col divide-y divide-gray-100 dark:divide-gray-800">
+                {stats.most_active_users.map((u, i) => (
+                  <div key={u.user_id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                    <span className="text-[11px] font-bold text-gray-400 w-4 shrink-0">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{u.name}</p>
+                      <p className="text-[10px] text-gray-400 truncate">{u.email}</p>
+                      <p className="text-[10px] text-gray-400 truncate">
+                        {u.sessions_participated} sessions · {u.approvals_given} approvals
+                      </p>
+                    </div>
+                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 shrink-0 tabular-nums">
+                      {u.total_activity}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState icon="leaderboard" label="No activity data yet" />
+            )}
+          </Card>
+
+          {/* Inactive Users */}
+          <Card border="border-red-100 dark:border-red-700/40">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="material-symbols-outlined text-[16px] text-red-400">person_off</span>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                Approved but never engaged Users
+              </p>
+              {!loading && stats?.inactive_users?.length > 0 && (
+                <span className="ml-auto text-[11px] font-semibold bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 px-2 py-0.5 rounded-full">
+                  {stats.inactive_users.length}
+                </span>
+              )}
+            </div>
+            <p className="text-[12px] text-gray-400 mb-4">Never participated in any session since registration</p>
+            {loading ? (
+              <div className="flex flex-col gap-3">
+                {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+              </div>
+            ) : stats?.inactive_users?.length > 0 ? (
+              <div className="flex flex-col gap-2 max-h-[260px] overflow-y-auto pr-1">
+                {stats.inactive_users.slice(0, 8).map((u) => (
+                  <div key={u.user_id}
+                    className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-700/20">
+                    <div className="w-7 h-7 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-[14px] text-red-400">person</span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{u.name}</p>
+                      <p className="text-[10px] text-gray-400 truncate">{u.email}</p>
+                    </div>
+                    {u.days_since_registration != null && (
+                      <span className="text-[11px] font-bold text-red-500 dark:text-red-400 shrink-0">
+                        {u.days_since_registration}d
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2 py-8 text-gray-400 dark:text-gray-600">
+                <span className="material-symbols-outlined text-3xl">check_circle</span>
+                <p className="text-xs font-medium">All approved users have engaged in sessions</p>
+              </div>
+            )}
+          </Card>
+
+          {/* Projects per PM ── */}
           <Card>
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Projects per PM</p>
             {loading ? (
@@ -478,84 +708,9 @@ export default function AdminDashboard() {
 
         </div>
 
-        {/* ── Most Active Users + Inactive Users ── */}
-        <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
 
-          <Card>
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Most Active Users</p>
-            {loading ? (
-              <div className="flex flex-col gap-3">
-                {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
-              </div>
-            ) : stats?.most_active_users?.length > 0 ? (
-              <div className="flex flex-col divide-y divide-gray-100 dark:divide-gray-800">
-                {stats.most_active_users.map((u, i) => (
-                  <div key={u.user_id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-                    <span className="text-[11px] font-bold text-gray-400 w-4 shrink-0">{i + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{u.name}</p>
-                      <p className="text-[10px] text-gray-400 truncate">{u.email}</p>
-                      <p className="text-[10px] text-gray-400 truncate">
-                        {u.sessions_participated} sessions · {u.approvals_given} approvals
-                      </p>
-                    </div>
-                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 shrink-0 tabular-nums">
-                      {u.total_activity}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState icon="leaderboard" label="No activity data yet" />
-            )}
-          </Card>
-
-          <Card border="border-red-100 dark:border-red-700/40">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="material-symbols-outlined text-[16px] text-red-400">person_off</span>
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                Inactive Users
-                <span className="ml-2 font-normal normal-case text-gray-400">— no session in last 60 days</span>
-              </p>
-              {!loading && stats?.inactive_users?.length > 0 && (
-                <span className="ml-auto text-[11px] font-semibold bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 px-2 py-0.5 rounded-full">
-                  {stats.inactive_users.length}
-                </span>
-              )}
-            </div>
-            {loading ? (
-              <div className="flex flex-col gap-3">
-                {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
-              </div>
-            ) : stats?.inactive_users?.length > 0 ? (
-              <div className="flex flex-col gap-2 max-h-[260px] overflow-y-auto pr-1">
-                {stats.inactive_users.slice(0, 8).map((u) => (
-                  <div key={u.user_id}
-                    className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-700/20">
-                    <div className="w-7 h-7 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
-                      <span className="material-symbols-outlined text-[14px] text-red-400">person</span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{u.name}</p>
-                      <p className="text-[10px] text-gray-400 truncate">{u.email}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-2 py-8 text-gray-400 dark:text-gray-600">
-                <span className="material-symbols-outlined text-3xl">check_circle</span>
-                <p className="text-xs font-medium">No inactive users</p>
-              </div>
-            )}
-          </Card>
-
-        </div>
-
-        
         {/* ── Action Distribution  ── */}
         <div className="mb-6 grid grid-cols-1 gap-6">
-
           <Card>
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Most Common Actions</p>
             {loading ? (
@@ -588,8 +743,8 @@ export default function AdminDashboard() {
 
         </div>
 
-        {/* ── + Task Type Distribution + Successful & Failed Task Distribution ── */}
-        <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* ── Task Type Distribution + Successful & Failed Task Distribution + Avg Task completion time── */}
+        <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-6">
 
           <Card>
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-5">Successed Background Tasks Distribution</p>
@@ -632,6 +787,7 @@ export default function AdminDashboard() {
             )}
           </Card>
 
+          {/* Successful & Failed Task Distribution */}
           <Card>
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-5">Failed vs Successed Task Types</p>
             {loading ? (
@@ -681,11 +837,7 @@ export default function AdminDashboard() {
             )}
           </Card>
 
-        </div>
-
-        {/* ── Task Completion Time ── */}
-        <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-
+          {/* ── Task Completion Time ── */}
           <Card>
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Avg Task Completion Time</p>
             {loading ? (
@@ -772,6 +924,7 @@ export default function AdminDashboard() {
                     </button>
                   ) : null;
                 })()}
+               
               </div>
             </div>
 
@@ -821,30 +974,60 @@ export default function AdminDashboard() {
 
               if (displayFeed.length === 0) return <EmptyState icon="inbox" label="No audit events for this period" />;
 
+              const totalPages  = Math.max(1, Math.ceil(displayFeed.length / FEED_PAGE_SIZE));
+              const currentPage = Math.min(feedPage, totalPages);
+              const pagedFeed   = displayFeed.slice(
+                (currentPage - 1) * FEED_PAGE_SIZE,
+                currentPage * FEED_PAGE_SIZE
+              );
+
               return (
-                <ul className="flex flex-col divide-y divide-gray-100 dark:divide-gray-800 max-h-[420px] overflow-y-auto pr-1">
-                  {displayFeed.map((e) => (
-                    <li key={e.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-                      <div className="p-2 rounded-xl shrink-0 bg-indigo-50 dark:bg-indigo-900/20">
-                        <span className="material-symbols-outlined text-[16px] text-indigo-500">history</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{e.action}</span>
-                          <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
-                            {e.entity}
-                          </span>
+                <>
+                  <ul className="flex flex-col divide-y divide-gray-100 dark:divide-gray-800 max-h-[420px] overflow-y-auto pr-1">
+                    {pagedFeed.map((e) => (
+                      <li key={e.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                        <div className="p-2 rounded-xl shrink-0 bg-indigo-50 dark:bg-indigo-900/20">
+                          <span className="material-symbols-outlined text-[16px] text-indigo-500">history</span>
                         </div>
-                        <p className="text-[11px] text-gray-400 mt-0.5 truncate">
-                          {e.user_name ?? `User #${e.user_id}`}
-                          {e.user_email ? ` · ${e.user_email}` : ""}
-                          {e.project_name ? ` · ${e.project_name}` : ""}
-                        </p>
-                      </div>
-                      <span className="text-[11px] text-gray-400 shrink-0 whitespace-nowrap">{timeAgo(e.created_at)}</span>
-                    </li>
-                  ))}
-                </ul>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{e.action}</span>
+                            <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                              {e.entity}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+                            {e.user_name ?? `User #${e.user_id}`}
+                            {e.user_email ? ` · ${e.user_email}` : ""}
+                            {e.project_name ? ` · ${e.project_name}` : ""}
+                          </p>
+                        </div>
+                        <span className="text-[11px] text-gray-400 shrink-0 whitespace-nowrap">{timeAgo(e.created_at)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {displayFeed.length > FEED_PAGE_SIZE && (
+                    <div className="flex items-center justify-between gap-3 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+                      <button
+                        onClick={() => setFeedPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="text-[11px] font-semibold px-3 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 disabled:opacity-40 disabled:cursor-not-allowed hover:border-indigo-400 transition"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-[11px] text-gray-400">
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <button
+                        onClick={() => setFeedPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="text-[11px] font-semibold px-3 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 disabled:opacity-40 disabled:cursor-not-allowed hover:border-indigo-400 transition"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </>
               );
             })()}
           </Card>

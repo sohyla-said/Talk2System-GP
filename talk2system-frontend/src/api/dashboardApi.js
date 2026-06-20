@@ -45,6 +45,15 @@ export async function fetchActivityFeed(filterBy = "all", filterValue = "") {
   return data;
 }
 
+export async function fetchUsersWorkloadReport() {
+  const res = await fetch(`${BASE_URL}/api/dashboard/admin/users-workload`, {
+    headers: authHeaders(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to fetch users workload report");
+  return data;
+}
+
 export async function fetchUserActivityFeed(filterBy = "all", filterValue = "") {
   const params = new URLSearchParams({ filter_by: filterBy });
   if (filterValue) params.set("filter_value", filterValue);
