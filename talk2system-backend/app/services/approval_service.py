@@ -157,6 +157,55 @@ class ApprovalService:
         db.commit()
 
     # ─────────────────────────────────────────────────────────────
+    # PUBLIC: items awaiting THIS user's approval across all their
+    # sessions. Distinct from "session is pending" (true if ANY member
+    # hasn't approved) — each row here is a (session, feature) pair
+    # where THIS user specifically has no approval row for the latest
+    # version.
+    # ─────────────────────────────────────────────────────────────
+    @staticmethod
+    def get_pending_for_user(db: Session, user_id: int) -> list:
+        memberships = (
+            db.query(SessionMembership)
+            .filter(SessionMembership.user_id == user_id)
+            .all()
+        )
+        pending = []
+        for m in memberships:
+            for feature in FEATURES:
+                if not ApprovalService._feature_exists(db, m.session_id, feature):
+                    continue
+                version_id = ApprovalService._latest_version_id(db, m.session_id, feature)
+                already_approved = (
+                    db.query(Approval)
+                    .filter(
+                        Approval.session_id == m.session_id,
+                        Approval.user_id == user_id,
+                        Approval.feature == feature,
+                        Approval.version_id == version_id,
+                    )
+                    .first()
+                )
+                if already_approved:
+                    continue
+                total = ApprovalService._members_count(db, m.session_id)
+                approved_count = (
+                    db.query(Approval)
+                    .filter(
+                        Approval.session_id == m.session_id,
+                        Approval.feature == feature,
+                        Approval.version_id == version_id,
+                    )
+                    .count()
+                )
+                pending.append({
+                    "session_id": m.session_id,
+                    "feature": feature,
+                    "is_sole_blocker": total > 0 and approved_count == total - 1,
+                })
+        return pending
+
+    # ─────────────────────────────────────────────────────────────
     # PRIVATE HELPERS
     # ─────────────────────────────────────────────────────────────
 

@@ -47,6 +47,14 @@ def get_activity_feed(
     return DashboardService.get_activity_feed_filtered(db, filter_by=filter_by, filter_value=filter_value)
 
 
+@router.get("/admin/users-workload")
+def get_users_workload_report(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    return DashboardService.get_users_workload_report(db, current_user)
+
+
 @router.get("/user-activity-feed")
 def get_user_activity_feed(
     filter_by: str = Query("all", pattern="^(all|week|month)$"),

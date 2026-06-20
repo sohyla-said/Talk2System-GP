@@ -158,6 +158,59 @@ class ProjectApprovalService:
         return "in_progress"
 
     # ─────────────────────────────────────────────
+    # ITEMS AWAITING THIS USER'S APPROVAL ACROSS ALL THEIR PROJECTS
+    # (mirrors ApprovalService.get_pending_for_user, project-level)
+    # ─────────────────────────────────────────────
+    @staticmethod
+    def get_pending_for_user(db: Session, user_id: int) -> list:
+        memberships = (
+            db.query(ProjectMembership)
+            .filter(ProjectMembership.user_id == user_id, ProjectMembership.left_at.is_(None))
+            .all()
+        )
+        pending = []
+        for m in memberships:
+            for feature in PROJECT_FEATURES:
+                if not ProjectApprovalService._feature_exists(db, m.project_id, feature):
+                    continue
+                version_id = ProjectApprovalService._latest_version_id(db, m.project_id, feature)
+                already_approved = (
+                    db.query(ProjectApproval)
+                    .filter(
+                        ProjectApproval.project_id == m.project_id,
+                        ProjectApproval.user_id == user_id,
+                        ProjectApproval.feature == feature,
+                        ProjectApproval.version_id == version_id,
+                    )
+                    .first()
+                )
+                if already_approved:
+                    continue
+                active_member_ids = {
+                    mm.user_id for mm in db.query(ProjectMembership).filter(
+                        ProjectMembership.project_id == m.project_id,
+                        ProjectMembership.left_at.is_(None),
+                    ).all()
+                }
+                total = len(active_member_ids)
+                approved_count = (
+                    db.query(ProjectApproval)
+                    .filter(
+                        ProjectApproval.project_id == m.project_id,
+                        ProjectApproval.feature == feature,
+                        ProjectApproval.version_id == version_id,
+                        ProjectApproval.user_id.in_(active_member_ids),
+                    )
+                    .count()
+                )
+                pending.append({
+                    "project_id": m.project_id,
+                    "feature": feature,
+                    "is_sole_blocker": total > 0 and approved_count == total - 1,
+                })
+        return pending
+
+    # ─────────────────────────────────────────────
     # PRIVATE HELPERS
     # ─────────────────────────────────────────────
     @staticmethod

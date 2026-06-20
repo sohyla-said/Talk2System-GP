@@ -1,4 +1,4 @@
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, APIRouter, Depends, Query
 from sqlalchemy.orm import Session, joinedload
@@ -11,6 +11,7 @@ from app.models.project import Project
 from app.models.session_membership import SessionMembership
 from app.models.session import Session as SessionModel
 from app.models.session_requirement import SessionRequirement
+from app.models.project_requirments import ProjectRequirement
 from app.models.artifact import Artifact
 from app.models.artifact_type import ArtifactType
 from app.models.requirement_runs import RequirementRun
@@ -19,6 +20,8 @@ from app.models.background_task import BackgroundTask
 from app.models.audit_log import AuditLog
 from app.models.approval import Approval
 from app.models.project_approval import ProjectApproval
+from app.services.approval_service import ApprovalService
+from app.services.project_approval_service import ProjectApprovalService
 
 class DashboardService:
 
@@ -150,13 +153,14 @@ class DashboardService:
         # 7) Recent activity feed
         recent_activity = _build_activity_feed(db, user, project_ids, session_ids)
 
+        project_name_map = {p.id: p.name for p in user_projects}
+
         # 8) Stale sessions (PM only) — in-progress / pending for > 3 days
         _STALE_STATUSES = ["in_progress", "pending approval", "pending_approval", "processing"]
         # _STALE_STATUSES = ["in_progress", "pending_approval"]
         _stale_cutoff   = datetime.utcnow() - timedelta(days=3)
         stale_sessions  = []
         if pm_project_ids:
-            project_name_map = {p.id: p.name for p in user_projects}
             stale_rows = (
                 db.query(SessionModel)
                 .filter(
@@ -177,8 +181,15 @@ class DashboardService:
                     "days_stale":   (datetime.utcnow() - s.created_at).days,
                 })
 
-        # 9) Sessions and projects pending user approval — oldest first, so the
-        # longest-waiting items surface at the top and get attention first.
+        # 9) Sessions and projects pending approval IN GENERAL (someone — anyone
+        # — hasn't approved the latest version), scoped to projects this user
+        # manages as PM. This is a "your projects are delayed" alert, not tied
+        # to whether THIS user personally still owes an approval — see (10).
+        pm_projects = [p for p in user_projects if p.id in set(pm_project_ids)]
+        pm_session_rows = (
+            db.query(SessionModel).filter(SessionModel.project_id.in_(pm_project_ids)).all()
+            if pm_project_ids else []
+        )
         projects_pending = sorted(
             [
                 {
@@ -188,7 +199,7 @@ class DashboardService:
                     # created_at is only a fallback for rows that predate that field.
                     "days_waiting": (datetime.utcnow() - (p.pending_since or p.created_at)).days if p.created_at else 0,
                 }
-                for p in user_projects if p.project_status == "pending_approval"
+                for p in pm_projects if p.project_status == "pending_approval"
             ],
             key=lambda x: x["days_waiting"],
             reverse=True,
@@ -201,11 +212,56 @@ class DashboardService:
                     "project_id": s.project_id,
                     "days_waiting": (datetime.utcnow() - (s.pending_since or s.created_at)).days if s.created_at else 0,
                 }
-                for s in user_sesions if s.status == "pending_approval" or s.status == "pending approval"
+                for s in pm_session_rows if s.status in ("pending_approval", "pending approval")
             ],
             key=lambda x: x["days_waiting"],
             reverse=True,
         )
+
+        # 10) Items awaiting THIS user's own approval — the user is a current
+        # member, the feature exists, but their approval row is missing for
+        # the latest version. Grouped per session/project so an entity with
+        # multiple unapproved features (e.g. requirements + uml) shows once.
+        # is_sole_blocker means every other member already approved — this
+        # user is the only thing standing between it and "approved".
+        session_name_map = {s.id: s.title for s in user_sesions}
+        session_project_map = {s.id: s.project_id for s in user_sesions}
+        awaiting_by_key = {}
+
+        for item in ApprovalService.get_pending_for_user(db, user.id):
+            sid = item["session_id"]
+            if sid not in session_name_map:
+                continue
+            entry = awaiting_by_key.setdefault(("session", sid), {
+                "type": "session",
+                "id": sid,
+                "name": session_name_map[sid],
+                "project_id": session_project_map[sid],
+                "features": [],
+                "is_sole_blocker": False,
+            })
+            entry["features"].append(item["feature"])
+            entry["is_sole_blocker"] = entry["is_sole_blocker"] or item["is_sole_blocker"]
+
+        for item in ProjectApprovalService.get_pending_for_user(db, user.id):
+            pid = item["project_id"]
+            if pid not in project_name_map:
+                continue
+            entry = awaiting_by_key.setdefault(("project", pid), {
+                "type": "project",
+                "id": pid,
+                "name": project_name_map[pid],
+                "features": [],
+                "is_sole_blocker": False,
+            })
+            entry["features"].append(item["feature"])
+            entry["is_sole_blocker"] = entry["is_sole_blocker"] or item["is_sole_blocker"]
+
+        awaiting_my_approval = sorted(
+            awaiting_by_key.values(),
+            key=lambda x: not x["is_sole_blocker"],  # sole blockers first
+        )
+        sole_blocker_count = sum(1 for x in awaiting_my_approval if x["is_sole_blocker"])
 
         return {
         "total_projects": total_projects,
@@ -252,6 +308,10 @@ class DashboardService:
         "sessions_pending_approval": sessions_pending,
         "stale_sessions": stale_sessions,
         "recent_activity": recent_activity,
+
+        "awaiting_my_approval": awaiting_my_approval,
+        "awaiting_my_approval_count": len(awaiting_my_approval),
+        "sole_blocker_count": sole_blocker_count,
     }
 
     @staticmethod
@@ -310,8 +370,18 @@ class DashboardService:
         if current_user.role != "admin":
             raise HTTPException(403, "Users must use /api/dashboard/user-stats")
 
-        # 1) Platform growth — new users + new projects per month (last 12 months)
-        cutoff_12m = datetime.now(timezone.utc) - timedelta(days=12 * 30)
+        # 1) Platform growth — new users + new projects per month (last 12 months,
+        # zero-filled so the current month is always present even with no activity)
+        now = datetime.now(timezone.utc)
+        current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_starts = []
+        for i in range(11, -1, -1):
+            month_index = current_month_start.month - 1 - i
+            year  = current_month_start.year + month_index // 12
+            month = month_index % 12 + 1
+            month_starts.append(datetime(year, month, 1, tzinfo=timezone.utc))
+        cutoff_12m = month_starts[0]
+
         user_rows = (
             db.query(
                 func.date_trunc("month", User.created_at).label("month"),
@@ -334,7 +404,7 @@ class DashboardService:
         )
         user_map = _to_dict(user_rows)
         project_map = _to_dict(project_rows)
-        all_months = sorted(set(user_map) | set(project_map))
+        all_months = [m.strftime("%Y-%m") for m in month_starts]
         platform_growth = {
             "months": all_months,
             "new_users": [user_map.get(m, 0) for m in all_months],
@@ -399,8 +469,11 @@ class DashboardService:
             for r in pm_rows
         ]
 
-        # 4) Sessions per week (last 6 weeks)
-        cutoff_6w = datetime.now(timezone.utc) - timedelta(weeks=6)
+        # 4) Sessions per week (last 6 weeks, zero-filled so the current week is
+        # always present even with no sessions yet)
+        current_week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        week_starts = [current_week_start - timedelta(weeks=i) for i in range(10, -1, -1)]
+        cutoff_6w = week_starts[0]
         sessions_week_rows = (
             db.query(
                 func.date_trunc("week", SessionModel.created_at).label("week"),
@@ -411,10 +484,18 @@ class DashboardService:
             .order_by("week")
             .all()
         )
+        sessions_week_map = {r.week.strftime("%Y-%m-%d"): r.count for r in sessions_week_rows}
         sessions_per_week = {
-            "weeks": [r.week.strftime("%Y-%m-%d") for r in sessions_week_rows],
-            "counts": [r.count for r in sessions_week_rows],
+            "weeks": [w.strftime("%Y-%m-%d") for w in week_starts],
+            "counts": [sessions_week_map.get(w.strftime("%Y-%m-%d"), 0) for w in week_starts],
         }
+
+        # 4b) All-time session total, grouped by how many projects they span
+        # (not bounded by the week window above)
+        total_sessions_count = db.query(func.count(SessionModel.id)).scalar() or 0
+        projects_with_sessions_count = (
+            db.query(func.count(func.distinct(SessionModel.project_id))).scalar() or 0
+        )
 
         # 5) Pending users queue
         pending_users_rows = (
@@ -487,16 +568,15 @@ class DashboardService:
             for r in active_user_rows
         ]
 
-        # 7) Inactive users — active users with no session in last 60 days
-        cutoff_60d = datetime.now(timezone.utc) - timedelta(days=60)
-        active_recently_subq = (
+        # 7) Inactive users — active users who have never joined a single
+        # session since they registered (not just inactive in a recent window)
+        ever_participated_subq = (
             db.query(func.distinct(SessionMembership.user_id))
-            .filter(SessionMembership.joined_at >= cutoff_60d)
             .subquery()
         )
         inactive_rows = (
             db.query(User)
-            .filter(User.status == "active", ~User.id.in_(active_recently_subq), User.role != "admin")
+            .filter(User.status == "active", ~User.id.in_(ever_participated_subq), User.role != "admin")
             .order_by(User.created_at.asc())
             .all()
         )
@@ -507,6 +587,7 @@ class DashboardService:
                 "email": u.email,
                 "role": u.role,
                 "member_since": u.created_at.isoformat() if u.created_at else None,
+                "days_since_registration": (datetime.now(timezone.utc) - u.created_at).days if u.created_at else None,
             }
             for u in inactive_rows
         ]
@@ -648,6 +729,8 @@ class DashboardService:
             "user_status_distribution": user_status_distribution,
             "projects_per_pm": projects_per_pm,
             "sessions_per_week": sessions_per_week,
+            "total_sessions": total_sessions_count,
+            "projects_with_sessions": projects_with_sessions_count,
             "pending_users": pending_users,
             "most_active_users": most_active_users,
             "inactive_users": inactive_users,
@@ -750,6 +833,257 @@ class DashboardService:
                 pass
 
         return activities[:50]
+
+    # ─────────────────────────────────────────────────────────────
+    # ADMIN: per-user engagement / workload report for every active,
+    # non-admin user — used to gauge load before accepting new projects.
+    # ─────────────────────────────────────────────────────────────
+    @staticmethod
+    def get_users_workload_report(db: Session, current_user: User) -> list:
+        if current_user.role != "admin":
+            raise HTTPException(403, "Users must use /api/dashboard/user-stats")
+
+        active_users = (
+            db.query(User)
+            .filter(User.status == "active", User.role != "admin")
+            .order_by(User.full_name.asc())
+            .all()
+        )
+        if not active_users:
+            return []
+        user_ids = [u.id for u in active_users]
+
+        # ── Bulk-fetch everything once, then group in Python to avoid N+1 ──
+        all_pm_rows = db.query(ProjectMembership).filter(ProjectMembership.user_id.in_(user_ids)).all()
+        memberships_by_user = defaultdict(list)
+        for m in all_pm_rows:
+            memberships_by_user[m.user_id].append(m)
+
+        project_ids = {m.project_id for m in all_pm_rows}
+        projects_by_id = (
+            {p.id: p for p in db.query(Project).filter(Project.id.in_(project_ids)).all()}
+            if project_ids else {}
+        )
+
+        sessions_by_project = defaultdict(list)
+        if project_ids:
+            for s in db.query(SessionModel).filter(SessionModel.project_id.in_(project_ids)).all():
+                sessions_by_project[s.project_id].append(s)
+        all_project_session_ids = {s.id for sl in sessions_by_project.values() for s in sl}
+
+        # Keyed by each requirement's OWN project_id — not derived via
+        # session_id -> Session.project_id. SessionRequirement.session_id is
+        # nullable and project_id is the required/authoritative field, so
+        # going through the session indirection could attribute a
+        # requirement to the wrong project (or drop it) if it ever diverges.
+        session_reqs_by_project = defaultdict(list)
+        if project_ids:
+            for r in db.query(SessionRequirement).filter(SessionRequirement.project_id.in_(project_ids)).all():
+                session_reqs_by_project[r.project_id].append(r)
+
+        # Project-level aggregated requirements (separate from the
+        # per-session ones above).
+        project_reqs_by_project = defaultdict(list)
+        if project_ids:
+            for r in db.query(ProjectRequirement).filter(ProjectRequirement.project_id.in_(project_ids)).all():
+                project_reqs_by_project[r.project_id].append(r)
+
+        artifacts_by_project = defaultdict(list)
+        if project_ids:
+            for a in db.query(Artifact).filter(Artifact.project_id.in_(project_ids)).all():
+                artifacts_by_project[a.project_id].append(a)
+
+        all_sm_rows = db.query(SessionMembership).filter(SessionMembership.user_id.in_(user_ids)).all()
+        session_memberships_by_user = defaultdict(list)
+        for sm in all_sm_rows:
+            session_memberships_by_user[sm.user_id].append(sm)
+        member_session_ids = {sm.session_id for sm in all_sm_rows} | all_project_session_ids
+        sessions_by_id = (
+            {s.id: s for s in db.query(SessionModel).filter(SessionModel.id.in_(member_session_ids)).all()}
+            if member_session_ids else {}
+        )
+
+        approvals_by_user = defaultdict(list)
+        for a in db.query(Approval).filter(Approval.user_id.in_(user_ids)).all():
+            approvals_by_user[a.user_id].append(a)
+        project_approvals_by_user = defaultdict(list)
+        for a in db.query(ProjectApproval).filter(ProjectApproval.user_id.in_(user_ids)).all():
+            project_approvals_by_user[a.user_id].append(a)
+
+        report = []
+        for u in active_users:
+            memberships = memberships_by_user.get(u.id, [])
+            active_memberships = [m for m in memberships if m.left_at is None]
+            pm_project_ids = {m.project_id for m in active_memberships if m.role == "project_manager"}
+            participant_project_ids = {m.project_id for m in active_memberships if m.role == "participant"}
+
+            def _is_active_project(pid):
+                p = projects_by_id.get(pid)
+                return bool(p and p.project_status not in ("completed", "Completed"))
+
+            active_projects_as_pm = sum(1 for pid in pm_project_ids if _is_active_project(pid))
+            active_projects_as_participant = sum(1 for pid in participant_project_ids if _is_active_project(pid))
+
+            # Pending backlog inside projects this user manages — a delay
+            # signal for THEIR projects, regardless of who specifically
+            # is the holdout approver.
+            pm_sessions = [s for pid in pm_project_ids for s in sessions_by_project.get(pid, [])]
+            pm_pending_sessions = sum(
+                1 for s in pm_sessions if s.status in ("pending_approval", "pending approval")
+            )
+            # Covers both session-level (SessionRequirement) and
+            # project-level (ProjectRequirement) requirement rows, scoped
+            # directly by their own project_id field — see note above.
+            pm_pending_requirements = sum(
+                1
+                for pid in pm_project_ids
+                for r in session_reqs_by_project.get(pid, []) + project_reqs_by_project.get(pid, [])
+                if r.approval_status != "approved"
+            )
+            pm_pending_artifacts = sum(
+                1 for pid in pm_project_ids for a in artifacts_by_project.get(pid, [])
+                if a.approval_status != "approved"
+            )
+            pm_backlog = {
+                "sessions": pm_pending_sessions,
+                "requirements": pm_pending_requirements,
+                "artifacts": pm_pending_artifacts,
+                "total": pm_pending_sessions + pm_pending_requirements + pm_pending_artifacts,
+            }
+
+            # Items where THIS user specifically hasn't approved yet (not
+            # "someone hasn't" — see ApprovalService.get_pending_for_user).
+            pending_items = (
+                ApprovalService.get_pending_for_user(db, u.id)
+                + ProjectApprovalService.get_pending_for_user(db, u.id)
+            )
+            awaiting_my_approval = {"sessions": 0, "requirements": 0, "artifacts": 0}
+            for item in pending_items:
+                if item["feature"] == "transcript":
+                    awaiting_my_approval["sessions"] += 1
+                elif item["feature"] == "requirements":
+                    awaiting_my_approval["requirements"] += 1
+                else:  # uml, srs
+                    awaiting_my_approval["artifacts"] += 1
+            awaiting_my_approval["total"] = len(pending_items)
+            sole_blocker_count = sum(1 for item in pending_items if item["is_sole_blocker"])
+
+            # Concurrent load right now — a clearer overload signal than
+            # lifetime totals.
+            user_sms = session_memberships_by_user.get(u.id, [])
+            concurrent_in_progress_sessions = sum(
+                1 for sm in user_sms
+                if sessions_by_id.get(sm.session_id) and sessions_by_id[sm.session_id].status != "completed"
+            )
+            concurrent_in_progress_as_owner = sum(
+                1 for sm in user_sms
+                if sm.role == "owner"
+                and sessions_by_id.get(sm.session_id)
+                and sessions_by_id[sm.session_id].status != "completed"
+            )
+
+            # Recency — SessionMembership.joined_at is tz-aware while
+            # Approval(.aproved_at)/ProjectApproval.approved_at are naive
+            # (datetime.utcnow), so normalize to aware UTC before comparing.
+            last_session_joined_at = max((sm.joined_at for sm in user_sms if sm.joined_at), default=None)
+            last_approval_at = max(
+                [a.aproved_at for a in approvals_by_user.get(u.id, [])]
+                + [a.approved_at for a in project_approvals_by_user.get(u.id, [])],
+                default=None,
+            )
+            last_activity_at = max(
+                [
+                    d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+                    for d in (last_session_joined_at, last_approval_at) if d
+                ],
+                default=None,
+            )
+
+            # Participation rate — sessions personally joined vs. sessions
+            # held across all projects this user currently belongs to
+            # (any role). A PM is auto-joined to every session in their own
+            # project, so a rate well under 100% points at projects where
+            # this user is a participant being left out of sessions.
+            all_active_project_ids = pm_project_ids | participant_project_ids
+            sessions_held_in_my_projects = sum(len(sessions_by_project.get(pid, [])) for pid in all_active_project_ids)
+            sessions_joined_in_my_projects = sum(
+                1 for sm in user_sms
+                if sessions_by_id.get(sm.session_id)
+                and sessions_by_id[sm.session_id].project_id in all_active_project_ids
+            )
+            participation_rate_pct = (
+                round(sessions_joined_in_my_projects / sessions_held_in_my_projects * 100)
+                if sessions_held_in_my_projects > 0 else None
+            )
+
+            # Churn — projects exited; useful context for interpreting a
+            # currently-low active count (shedding load vs. never had any).
+            projects_left_count = sum(1 for m in memberships if m.left_at is not None)
+
+            report.append({
+                "user_id": u.id,
+                "name": u.full_name,
+                "email": u.email,
+
+                # Active (status in "Active"/"in_progress") project count,
+                # split by role — PM load and participant load aren't
+                # comparable, so keep them separate rather than summed.
+                "active_projects_as_pm": active_projects_as_pm,
+                "active_projects_as_participant": active_projects_as_participant,
+
+                # Whether this user currently manages ANY project, regardless
+                # of that project's status (active/pending/completed). Use
+                # this — not active_projects_as_pm — to decide whether the
+                # pm_backlog section below applies to them at all.
+                "is_pm": bool(pm_project_ids),
+
+                # Delay signal for projects THIS user manages: counts of
+                # sessions/requirements/artifacts still sitting in a
+                # non-approved status inside their PM-owned projects. This
+                # is "their projects are stuck", regardless of who the
+                # actual holdout approver is.
+                "pm_backlog": pm_backlog,  # {sessions, requirements, artifacts, total}
+
+                # Items where THIS user personally hasn't approved the
+                # latest version yet (their own to-do queue), as opposed to
+                # pm_backlog above which is "someone hasn't approved".
+                "awaiting_my_approval": awaiting_my_approval,  # {sessions, requirements, artifacts, total}
+
+                # Of the items in awaiting_my_approval, how many have every
+                # OTHER member already approved — i.e. this user is the
+                # sole thing standing between it and "approved". A high
+                # count means they're not reviewing at a healthy pace.
+                "sole_blocker_count": sole_blocker_count,
+
+                # Sessions with status == "in_progress" that this user is
+                # a member of RIGHT NOW — a live overload signal, unlike
+                # lifetime session totals which include long-finished work.
+                "concurrent_in_progress_sessions": concurrent_in_progress_sessions,
+                "concurrent_in_progress_as_owner": concurrent_in_progress_as_owner,  # subset where role == "owner"
+
+                # Recency of engagement, not just totals — a user can have
+                # high lifetime counts but have gone quiet recently.
+                "last_session_joined_at": last_session_joined_at.isoformat() if last_session_joined_at else None,
+                "last_approval_at": last_approval_at.isoformat() if last_approval_at else None,
+                "last_activity_at": last_activity_at.isoformat() if last_activity_at else None,  # max of the two above
+
+                # Sessions personally joined vs. sessions actually held
+                # across all currently-active projects this user belongs
+                # to (any role). PMs are auto-joined to every session in
+                # their own project, so a rate well under 100% points at
+                # projects where this user is a participant being left out
+                # of sessions, not at the PM side of their workload.
+                "sessions_held_in_my_projects": sessions_held_in_my_projects,
+                "sessions_joined_in_my_projects": sessions_joined_in_my_projects,
+                "participation_rate_pct": participation_rate_pct,  # None if they have no sessions to measure against
+
+                # How many projects this user has exited (ProjectMembership
+                # rows with left_at set). Context for interpreting a low
+                # active-project count: shedding load vs. never had much.
+                "projects_left_count": projects_left_count,
+            })
+
+        return report
 
 
 def _to_dict(rows):
@@ -865,4 +1199,6 @@ def _empty_user_stats():
         "is_pm": False, "pending_invitations": 0,
         "approvals_given_total": 0, "approvals_by_feature": {},
         "stale_sessions": [], "recent_activity": [],
+        "projects_pending_approval": [], "sessions_pending_approval": [],
+        "awaiting_my_approval": [], "awaiting_my_approval_count": 0, "sole_blocker_count": 0,
     }
