@@ -41,7 +41,11 @@ beforeAll(async () => {
   if (res.status === 200) {
     sessionId = res.data.session_id;
   }
-});
+  // Other suites queue Ollama/Gemini background generation tasks (extract-requirements,
+  // generate-uml, generate-srs) that can leave the backend busy for a while; give this
+  // hook more room than the 15s default so a transiently slow server doesn't fail
+  // the whole suite on a login + one upload call.
+}, 60000);
 
 describe('UML Generation Module — /api/projects/.../generate-uml-async', () => {
 
