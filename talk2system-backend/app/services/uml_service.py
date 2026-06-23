@@ -12,7 +12,7 @@ from app.db.session import SessionLocal
 from app.models.background_task import BackgroundTask
 from app.models.project import Project
 from app.models.session_membership import SessionMembership
-from app.services import notification_service   # adjust to your actual import path
+from app.services import notification_service   
 import logging
 from app.services.audit_service import log_action
 logger = logging.getLogger(__name__)
@@ -49,12 +49,10 @@ def simplify_requirements(frs: list):
 
     for fr in frs:
         actor = fr.get("actor", "user")
-        # actor = fr.get("actor") or "user"
         # Skip entirely if actor is "system"
         if actor.strip().lower() == "system":
             continue
         feature = fr.get("feature") or fr.get("text")
-        # feature = fr.get("feature") or fr.get("text") or ""
 
         simplified.append({
             "actor": actor,

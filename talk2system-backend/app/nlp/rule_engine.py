@@ -175,77 +175,6 @@ class RuleBasedRequirementEngine:
     # ===============================
     # Step 3: Actor Extraction
     # ===============================
-
-    # def extract_actor(self, doc) -> Optional[str]:
-
-    #     subject = None
-    #     human_actor_default = "user"
-    #     found_actors = set()
-
-    #     # 1️⃣ Extract grammatical subject
-    #     for token in doc:
-    #         if token.dep_ in {"nsubj", "nsubjpass"}:
-    #             subject = token.text.lower()
-    #             break
-
-    #     # 2️⃣ Collect known actors in sentence
-    #     for token in doc:
-    #         if token.text.lower() in self.known_actors:
-    #             found_actors.add(token.text.lower())
-
-    #     # 3️⃣ Identify direct or prepositional objects
-    #     beneficiaries = set()
-    #     for token in doc:
-    #         if token.dep_ in {"dobj", "pobj"}:
-    #             # If the object is a known human actor → beneficiary
-    #             if token.text.lower() in {"user", "customer", "client", "employee"}:
-    #                 beneficiaries.add(token.text.lower())
-    #             else:
-    #                 # Also consider nouns that represent actions or entities benefiting humans
-    #                 for child in token.children:
-    #                     if child.text.lower() in {"user", "customer", "client", "employee"}:
-    #                         beneficiaries.add(child.text.lower())
-
-    #     # 4️⃣ Determine actor
-    #     # Case A: subject is human → actor = subject
-    #     human_subjects = {"user", "users","customer","customers" ,"client", "clients","managers" ,"manager", "admins", "admin", "employee", "employees"}
-    #     if subject and subject in human_subjects:
-    #         return subject
-
-    #     # Case B: subject = system but action benefits humans
-    #     if subject == "system" and beneficiaries:
-    #         return beneficiaries.pop()  # usually user
-
-    #     # Case C: subject = system, no explicit human beneficiary
-    #     if subject == "system" and not beneficiaries:
-    #         root_verb = None
-    #         for token in doc:
-    #             if token.dep_ == "ROOT" and token.pos_ == "VERB":
-    #                 root_verb = token
-    #                 break
-
-    #         if root_verb:
-    #             verb_lemma = root_verb.lemma_.lower()
-
-    #             if verb_lemma in self.autonomous_system_verbs:
-    #                 return "system" 
-    #             else:
-    #                 return human_actor_default  
-    #         else:
-    #             return "system"
-
-    #     # Case D: fallback if subject is a human actor mentioned anywhere
-    #     for actor in human_subjects:
-    #         if actor in found_actors:
-    #             return actor
-
-    #     # Case E: fallback default
-    #     return human_actor_default
-
-
-    # ===============================
-    # SMART ACTOR EXTRACTION
-    # ===============================
     def extract_actor(self, doc) -> Optional[str]:
 
         scores = {}
@@ -503,15 +432,12 @@ class RuleBasedRequirementEngine:
             return None
 
         # 2. Classify type
-        # req_type, quality_category = self.classify_requirement_type(lemmas, doc)
         req_type, quality_category, type_confidence ,category_confidence = self.score_requirement_type(
             lemmas, doc, cleaned_sentence
         )
 
         # 3. Extract components
         actor = self.extract_actor(doc)
-        # if actor == "system":
-        #     actor = None   # or "user" depending on your preference
         action = self.extract_action(doc)
         direct_object = self.extract_direct_object(doc)
         prepositional_objects = self.extract_prepositional_objects(doc)
@@ -520,8 +446,6 @@ class RuleBasedRequirementEngine:
 
         # 4. Build output
         return {
-            # "sentence_id": sentence_obj["id"],
-            # "speaker": sentence_obj["speaker"],
             "cleaned_sentence": sentence,
             "req_confidence": req_confidence,
             "req_type_confidence": type_confidence,
@@ -532,7 +456,6 @@ class RuleBasedRequirementEngine:
             "action": action,
             "direct_object": direct_object,
             "prepositional_objects": prepositional_objects,
-            # "is_negative": sentence_obj["negation"],
         }
 
     # ===============================

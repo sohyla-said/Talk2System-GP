@@ -21,7 +21,7 @@ export default function UmlPage() {
   const [sessionCompleted, setSessionCompleted] = useState(false);
   const [approved, setApproved] = useState(false);
   const [projectCompleted, setProjectCompleted] = useState(false);
-  const [hasNewUnapproved, setHasNewUnapproved] = useState(false); // ✅ NEW
+  const [hasNewUnapproved, setHasNewUnapproved] = useState(false); 
   const [umlApproval, setUmlApproval] = useState({
     approved_members_count: 0,
     total_members_count: 0,
@@ -75,11 +75,11 @@ export default function UmlPage() {
     const source = location.state?.source;
 
     if (source === "project") {
-      // ✅ Came from Requirements_project_view — use project-level generation
+      // Came from Requirements_project_view — use project-level generation
       setIsProjectSource(true);
       // No session needed for project-level generation
     } else {
-      // ✅ Session-level flow (existing behavior unchanged)
+      //  Session-level flow (existing behavior unchanged)
       setIsProjectSource(false);
       const stateSessionId = location.state?.sessionId;
 
@@ -148,7 +148,7 @@ export default function UmlPage() {
       let res;
 
       if (isProjectSource) {
-        // ✅ Project-level: fetch artifacts with no session (project-wide)
+        // Project-level: fetch artifacts with no session (project-wide)
         res = await fetch(
           `${BASE_URL}/api/projects/${projectId}/artifacts/${diagramType}/versions`
         );
@@ -466,7 +466,7 @@ export default function UmlPage() {
   };
 
   // Derived: is the button currently in "approved" display state?
-  const isApprovedState = approved && !hasNewUnapproved; // ✅ NEW
+  const isApprovedState = approved && !hasNewUnapproved; 
 
   return (
     <div className="font-display bg-background-light dark:bg-background-dark min-h-screen text-[#100d1c] dark:text-white">
@@ -566,13 +566,6 @@ export default function UmlPage() {
             <div className="flex gap-3 items-center">
 
               {/* GENERATE */}
-              {/* <button
-                 onClick={handleGenerate}
-                 disabled={loading || (!isProjectSource && !sessionId) || (!isProjectSource && sessionCompleted)}
-                  className="h-10 px-4 rounded-lg bg-primary text-white disabled:opacity-50"
-                >
-                {loading ? "Generating..." : "Generate UML"}
-              </button> */}
 
               <button
                 onClick={handleGenerate}
@@ -612,7 +605,7 @@ export default function UmlPage() {
                 Export
               </button>
 
-              {/* APPROVE — ✅ uses isApprovedState so new versions re-enable it */}
+              {/* APPROVE — uses isApprovedState so new versions re-enable it */}
 
               {isProjectSource ? (
                 // Project-level: direct artifact approval, no session members needed

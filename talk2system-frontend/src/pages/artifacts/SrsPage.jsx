@@ -793,13 +793,6 @@ export default function SrsPage() {
 
             {/* LEFT */}
             <div className="flex gap-3 items-center">
-              {/* <button
-                onClick={handleGenerate}
-                disabled={loading || (!isProjectSource && !sessionCompleted)}
-                className="h-10 px-4 rounded-lg bg-primary text-white disabled:opacity-50"
-              >
-                {loading ? "Generating..." : "Generate SRS"}
-              </button> */}
               <button
                 onClick={handleGenerate}
                 disabled={
@@ -811,15 +804,6 @@ export default function SrsPage() {
                 Generate SRS
               </button>
 
-              {/* Format badge shown next to button so user sees what will be generated */}
-              {/* {(() => {
-                const opt = FORMAT_OPTIONS.find(f => f.value === formatVersion);
-                return opt ? (
-                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${opt.badgeColor}`}>
-                    {opt.label}
-                  </span>
-                ) : null;
-              })()} */}
 
               <select
                 onChange={(e) => handleSelectVersion(e.target.value)}
