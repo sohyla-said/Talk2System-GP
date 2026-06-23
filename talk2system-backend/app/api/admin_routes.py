@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
@@ -739,3 +739,33 @@ def reject_pm_leave_request(
     )
     db.commit()
     return {"message": "PM leave request rejected. Project has been restored."}
+
+@router.patch("/users/{user_id}/reject")
+def reject_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin"))
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    if user.role == "admin":
+        raise HTTPException(400, "Cannot reject admin accounts")
+
+    old_status = user.status
+    db.delete(user)
+
+    log_action(
+        db,
+        current_user.id,
+        "rejected_user",
+        "user",
+        entity_id=user.id,
+        details={
+            "label": f"Admin {current_user.full_name or current_user.email} rejected user {user.full_name or user.email}",
+            "old_status": old_status,
+        }
+    )
+
+    db.commit()
+    return {"message": f"{user.email} has been rejected and removed."}

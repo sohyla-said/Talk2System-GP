@@ -467,7 +467,7 @@ export default function AllUsersPage() {
                         </td>
                         <td className="px-5 py-4 text-right">
                           <div className="flex justify-end gap-1.5">
-                            {u.status === "active" && (
+                            {u.status === "active" && u.role !== "admin" && u.role !== "Admin" && (
                               <>
                                 <button disabled={actionLoading === u.id} onClick={() => openActionModal("suspend", u)}
                                   className="px-2.5 py-1.5 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-md text-xs font-semibold disabled:opacity-50 transition-colors"
@@ -647,11 +647,11 @@ export default function AllUsersPage() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex justify-end gap-1">
-                            {u.status === "active" && (
+                            {u.status === "active" && u.role !== "admin" && u.role !== "Admin" && (
                               <>
-                                <button disabled={actionLoading === u.id} onClick={() => openActionModal("suspend", u)} className="px-2 py-1 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded text-[11px] font-semibold disabled:opacity-50 transition-colors">Suspend</button>
-                                <button disabled={actionLoading === u.id} onClick={() => openActionModal("terminate", u)} className="px-2 py-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded text-[11px] font-semibold disabled:opacity-50 transition-colors">Terminate</button>
-                                <button disabled={actionLoading === u.id} onClick={() => openActionModal("archive", u)} className="px-2 py-1 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded text-[11px] font-semibold disabled:opacity-50 transition-colors">Archive</button>
+                              <button disabled={actionLoading === u.id} onClick={() => openActionModal("suspend", u)} className="px-2 py-1 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded text-[11px] font-semibold disabled:opacity-50 transition-colors">Suspend</button>
+                              <button disabled={actionLoading === u.id} onClick={() => openActionModal("terminate", u)} className="px-2 py-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded text-[11px] font-semibold disabled:opacity-50 transition-colors">Terminate</button>
+                              <button disabled={actionLoading === u.id} onClick={() => openActionModal("archive", u)} className="px-2 py-1 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded text-[11px] font-semibold disabled:opacity-50 transition-colors">Archive</button>
                               </>
                             )}
                             {u.status !== "active" && u.status !== "pending" && (
@@ -790,7 +790,7 @@ export default function AllUsersPage() {
                     </div>
 
                     <div className="flex items-center gap-1.5 px-4 py-2.5 bg-gray-50/80 dark:bg-[#1f1b35]/50 border-t border-gray-100 dark:border-white/5">
-                      {u.status === "active" && (
+                      {u.status === "active" && u.role !== "admin" && u.role !== "Admin" && (
                         <>
                           <button disabled={actionLoading === u.id} onClick={() => openActionModal("suspend", u)} className="flex-1 py-2 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg text-xs font-semibold disabled:opacity-50 transition-colors text-center">Suspend</button>
                           <button disabled={actionLoading === u.id} onClick={() => openActionModal("terminate", u)} className="flex-1 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-xs font-semibold disabled:opacity-50 transition-colors text-center">Terminate</button>

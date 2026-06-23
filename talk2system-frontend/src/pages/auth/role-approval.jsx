@@ -9,6 +9,8 @@ export default function RoleApprovalPage() {
   const [loading, setLoading]         = useState(true);
   const [search, setSearch]           = useState("");
   const [notification, setNotification] = useState(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
 
   useEffect(() => { fetchPendingUsers(); }, []);
 
@@ -39,6 +41,11 @@ export default function RoleApprovalPage() {
       });
       if (res.ok) {
         setUsers((prev) => prev.filter((u) => u.id !== userId));
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(userId);
+          return next;
+        });
         showNotification(`${email} approved`, "success");
       } else {
         const d = await res.json();
@@ -57,19 +64,123 @@ export default function RoleApprovalPage() {
       });
       if (res.ok) {
         setUsers((prev) => prev.filter((u) => u.id !== userId));
-        showNotification(`${email} rejected`, "error");
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(userId);
+          return next;
+        });
+        return true;
       } else {
         const d = await res.json();
-        showNotification(d.detail || "Failed to reject", "error");
+        showNotification(d.detail || `Failed to reject ${email}`, "error");
+        return false;
       }
     } catch {
       showNotification("Network error", "error");
+      return false;
     }
   }
 
   async function handleBulkApprove() {
+    if (filteredUsers.length === 0) return;
+    setBulkLoading(true);
+    let count = 0;
     for (const user of filteredUsers) {
-      await handleApprove(user.id, user.email);
+      try {
+        const res = await fetch(`${BASE_URL}/api/admin/users/${user.id}/approve`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${getToken()}` },
+        });
+        if (res.ok) {
+          setUsers((prev) => prev.filter((u) => u.id !== user.id));
+          count++;
+        }
+      } catch {
+      }
+    }
+    setBulkLoading(false);
+    setSelectedIds(new Set());
+    if (count > 0) showNotification(`${count} user${count > 1 ? "s" : ""} approved`, "success");
+  }
+
+  async function handleBulkReject() {
+    if (filteredUsers.length === 0) return;
+    setBulkLoading(true);
+    let count = 0;
+    for (const user of filteredUsers) {
+      const success = await handleReject(user.id, user.email);
+      if (success) count++;
+    }
+    setBulkLoading(false);
+    setSelectedIds(new Set());
+    if (count > 0) showNotification(`${count} user${count > 1 ? "s" : ""} rejected`, "error");
+  }
+
+  async function handleSelectedApprove() {
+    if (selectedIds.size === 0) return;
+    setBulkLoading(true);
+    let count = 0;
+    for (const userId of selectedIds) {
+      const user = users.find((u) => u.id === userId);
+      if (!user) continue;
+      try {
+        const res = await fetch(`${BASE_URL}/api/admin/users/${userId}/approve`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${getToken()}` },
+        });
+        if (res.ok) {
+          setUsers((prev) => prev.filter((u) => u.id !== userId));
+          count++;
+        }
+      } catch {
+      }
+    }
+    setBulkLoading(false);
+    setSelectedIds(new Set());
+    if (count > 0) showNotification(`${count} user${count > 1 ? "s" : ""} approved`, "success");
+  }
+
+  async function handleSelectedReject() {
+    if (selectedIds.size === 0) return;
+    setBulkLoading(true);
+    let count = 0;
+    for (const userId of selectedIds) {
+      const user = users.find((u) => u.id === userId);
+      if (!user) continue;
+      try {
+        const res = await fetch(`${BASE_URL}/api/admin/users/${userId}/reject`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${getToken()}` },
+        });
+        if (res.ok) {
+          setUsers((prev) => prev.filter((u) => u.id !== userId));
+          count++;
+        }
+      } catch {
+      }
+    }
+    setBulkLoading(false);
+    setSelectedIds(new Set());
+    if (count > 0) showNotification(`${count} user${count > 1 ? "s" : ""} rejected`, "error");
+  }
+
+  function toggleSelect(userId) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === filteredUsers.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredUsers.map((u) => u.id)));
     }
   }
 
@@ -83,6 +194,9 @@ export default function RoleApprovalPage() {
       u.email.toLowerCase().includes(search.toLowerCase()) ||
       (u.full_name && u.full_name.toLowerCase().includes(search.toLowerCase()))
   );
+
+  const allSelected = filteredUsers.length > 0 && selectedIds.size === filteredUsers.length;
+  const someSelected = selectedIds.size > 0 && selectedIds.size < filteredUsers.length;
 
   function formatDate(dateStr) {
     if (!dateStr) return "—";
@@ -110,13 +224,44 @@ export default function RoleApprovalPage() {
               )}
             </p>
           </div>
-          <button
-            onClick={handleBulkApprove}
-            disabled={filteredUsers.length === 0}
-            className="h-11 px-5 bg-primary text-white rounded-lg font-bold disabled:opacity-40"
-          >
-            Approve All
-          </button>
+          <div className="flex gap-3 flex-wrap">
+            {selectedIds.size > 0 && (
+              <>
+                <button
+                  onClick={handleSelectedApprove}
+                  disabled={bulkLoading}
+                  className="h-11 px-5 bg-emerald-500 text-white rounded-lg font-bold disabled:opacity-40 hover:bg-emerald-600 transition-colors flex items-center gap-2"
+                >
+                  {bulkLoading && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  Approve Selected ({selectedIds.size})
+                </button>
+                <button
+                  onClick={handleSelectedReject}
+                  disabled={bulkLoading}
+                  className="h-11 px-5 bg-red-500 text-white rounded-lg font-bold disabled:opacity-40 hover:bg-red-600 transition-colors flex items-center gap-2"
+                >
+                  {bulkLoading && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  Reject Selected ({selectedIds.size})
+                </button>
+              </>
+            )}
+            <button
+              onClick={handleBulkApprove}
+              disabled={filteredUsers.length === 0 || bulkLoading}
+              className="h-11 px-5 bg-primary text-white rounded-lg font-bold disabled:opacity-40 hover:bg-primary/90 transition-colors flex items-center gap-2"
+            >
+              {bulkLoading && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              Approve All
+            </button>
+            <button
+              onClick={handleBulkReject}
+              disabled={filteredUsers.length === 0 || bulkLoading}
+              className="h-11 px-5 border border-red-300 text-red-500 rounded-lg font-bold disabled:opacity-40 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors flex items-center gap-2"
+            >
+              {bulkLoading && <span className="w-4 h-4 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" />}
+              Reject All
+            </button>
+          </div>
         </div>
 
         {/* Search */}
@@ -134,6 +279,15 @@ export default function RoleApprovalPage() {
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-[#231e3d]">
               <tr>
+                <th className="px-4 py-4 w-12">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                  />
+                </th>
                 <Th>Full Name</Th>
                 <Th>Email</Th>
                 <Th>Signup Date</Th>
@@ -143,13 +297,13 @@ export default function RoleApprovalPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-10 text-center text-gray-400">
+                  <td colSpan={5} className="px-6 py-10 text-center text-gray-400">
                     Loading…
                   </td>
                 </tr>
               ) : filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-10 text-center text-gray-400">
+                  <td colSpan={5} className="px-6 py-10 text-center text-gray-400">
                     No pending users.
                   </td>
                 </tr>
@@ -160,6 +314,8 @@ export default function RoleApprovalPage() {
                     name={user.full_name || "—"}
                     email={user.email}
                     date={formatDate(user.created_at)}
+                    selected={selectedIds.has(user.id)}
+                    onSelect={() => toggleSelect(user.id)}
                     onApprove={() => handleApprove(user.id, user.email)}
                     onReject={() => handleReject(user.id, user.email)}
                   />
@@ -197,22 +353,30 @@ function Th({ children, align }) {
   );
 }
 
-function ApprovalRow({ name, email, date, onApprove, onReject }) {
+function ApprovalRow({ name, email, date, selected, onSelect, onApprove, onReject }) {
   return (
-    <tr className="border-t hover:bg-gray-50 dark:hover:bg-[#231e3d]">
+    <tr className={`border-t transition-colors ${selected ? "bg-primary/5 dark:bg-primary/10" : "hover:bg-gray-50 dark:hover:bg-[#231e3d]"}`}>
+      <td className="px-4 py-5 w-12">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onSelect}
+          className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+        />
+      </td>
       <td className="px-6 py-5 font-medium">{name}</td>
       <td className="px-6 py-5 text-sm text-gray-400">{email}</td>
       <td className="px-6 py-5 italic text-gray-400">{date}</td>
       <td className="px-6 py-5 text-right space-x-2">
         <button
           onClick={onApprove}
-          className="bg-primary text-white px-3 py-1 rounded-lg text-xs hover:bg-primary/90"
+          className="bg-primary text-white px-3 py-1 rounded-lg text-xs hover:bg-primary/90 transition-colors"
         >
           Approve
         </button>
         <button
           onClick={onReject}
-          className="border border-red-300 text-red-500 px-3 py-1 rounded-lg text-xs hover:bg-red-50"
+          className="border border-red-300 text-red-500 px-3 py-1 rounded-lg text-xs hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors"
         >
           Reject
         </button>
