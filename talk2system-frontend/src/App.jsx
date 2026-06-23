@@ -43,8 +43,8 @@ function AppInner() {
     },
   });
 
-  const startExtraction = async (sessionId, projectId, transcript, engine) => {
-    lastCallRef.current = { sessionId, projectId, transcript, engine };
+  const startExtraction = async (sessionId, projectId, transcript, engine, autoSave = true) => {
+    lastCallRef.current = { sessionId, projectId, transcript, engine, autoSave };
 
     const res = await fetch(
       `http://localhost:8000/api/projects/${projectId}/session/${sessionId}/extract-requirements-async`,
@@ -54,7 +54,7 @@ function AppInner() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getToken()}`,
         },
-        body: JSON.stringify({ transcript, engine }),
+        body: JSON.stringify({ transcript, engine, auto_save: autoSave }),
       }
     );
 
@@ -76,11 +76,11 @@ function AppInner() {
 
   const handleRetry = () => {
     if (!lastCallRef.current) return;
-    const { sessionId, projectId, transcript, engine } = lastCallRef.current;
+    const { sessionId, projectId, transcript, engine, autoSave } = lastCallRef.current;
     cancelTracking();
     setTaskStatus("pending");
     setTaskOutput(null);
-    startExtraction(sessionId, projectId, transcript, engine);
+    startExtraction(sessionId, projectId, transcript, engine, autoSave);
   };
 
   const handleDismiss = () => {

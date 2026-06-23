@@ -23,8 +23,9 @@ llm = None
 def _get_llm():
     logger.info("Initializing Ollama LLM for sentence extraction...")
     return OllamaLLM(
-        model="qwen2.5:7b",
-        streaming=False,    # not needed for invoke() as it always waits for the complete response,  Streaming is for token-by-token UI display — it adds overhead here with zero benefit.      
+        # model="qwen2.5:7b",
+        model="qwen2.5:3b",    # 7b didn't fit in 4GB VRAM (GTX 1650) and crashed llama-server; CPU fallback was stable but ~3 sec/token due to 8GB system RAM. 3b fits in VRAM with room to spare.
+        streaming=False,    # not needed for invoke() as it always waits for the complete response,  Streaming is for token-by-token UI display — it adds overhead here with zero benefit.
         temperature=0.1,    # low temp = more consistent JSON output
         # num_predict=512,
     )

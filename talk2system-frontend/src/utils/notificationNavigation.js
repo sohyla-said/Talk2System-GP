@@ -14,6 +14,10 @@ export async function handleNotificationNav(notif, navigate, getToken) {
   const llmMatch    = message?.match(/\[llm_run_id:(\d+)\]/);
   const hybridRunId = hybridMatch ? parseInt(hybridMatch[1], 10) : null;
   const llmRunId    = llmMatch    ? parseInt(llmMatch[1],    10) : null;
+  const engineMatch = message?.match(/\[engine:(\w+)\]/);
+  const runIdMatch  = message?.match(/\[run_id:(\d+)\]/);
+  const singleEngine = engineMatch ? engineMatch[1] : null;
+  const singleRunId  = runIdMatch  ? parseInt(runIdMatch[1], 10) : null;
 
   if (
     notification_type === "transcription_done" ||
@@ -24,23 +28,50 @@ export async function handleNotificationNav(notif, navigate, getToken) {
       return;
     }
   }
-  // ── Single-engine success: requirements view ──────────────────────────────
+  // ── Single-engine success ──────────────────────────────────────────────────
   if (notification_type === "requirements_extracted" && sessionId && project_id) {
+    // This single engine may have just been regenerated from the choice page
+    // for an existing, unfinished comparison (Requirements_choice_page persists
+    // that comparison to localStorage until a preferred set is chosen). If so,
+    // merge the new run id in and go back to the choice page — same as the
+    // live extraction toast already does — instead of the single-result view.
+    if (singleEngine === "llm" || singleEngine === "hybrid") {
+      const storageKey = `extractionState_session_${sessionId}`;
+      try {
+        const stored = localStorage.getItem(storageKey);
+        const prior = stored ? JSON.parse(stored) : null;
+        if (prior && (prior.hybridRunId || prior.llmRunId)) {
+          const updated = {
+            ...prior,
+            projectId: project_id,
+            hybridRunId: singleEngine === "hybrid" ? (singleRunId ?? prior.hybridRunId) : prior.hybridRunId,
+            llmRunId: singleEngine === "llm" ? (singleRunId ?? prior.llmRunId) : prior.llmRunId,
+          };
+          localStorage.setItem(storageKey, JSON.stringify(updated));
+          navigate(`/transcript/${sessionId}/requirements/choice`, { state: updated });
+          return;
+        }
+      } catch {
+        // fall through to the single-result view below
+      }
+    }
+
     navigate(`/transcript/${sessionId}/requirements`, {
       state: { projectId: project_id },
     });
     return;
   }
 
-  // ── Both-engine success: fetch task_output then go to choice page ─────────
-  if (notification_type === "requirements_extracted_both" && sessionId && hybridRunId && llmRunId) {
+  // ── Both-engine run finished: go to choice page ────────────────────────────
+  // Only sessionId + at least one run id is required — one engine can come back
+  // empty (e.g. a local model crash during preprocessing) while the run still
+  // completes. The choice page already shows a "Regenerate" button for whichever
+  // engine has no data, same as the live extraction toast already does.
+  if (notification_type === "requirements_extracted_both" && sessionId && (hybridRunId || llmRunId)) {
     navigate(`/transcript/${sessionId}/requirements/choice`, {
       state: { projectId: project_id, hybridRunId, llmRunId },
     });
     return;
-    // Fallback if fetch fails: go to transcript so user can re-trigger
-    // navigate(`/transcript/${sessionId}`);
-    // return;
   }
 
   // ── Failure: back to transcript to retry ─────────────────────────────────

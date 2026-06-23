@@ -103,6 +103,9 @@ Extract both EXPLICIT and IMPLICIT requirements:
    - "NFR" (Non-Functional Requirement): describes quality attributes
 10. For NFRs, assign a category: "performance", "security", "usability", "reliability", "scalability", "maintainability", "compatibility", or "other".
 11. Extract the actor (who performs the action) and a short feature label.
+12. Identify external systems as actors: if a requirement involves an integration, call, or notification to a named external system or service (e.g., "payment gateway", "email service", "SMS provider", "third-party API", "shipping service"), use that external system's name as the actor instead of the generic "system".
+   Example: "the system must send a receipt via the email service" → actor: "email service" (not "system")
+
 
 === SELF-CHECK BEFORE RESPONDING ===
 
@@ -111,6 +114,8 @@ Extract both EXPLICIT and IMPLICIT requirements:
 3. Did I leave compound sentences unsplit? If yes, split them.
 4. Did I classify FR/NFR correctly?
 5. Did I duplicate any requirement? If yes, keep only the strongest modal version.
+6. Did I label any requirement involving a named external system/service with actor "system" instead of that system's name? If yes, fix it.
+
 
 === OUTPUT FORMAT ===
 

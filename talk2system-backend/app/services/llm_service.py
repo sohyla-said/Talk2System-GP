@@ -27,10 +27,12 @@ llm = None
 def _get_llm():
     logger.info("Initializing Ollama LLM for requirement extraction...")
     return OllamaLLM(
-        model="qwen2.5:7b",
+        # model="qwen2.5:7b",
+        model="qwen2.5:3b",
         streaming=False,    # not needed for invoke() as it always waits for the complete response,  Streaming is for token-by-token UI display — it adds overhead here with zero benefit.      
         temperature=0.1,    # low temp = more consistent JSON output
         # num_predict=512,
+        num_gpu=0,
     )
     
 llm = _get_llm()        # module-level, created once when the module is first imported
@@ -140,6 +142,9 @@ Completely ignore:
    - actor: who performs the action (user, admin, system, customer, ...)
    - feature: the core capability (login, upload file, manage users)
 
+8. Identify external systems as actors: if a requirement involves an integration, call, or notification to a named external system or service (e.g., "payment gateway", "email service", "SMS provider", "third-party API", "shipping service"), use that external system's name as the actor instead of the generic "system".
+   Example: "the system must send a receipt via the email service" → actor: "email service" (not "system")
+
 === EXAMPLES ===
 
 Input: "users must be able to sign in and register"
@@ -172,6 +177,7 @@ Before producing output, silently verify:
 4. Did I leave multi-actor requirements unsplit? If yes, split them.
 5. Did I classify FR/NFR correctly?
 6. Did I duplicate any requirement? If yes, keep only the strongest modal version.
+7. Did I label any requirement involving a named external system/service with actor "system" instead of that system's name? If yes, fix it.
 
 TRANSCRIPT:
 {transcript}

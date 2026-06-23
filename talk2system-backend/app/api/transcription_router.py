@@ -208,23 +208,22 @@ def upload_transcript_text(
     db.commit() 
 
     # Session memberships
-    if payload.participant_ids:
-        from app.models.project_membership import ProjectMembership
-        pm_membership = (
-            db.query(ProjectMembership)
-            .filter(
-                ProjectMembership.project_id == project_id,
-                ProjectMembership.role == "project_manager",
-            )
-            .first()
+    from app.models.project_membership import ProjectMembership
+    pm_membership = (
+        db.query(ProjectMembership)
+        .filter(
+            ProjectMembership.project_id == project_id,
+            ProjectMembership.role == "project_manager",
         )
-        if pm_membership:
-            db.add(SessionMembership(session_id=session.id, user_id=pm_membership.user_id, role="owner"))
-        for uid in payload.participant_ids:
-            if pm_membership and uid == pm_membership.user_id:
-                continue
-            db.add(SessionMembership(session_id=session.id, user_id=uid, role="participant"))
-        db.commit()
+        .first()
+    )
+    if pm_membership:
+        db.add(SessionMembership(session_id=session.id, user_id=pm_membership.user_id, role="owner"))
+    for uid in (payload.participant_ids or []):
+        if pm_membership and uid == pm_membership.user_id:
+            continue
+        db.add(SessionMembership(session_id=session.id, user_id=uid, role="participant"))
+    db.commit()
 
     try:
         transcript_text = save_transcript_text(db, session.id, payload.transcript)

@@ -349,3 +349,42 @@ Business Analyst: Anything else?
 System Admin: If login fails five times, the account should be temporarily locked for 15 minutes.
 Client: Also keep inactive sessions logged out after 10 minutes.
 Business Analyst: Great. We’ll convert these into functional and non-functional requirements.
+
+
+                                        Patient Portal system (with external systems)
+Sarah Chen: Good morning everyone. Today's session is for gathering requirements for the new Patient Portal system. I'm Sarah, the project manager. Let's do quick introductions.
+Dr. Ahmed Khalil: I'm Dr. Khalil, head of cardiology. I'll be a primary end user of this system.
+Layla Hassan: I'm Layla, the business analyst. I'll be capturing requirements as we go.
+Marcus Reed: I'm Marcus, lead developer. I'll flag technical constraints as they come up, especially around the external integrations.
+Sarah Chen: Great. Dr. Khalil, what problems are you trying to solve with this portal?
+Dr. Ahmed Khalil: Right now I have to open three separate systems to get one complete patient view. Lab results are in LabCore, insurance details are in the BillingHub portal, and appointment history is in our legacy HospitalSched system. The portal must consolidate patient data from all three external systems into a single unified view.
+Layla Hassan: So the system must integrate with LabCore, BillingHub, and HospitalSched to retrieve and display patient information. And this data needs to be current?
+Dr. Ahmed Khalil: Yes, the system must display real-time lab results fetched from LabCore. I cannot be reviewing yesterday's values during a live consultation.
+Marcus Reed: LabCore provides a REST API, so the system must call the LabCore REST API to retrieve lab results on demand. BillingHub is a legacy SOAP service, so the system must include an adapter layer to communicate with the BillingHub SOAP API and translate responses into the portal's internal data format.
+Sarah Chen: What specific information do you need from BillingHub?
+Dr. Ahmed Khalil: Before I order any procedure, the system must check the patient's insurance eligibility by querying BillingHub. If the patient's insurance does not cover the procedure, the system must display a coverage warning to the physician before the order is submitted.
+Layla Hassan: And can the physician override that warning?
+Dr. Ahmed Khalil: Yes, but it must be documented. The system must allow the physician to override an insurance coverage warning and must require the physician to enter a written reason before the order proceeds.
+Marcus Reed: We also need a safety carve-out. The system must not block procedure ordering in emergency cases, but it must still log the override action with a timestamp and the physician's user ID.
+Layla Hassan: Noted. So the system must log all insurance override actions, including the procedure name, physician ID, override reason, and timestamp.
+Sarah Chen: Let's move to appointments. How should the portal handle scheduling?
+Dr. Ahmed Khalil: The system must display my upcoming appointment schedule inside the portal. I should not need to log into HospitalSched separately.
+Marcus Reed: HospitalSched supports outbound webhooks. The system must subscribe to HospitalSched webhook events to receive real-time notifications when appointments are created, updated, or cancelled. The system must update the physician's calendar view automatically when a webhook event is received, without requiring a manual page refresh.
+Layla Hassan: What happens if HospitalSched is unavailable?
+Marcus Reed: The system must cache the most recently retrieved appointment schedule locally. If the connection to HospitalSched is lost, the system must display the cached schedule and must show a visible staleness indicator that includes the date and time of the last successful sync.
+Dr. Ahmed Khalil: That works, as long as the indicator is clear. I do not want to accidentally treat a stale schedule as current.
+Sarah Chen: Agreed. Now let's talk about lab result notifications. Dr. Khalil, how do you want to be alerted?
+Dr. Ahmed Khalil: The system must notify me when new lab results arrive for any patient currently on my active worklist. Right now I find out by phone or by accident, which is not acceptable.
+Marcus Reed: LabCore does not support push notifications or webhooks. The system must poll the LabCore API at a regular interval to check for new lab results. I'd suggest every five minutes as the default.
+Layla Hassan: The system must poll LabCore every five minutes and must generate an in-app notification for the assigned physician when new lab results are available for a patient on their active worklist.
+Dr. Ahmed Khalil: For critical values — anything LabCore flags as critical — the system must also send an SMS notification to the physician immediately, not just an in-app alert.
+Marcus Reed: SMS delivery is straightforward through an SMTP-to-SMS relay. The system must send an SMS notification to the physician's registered mobile number when LabCore returns a result flagged as critical.
+Dr. Ahmed Khalil: Can we also have email as a backup option.
+Marcus Reed: Yes, the system must support email notifications as an optional channel using an SMTP relay service. The system must allow each physician to configure their preferred notification channels — in-app, SMS, and email — from their profile settings. In-app and SMS must be enabled by default.
+Layla Hassan: So the system must provide a notification preferences page where physicians can enable or disable each notification channel individually.
+Sarah Chen: Good. Before we close, let's cover security requirements. Marcus?
+Marcus Reed: The system must route all calls to external systems — LabCore, BillingHub, and HospitalSched — through the server-side backend. The frontend must never communicate directly with any external API. The system must store all API credentials for external systems in a secrets management vault and must never expose those credentials to the client side. All data transmitted between the portal and external systems must be encrypted using TLS 1.2 or higher. The system must authenticate all users before granting access to any patient data and must enforce role-based access control to restrict data visibility based on the user's assigned role.
+Layla Hassan: And for audit purposes — the system must maintain an audit log of all data access events, including which user accessed which patient record and at what time.
+Sarah Chen: Perfect. I think we have a clear and complete set of requirements. Layla will compile and share the structured document by end of day today.
+Layla Hassan: Will do. I'll have it ready by 5 PM for everyone to review before Thursday.
+Sarah Chen: Great. Thanks everyone.

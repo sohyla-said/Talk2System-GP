@@ -244,6 +244,10 @@ class ExtractRequirementsRequest(BaseModel):
 class AsyncExtractRequest(BaseModel):
     transcript: str
     engine: str
+    # False when a single-engine run is just regenerating one failed half of an
+    # unfinished comparison (Requirements_choice_page) — the result shouldn't be
+    # auto-saved as the preferred version until the user actually picks one.
+    auto_save: bool = True
 
 class UpdateRequirementsRequest(BaseModel):
     grouped: dict
@@ -310,6 +314,7 @@ def extract_requirements_async(
         task_input={
             "engine":     request.engine,
             "transcript": request.transcript,
+            "auto_save":  request.auto_save,
         },
     )
 
@@ -326,6 +331,7 @@ def extract_requirements_async(
         transcript=request.transcript,
         engine=request.engine,
         user_id=current_user.id,
+        auto_save=request.auto_save,
     )
 
     log_action(db, current_user.id, "started_async_extraction", "session",

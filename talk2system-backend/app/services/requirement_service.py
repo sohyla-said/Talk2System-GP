@@ -559,7 +559,7 @@ class RequirementService:
 # Opens its own DB session because the request session is already closed by
 # the time this runs.
 
-def run_async_extraction_task(task_id: int, project_id: int, session_id: int, transcript: str, engine: str, user_id: int):
+def run_async_extraction_task(task_id: int, project_id: int, session_id: int, transcript: str, engine: str, user_id: int, auto_save: bool = True):
     db = SessionLocal()
     task = None
     try:
@@ -572,7 +572,6 @@ def run_async_extraction_task(task_id: int, project_id: int, session_id: int, tr
         result = RequirementService.extract_and_store_requirements(db=db, project_id=project_id, session_id=session_id, transcript=transcript, engine=engine)
 
         if engine in ("hybrid", "llm", 'gemini'):
-            # Single-engine: auto-save preferred and record the session_req_id
             preferred_run_id = None
             if engine == 'hybrid':
                 preferred_run_id = result.get('hybrid_run_id')
@@ -582,19 +581,31 @@ def run_async_extraction_task(task_id: int, project_id: int, session_id: int, tr
                 preferred_run_id = result.get("gemini_run_id")
             run = RequirementService.get_req_run_by_id(db, preferred_run_id)
             grouped = run.grouped_json
-            saved = RequirementService.save_preferred_requirements(
-                db=db,
-                project_id=project_id,
-                session_id=session_id,
-                req_json=grouped,
-                src_run_id=preferred_run_id,
-            )
+
+            # Auto-save as the preferred version only for a genuine standalone
+            # single-engine run. A regeneration of one failed half of an
+            # unfinished comparison (Requirements_choice_page) sets
+            # auto_save=False — nothing should be saved until the user
+            # actually chooses a preferred set on the choice page.
+            session_req_id = None
+            preferred_type = None
+            if auto_save:
+                saved = RequirementService.save_preferred_requirements(
+                    db=db,
+                    project_id=project_id,
+                    session_id=session_id,
+                    req_json=grouped,
+                    src_run_id=preferred_run_id,
+                )
+                session_req_id = saved.get("session_req_id")
+                preferred_type = engine
+
             task.task_output = {
                 "engine":         engine,
                 "run_id":         preferred_run_id,
-                "session_req_id": saved.get("session_req_id"),
+                "session_req_id": session_req_id,
                 "data": grouped,
-                "preferred_type": engine,
+                "preferred_type": preferred_type,
             }
 
         elif engine == "both":
@@ -619,7 +630,7 @@ def run_async_extraction_task(task_id: int, project_id: int, session_id: int, tr
             message=(
                 f"Both extraction engines finished. Compare the results to choose your preferred output.\n [session_id:{session_id}] \n [hybrid_run_id:{result.get('hybrid_run_id')}] \n [llm_run_id:{result.get('llm_run_id')}]"
                 if engine == "both"
-                else "Requirement extraction completed successfully. You can now review the results."
+                else f"Requirement extraction completed successfully. You can now review the results. [engine:{engine}] [run_id:{preferred_run_id}]"
             ),
         )
 
@@ -946,7 +957,7 @@ def normalize_actor(actor, requirement_type=None):
         return None
     if isinstance(actor, str) and actor.strip().lower() == "system":
         if requirement_type == "FR":
-            return "Internal System"
+            return "System being built"
         return None
     return actor
 

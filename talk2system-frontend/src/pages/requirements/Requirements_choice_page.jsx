@@ -8,6 +8,7 @@ export default function RequirementsChoicePage() {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const { sessionId } = useParams();
+	
 	const { startExtraction, taskStatus, taskOutput, activeSessionId, activeTaskId } = useContext(ExtractionContext);
 
 	const STORAGE_KEY = `extractionState_session_${sessionId}`;
@@ -29,6 +30,7 @@ export default function RequirementsChoicePage() {
 	// own button, can still be recognized and reflected in the button state.
 	const [lastFailedEngine, setLastFailedEngine] = useState(null);
 	const [sessionName, setSessionName] = useState(null);
+	const [projectName, setProjectName] = useState(null);
 
 	// ── Toast notifications ──────────────────────────────────────────────────
 	const [toast, setToast] = useState(null); // { message, type: "error"|"warning"|"info"|"success" }
@@ -109,8 +111,10 @@ export default function RequirementsChoicePage() {
 	}, [location.state]);
 
 	useEffect(() => {
+		fetchProjectName();
 		fetchSessionMeta();
-	}, [sessionId]);
+		
+	}, [projectId, sessionId]);
 
 	useEffect(() => {
 		if (!hybridRunId && !llmRunId) {
@@ -129,6 +133,19 @@ export default function RequirementsChoicePage() {
 		};
 		load();
 	}, [hybridRunId, llmRunId]);
+
+	const fetchProjectName = async () =>{
+    try{
+        const projectRes = await fetch(`http://localhost:8000/api/projects/getproject/${projectId}`, {
+          headers: { Authorization: `Bearer ${getToken()}` }
+        });
+        const projectData = await projectRes.json();
+        setProjectName(projectData.name)
+    }
+    catch (err) {
+        console.error(err);
+      } 
+  };
 
 	const fetchSessionMeta = async () => {
 		try {
@@ -364,7 +381,10 @@ export default function RequirementsChoicePage() {
 			const resolvedTranscriptText = await fetchTranscriptText();
 			// Fire-and-forget: this only starts the background task. Completion is
 			// tracked globally (ExtractionContext) and merged in by the effect above.
-			const taskId = await startExtraction(sessionId, projectId, resolvedTranscriptText, engine);
+			// auto_save=false: this is just retrying one half of an unfinished
+			// comparison — don't save it as the preferred version until the user
+			// actually picks one on this page.
+			const taskId = await startExtraction(sessionId, projectId, resolvedTranscriptText, engine, false);
 			setRegeneratingTaskId(taskId);
 		} catch (error) {
 			console.error(error);
@@ -420,7 +440,32 @@ export default function RequirementsChoicePage() {
 
 	return (
 		<>
+		
 		<div className="w-full max-w-7xl mx-auto p-4 space-y-4">
+			<div className="flex flex-wrap gap-2 text-sm">
+              <button 
+                onClick={() => navigate("/projects")}
+                className="text-primary-accent dark:text-secondary-accent font-medium leading-normal"
+              >
+                Projects
+              </button>
+              <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
+              <button 
+                onClick={() => navigate(`/projects/${projectId}`)}
+                className="text-primary-accent dark:text-secondary-accent font-medium leading-normal"
+              >
+                {projectName}
+              </button>
+              <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
+              <button 
+                onClick={() => navigate(`/projects/${projectId}/sessions/${sessionId}/sessiondetails`)}
+                className="text-primary-accent dark:text-secondary-accent font-medium leading-normal"
+              >
+                {sessionName}
+              </button>
+              <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
+              <span className="text-text-dark dark:text-text-light font-medium leading-normal">Choose Requirements</span>
+            </div>
 			<div className="rounded-xl border border-[#d3cee8]/50 bg-white dark:bg-background-dark p-5">
 				<h1 className="text-slate-900 dark:text-white text-3xl font-black leading-tight tracking-[-0.02em]">
 					{sessionName} - Choose Preferred Extraction
