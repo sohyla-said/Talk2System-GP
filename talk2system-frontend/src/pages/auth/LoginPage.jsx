@@ -127,7 +127,7 @@ export default function LoginPage() {
       setForgotSuccess(true);
       setCooldown(60);
     } catch (err) {
-      setForgotError(err.message || "Failed to send reset email");
+      setForgotError(err.message || t("failedToSendResetEmail")||"Failed to send reset email");
     } finally {
       setForgotLoading(false);
     }
@@ -141,7 +141,7 @@ export default function LoginPage() {
       await forgotPasswordApi(forgotEmail.trim());
       setCooldown(60);
     } catch (err) {
-      setForgotError(err.message || "Failed to resend email");
+      setForgotError(err.message || t("failedToResendEmail")||"Failed to resend email");
     } finally {
       setForgotLoading(false);
     }
@@ -197,7 +197,7 @@ export default function LoginPage() {
 
                   <div>
                     <label className="text-sm font-medium text-[#100d1c] dark:text-white">{t("emailAddress")}</label>
-                    <input type="email" name="email" placeholder={t("emailPlaceholder")} value={form.email} onChange={handleChange} required className="w-full h-12 mt-1 px-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-[#100d1c] dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all" />
+                    <input type="email" name="email" placeholder={t("emailAddress")} value={form.email} onChange={handleChange} required className="w-full h-12 mt-1 px-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-[#100d1c] dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all" />
                   </div>
 
                   <div>
@@ -229,7 +229,7 @@ export default function LoginPage() {
                       <label htmlFor="rememberMe" className="text-sm text-[#100d1c]/70 dark:text-white/70 cursor-pointer select-none">{t("rememberMe")}</label>
                     </div>
                     <button type="button" onClick={openForgot} className="text-sm text-primary hover:text-primary/80 font-medium hover:underline transition-all">
-                      {"Forgot Password?"}
+                      {t("forgotPassword") || "Forgot password?"}
                     </button>
                   </div>
 
@@ -264,11 +264,11 @@ export default function LoginPage() {
                 <form onSubmit={handleForgotSubmit} className="space-y-4">
                   <div>
                     <label className="text-sm font-medium text-[#100d1c] dark:text-white block mb-1">{t("emailAddress")}</label>
-                    <input type="email" value={forgotEmail} onChange={(e) => { setForgotEmail(e.target.value); setForgotError(""); }} placeholder={t("emailPlaceholder")} required autoFocus className="w-full h-12 px-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-[#100d1c] dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all" />
+                    <input type="email" value={forgotEmail} onChange={(e) => { setForgotEmail(e.target.value); setForgotError(""); }} placeholder={t("emailAddress")} required autoFocus className="w-full h-12 px-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-[#100d1c] dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all" />
                   </div>
                   <button type="submit" disabled={forgotLoading} className="w-full h-12 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">
                     {forgotLoading && <SpinnerIcon />}
-                    {forgotLoading ? "Sending..." : "Send Reset Link"}
+                    {forgotLoading ? "Sending..." : t("sendResetLink") || "Send Reset Link"}
                   </button>
                 </form>
                 <button type="button" onClick={closeForgot} className="w-full mt-4 flex items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-[#100d1c] dark:hover:text-white transition-colors py-2"><ArrowLeftIcon />{t("backToLogin") || "Back to login"}</button>
@@ -284,7 +284,7 @@ export default function LoginPage() {
                 </div>
                 <button type="button" onClick={handleResend} disabled={cooldown > 0 || forgotLoading} className="w-full h-12 border-2 border-primary text-primary rounded-lg font-semibold hover:bg-primary/5 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">
                   {forgotLoading && <SpinnerIcon />}
-                  {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend Email"}
+                  {cooldown > 0 ? t("resendIn").replace("{seconds}", cooldown) : t("resendEmail")}
                 </button>
                 <button type="button" onClick={closeForgot} className="w-full mt-4 h-12 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 transition-all flex items-center justify-center gap-2"><ArrowLeftIcon />{t("backToLogin") || "Back to login"}</button>
               </div>
