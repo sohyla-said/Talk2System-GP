@@ -885,33 +885,6 @@ export default function SrsPage() {
           </div>
         )}
 
-        {/* Tab toggle */}
-        {srsContent && (
-          <div className="flex gap-2 mb-4">
-            <button
-              onClick={() => setPreviewMode(false)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${!previewMode ? "bg-primary text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"}`}
-            >
-              <span className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-base">download</span>
-                Download
-              </span>
-            </button>
-            <button
-              onClick={() => {
-                if (!previewText && artifactId) fetchSrsText(artifactId);
-                setPreviewMode(true);
-              }}
-              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${previewMode ? "bg-primary text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"}`}
-            >
-              <span className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-base">visibility</span>
-                Preview
-              </span>
-            </button>
-          </div>
-        )}
-
         {/* Main content area */}
         {loading ? (
           <div className="bg-white dark:bg-[#1f1c2e] rounded-xl border p-6 min-h-[300px] flex items-center justify-center">
