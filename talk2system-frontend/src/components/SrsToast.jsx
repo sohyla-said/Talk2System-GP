@@ -5,6 +5,7 @@ export default function SrsToast({
   projectId,
   sessionId,   // null for project-level generation
   taskOutput,  // set by onDone; null while pending/in_progress
+  formatVersion: formatVersionProp,  // explicitly passed from App.jsx so it's always available
   onDismiss,
   onRetry,
 }) {
@@ -15,13 +16,17 @@ export default function SrsToast({
     ? rawError
     : "SRS generation failed. Please retry or try again in a moment.";
 
-  const formatVersion = taskOutput?.format_version ?? "";
+  const formatVersion = formatVersionProp ?? taskOutput?.format_version ?? "";
 
   const handleView = () => {
     if (sessionId) {
-      navigate(`/projects/${projectId}/sessions/${sessionId}/artifacts/srs`);
+      navigate(`/projects/${projectId}/sessions/${sessionId}/srs/generate`, {
+        state: { formatVersion: formatVersion || undefined },
+      });
     } else {
-      navigate(`/projects/${projectId}/artifacts/srs`);
+      navigate(`/projects/${projectId}/srs/generate`, {
+        state: { source: "project", formatVersion: formatVersion || undefined },
+      });
     }
     onDismiss();
   };

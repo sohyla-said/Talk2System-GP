@@ -56,11 +56,14 @@ export async function handleNotificationNav(notif, navigate, getToken) {
     const sId = sessionMatch ? parseInt(sessionMatch[1], 10) : null;
     const dtMatch = message?.match(/\[diagram_type:([a-z]+)\]/);
     const diagramType = dtMatch ? dtMatch[1] : null;
-    const navState = diagramType ? { diagramType } : undefined;
     if (sId) {
-      navigate(`/projects/${project_id}/sessions/${sId}/artifacts/uml`, { state: navState });
+      navigate(`/projects/${project_id}/artifacts/uml`, {
+        state: { source: "session", sessionId: sId, diagramType: diagramType || undefined },
+      });
     } else {
-      navigate(`/projects/${project_id}/artifacts/uml-view`, { state: navState });
+      navigate(`/projects/${project_id}/artifacts/uml`, {
+        state: { source: "project", diagramType: diagramType || undefined },
+      });
     }
     return;
   }
@@ -83,10 +86,16 @@ export async function handleNotificationNav(notif, navigate, getToken) {
   if (notification_type === "srs_generated" && project_id) {
     const sessionMatch = message?.match(/\[session_id:(\d+)\]/);
     const sId = sessionMatch ? parseInt(sessionMatch[1], 10) : null;
+    const fvMatch = message?.match(/\[format_version:([a-z0-9_]+)\]/);
+    const formatVersion = fvMatch ? fvMatch[1] : null;
     if (sId) {
-      navigate(`/projects/${project_id}/sessions/${sId}/artifacts/srs`);
+      navigate(`/projects/${project_id}/sessions/${sId}/srs/generate`, {
+        state: { formatVersion: formatVersion || undefined },
+      });
     } else {
-      navigate(`/projects/${project_id}/artifacts/srs`);
+      navigate(`/projects/${project_id}/srs/generate`, {
+        state: { source: "project", formatVersion: formatVersion || undefined },
+      });
     }
     return;
   }

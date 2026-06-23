@@ -20,12 +20,12 @@ export default function UmlToast({
 
   const handleView = () => {
     if (sessionId) {
-      navigate(`/projects/${projectId}/sessions/${sessionId}/artifacts/uml`, {
-        state: { diagramType: diagramType || undefined },
+      navigate(`/projects/${projectId}/artifacts/uml`, {
+        state: { source: "session", sessionId, diagramType: diagramType || undefined },
       });
     } else {
-      navigate(`/projects/${projectId}/artifacts/uml-view`, {
-        state: { diagramType: diagramType || undefined },
+      navigate(`/projects/${projectId}/artifacts/uml`, {
+        state: { source: "project", diagramType: diagramType || undefined },
       });
     }
     onDismiss();

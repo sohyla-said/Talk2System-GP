@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { getToken } from "../../api/authApi";
 import SrsApprovalModal from "../../components/modals/SrsApprovalModal";
+import Toast from "../../components/Toast";
 import { useContext } from "react";
 import { SrsContext } from "../../App";
 import {
@@ -278,9 +279,18 @@ export default function SrsPage() {
 
   // track whether we came from the project-level requirements page
   const [isProjectSource, setIsProjectSource] = useState(false);
-  const [formatVersion, setFormatVersion] = useState("ieee_830");
+  const [formatVersion, setFormatVersion] = useState(location.state?.formatVersion ?? "ieee_830");
   const [projectName, setProjectName] = useState(null);
   const [sessionName, setSessionName] = useState(null);
+
+  // ── Toast notifications ──────────────────────────────────────────────────
+  const [toast, setToast] = useState(null); // { message, type: "error"|"warning"|"info"|"success" }
+  const showToast = (message, type = "error") => setToast({ message, type });
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const getAuthHeaders = () => {
     const token = getToken();
@@ -513,14 +523,14 @@ export default function SrsPage() {
         }
       } catch (err) {
         console.error(err);
-        alert("Failed to start SRS generation. Make sure Ollama is running.");
+        showToast("Failed to start SRS generation. Make sure Ollama is running.");
       }
       return;
     }
 
     // ── SESSION-LEVEL generation ───────────────────────────────────────────────
     if (!sessionId) {
-      alert("No session found. Please start a meeting session first.");
+      showToast("No session found. Please start a meeting session first.");
       return;
     }
 
@@ -533,7 +543,7 @@ export default function SrsPage() {
       // Background task started — SrsToast will notify when done.
     } catch (err) {
       console.error(err);
-      alert("Failed to start SRS generation. Make sure Ollama is running.");
+      showToast("Failed to start SRS generation. Make sure Ollama is running.");
     }
   };
 
@@ -986,6 +996,8 @@ export default function SrsPage() {
           onApprove={handleApprove}
         />
       )}
+
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }

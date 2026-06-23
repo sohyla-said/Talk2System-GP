@@ -417,7 +417,7 @@ def run_async_uml_task(
             db=db, project_id=project_id, session_id=session_id,
             notification_type="uml_generated",
             title="UML Diagram Ready",
-            message=f"Your {diagram_type} UML diagram has been generated. [project_id:{project_id}]"
+            message=f"Your {diagram_type} UML diagram has been generated. [project_id:{project_id}] [diagram_type:{diagram_type}]"
                     + (f" [session_id:{session_id}]" if session_id else ""),
         )
 

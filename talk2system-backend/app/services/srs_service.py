@@ -820,7 +820,8 @@ def run_async_srs_task(
             db=db, project_id=project_id, session_id=session_id,
             notification_type="srs_generated",
             title="SRS Document Ready",
-            message=f"Your SRS document ({format_version}) has been generated.",
+            message=f"Your SRS document ({format_version}) has been generated. [project_id:{project_id}] [format_version:{format_version}]"
+                    + (f" [session_id:{session_id}]" if session_id else ""),
         )
 
     except Exception as exc:

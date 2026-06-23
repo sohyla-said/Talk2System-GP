@@ -151,6 +151,7 @@ function AppInner() {
   const [srsTaskOutput,   setSrsTaskOutput]   = useState(null);
   const [srsProjectId,    setSrsProjectId]    = useState(null);
   const [srsSessionId,    setSrsSessionId]    = useState(null);
+  const [srsFormatVersion, setSrsFormatVersion] = useState(null);
   const lastSrsCallRef = useRef(null);
 
   const { trackTask: trackSrs, cancelTracking: cancelSrs } = useSrsTask({
@@ -187,6 +188,7 @@ function AppInner() {
     }
 
     const data = await res.json();
+    setSrsFormatVersion(formatVersion);
     setSrsProjectId(projectId);
     setSrsSessionId(sessionId ?? null);
     setSrsTaskOutput(null);
@@ -253,6 +255,7 @@ function AppInner() {
           projectId={srsProjectId}
           sessionId={srsSessionId}
           taskOutput={srsTaskOutput}
+          formatVersion={srsTaskOutput?.format_version || srsFormatVersion}
           onDismiss={() => setSrsToastVisible(false)}
           onRetry={() => {
             if (!lastSrsCallRef.current) return;
