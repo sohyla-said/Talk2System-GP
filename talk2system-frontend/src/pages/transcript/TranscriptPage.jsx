@@ -48,6 +48,7 @@ export default function TranscriptPage() {
   const [pendingEngineAction, setPendingEngineAction] = useState(null);
   const [existingRequirementId, setExistingRequirementId] = useState(null);
   const [isCheckingReq, setIsCheckingReq] = useState(false);
+  const [hasSummary, setHasSummary] = useState(false);
   const [sessionCompleted, setSessionCompleted] = useState(false);
 
   // ── Translation state ────────────────────────────────────────────────────
@@ -216,6 +217,23 @@ export default function TranscriptPage() {
     };
     check();
   }, [projectId, sessionId]);
+
+  // ── Check existing summary ───────────────────────────────────────────────
+  useEffect(() => {
+    if (!sessionId) return;
+    const check = async () => {
+      try {
+        const res = await fetch(`http://localhost:8000/api/summary/${sessionId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.summary) setHasSummary(true);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    check();
+  }, [sessionId]);
 
   // ── Load cached translation ──────────────────────────────────────────────
   // Runs once on mount. If a valid cached translation is found, lock the ref
@@ -851,14 +869,24 @@ export default function TranscriptPage() {
             <div className="flex flex-col gap-4 bg-white dark:bg-background-dark/50 rounded-xl p-6 shadow-soft border border-border-light dark:border-white/10">
               <h3 className="text-xl font-bold">Generate Assets</h3>
               <div className="flex flex-col gap-3">
-                <button
-                  onClick={() => handleGenerate("sum")}
-                  disabled={sessionCompleted}
-                  className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-primary-accent/90 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary-accent"
-                >
-                  <span className="material-symbols-outlined text-xl">summarize</span>
-                  Summarize Transcript
-                </button>
+                {hasSummary ? (
+                  <button
+                    onClick={() => navigate(`/summary/${sessionId}`)}
+                    className="flex w-full items-center justify-center gap-3 rounded-lg bg-green-600 hover:bg-green-700 px-4 py-3 text-base font-bold text-white shadow-soft transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-xl">task_alt</span>
+                    View Summary
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleGenerate("sum")}
+                    disabled={sessionCompleted}
+                    className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-primary-accent/90 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary-accent"
+                  >
+                    <span className="material-symbols-outlined text-xl">summarize</span>
+                    Summarize Transcript
+                  </button>
+                )}
 
                 {existingRequirementId ? (
                   <div className="flex flex-col gap-2">
@@ -969,6 +997,13 @@ export default function TranscriptPage() {
                   <p className="text-xs text-blue-600 dark:text-blue-400 text-center flex items-center justify-center gap-1">
                     <span className="material-symbols-outlined text-sm">info</span>
                     Requirements already generated for this session
+                  </p>
+                )}
+
+                {hasSummary && (
+                  <p className="text-xs text-blue-600 dark:text-blue-400 text-center flex items-center justify-center gap-1">
+                    <span className="material-symbols-outlined text-sm">info</span>
+                    Summary already generated for this session
                   </p>
                 )}
               </div>

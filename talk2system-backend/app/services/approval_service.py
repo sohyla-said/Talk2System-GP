@@ -1,5 +1,5 @@
 # app/services/approval_service.py
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from app.models.approval import Approval
 from app.models.artifact import Artifact
@@ -9,6 +9,16 @@ from app.models.session_membership import SessionMembership
 from app.models.session_requirement import SessionRequirement
 
 FEATURES = {"transcript", "requirements", "uml", "srs"}
+
+# UML has multiple independently-versioned diagram types. The aggregate "uml" feature
+# snapshot (used by get_approval_status/_latest_version_id) only reflects whichever
+# diagram type was generated most recently — see get_uml_diagrams_breakdown for the
+# per-type view used to avoid confusing users about which diagrams still need approval.
+UML_DIAGRAM_TYPES = {
+    "usecase": "UML_USECASE",
+    "class": "UML_CLASS",
+    "sequence": "UML_SEQUENCE",
+}
 
 
 class ApprovalError(Exception):
@@ -206,6 +216,38 @@ class ApprovalService:
         return pending
 
     # ─────────────────────────────────────────────────────────────
+    # PUBLIC: per-diagram-type UML approval breakdown (usecase/class/
+    # sequence), each using its OWN latest version. Lets the UI flag
+    # diagram types other than the one a user just reviewed that still
+    # need approval, instead of relying on the single aggregate "uml"
+    # snapshot which only tracks whichever type was generated last.
+    # ─────────────────────────────────────────────────────────────
+    @staticmethod
+    def get_uml_diagrams_breakdown(db: Session, session_id: int, user_id: int) -> List[Dict]:
+        ApprovalService._ensure_session_membership(db, session_id, user_id)
+        breakdown = []
+        for diagram_type, type_name in UML_DIAGRAM_TYPES.items():
+            art = (
+                db.query(Artifact)
+                .join(ArtifactType, Artifact.artifact_type_id == ArtifactType.id)
+                .filter(
+                    Artifact.session_id == session_id,
+                    ArtifactType.name == type_name,
+                )
+                .order_by(Artifact.created_at.desc())
+                .first()
+            )
+            if not art:
+                continue
+            snapshot = ApprovalService._snapshot_for_version(
+                db, session_id, user_id, "uml", art.id
+            )
+            snapshot["diagram_type"] = diagram_type
+            snapshot["version"] = art.version
+            breakdown.append(snapshot)
+        return breakdown
+
+    # ─────────────────────────────────────────────────────────────
     # PRIVATE HELPERS
     # ─────────────────────────────────────────────────────────────
 
@@ -265,6 +307,21 @@ class ApprovalService:
         current_user_approved = user_id in approved_user_ids
         all_members_approved = total_members > 0 and approved_count == total_members
 
+        members = (
+            db.query(SessionMembership)
+            .filter(SessionMembership.session_id == session_id)
+            .all()
+        )
+        pending_members = [
+            {
+                "user_id": m.user_id,
+                "full_name": m.user.full_name,
+                "email": m.user.email,
+            }
+            for m in members
+            if m.user_id not in approved_user_ids
+        ]
+
         return {
             "feature": feature,
             "version_id": version_id,
@@ -274,6 +331,7 @@ class ApprovalService:
             "all_members_approved": all_members_approved,
             "status": "approved" if all_members_approved else "pending",
             "exists": ApprovalService._feature_exists(db, session_id, feature),
+            "pending_members": pending_members,
         }
 
     @staticmethod

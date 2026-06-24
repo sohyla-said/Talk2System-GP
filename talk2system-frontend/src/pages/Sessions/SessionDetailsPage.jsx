@@ -15,12 +15,15 @@ export default function SessionDetailsPage() {
   const [session, setSession] = useState(null);
   const [members, setMembers] = useState([]);
   const [approvalStatus, setApprovalStatus] = useState(null);
+  const [umlDiagramsBreakdown, setUmlDiagramsBreakdown] = useState([]);
+  const [umlBreakdownExpanded, setUmlBreakdownExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [projectName, setProjectName] = useState(null);
   const [notification, setNotification] = useState(null);
 
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [pendingPopup, setPendingPopup] = useState(null); // { label, pending_members }
 
   // Derive active tab from current path
   const currentPath = location.pathname;
@@ -64,6 +67,23 @@ export default function SessionDetailsPage() {
         const membersList = Array.isArray(membersRes) ? membersRes : [];
         setMembers(membersList);
         setApprovalStatus(approvalRes);
+
+        // Per-diagram-type breakdown — only fetched when UML diagrams exist, since the
+        // aggregate "uml" snapshot above only reflects whichever type was generated last.
+        const umlFeature = (approvalRes?.features || []).find((f) => f.feature === "uml");
+        if (umlFeature?.exists) {
+          try {
+            const breakdownRes = await fetch(
+              `http://127.0.0.1:8000/api/sessions/${sessionId}/features/uml/diagrams-status`,
+              { headers }
+            );
+            if (breakdownRes.ok) {
+              setUmlDiagramsBreakdown(await breakdownRes.json());
+            }
+          } catch {
+            // silently fail — the aggregate uml card still renders without the breakdown
+          }
+        }
 
         const resolvedProjectId = projectId || sessionRes?.project_id;
         if (resolvedProjectId) {
@@ -372,6 +392,7 @@ export default function SessionDetailsPage() {
                         current_user_approved: false,
                         all_members_approved: false,
                         exists: key === "transcript", // transcript always exists
+                        pending_members: [],
                       };
 
                       const pct =
@@ -415,8 +436,22 @@ export default function SessionDetailsPage() {
 
                           {/* Footer */}
                           <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-400">
+                            <span className="flex items-center gap-1 text-xs text-gray-400">
                               {item.approved_members_count}/{item.total_members_count} approved
+                              {!item.all_members_approved && (item.pending_members?.length > 0) && (
+                                <button
+                                  onClick={() =>
+                                    setPendingPopup({
+                                      label: featureMeta.label,
+                                      pending_members: item.pending_members,
+                                    })
+                                  }
+                                  title="View members who haven't approved yet"
+                                  className="flex items-center justify-center w-5 h-5 rounded-full text-gray-400 hover:text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition"
+                                >
+                                  <span className="material-symbols-outlined text-sm">group</span>
+                                </button>
+                              )}
                             </span>
                             <button
                               onClick={() => handleNavigateToFeature(key)}
@@ -432,6 +467,60 @@ export default function SessionDetailsPage() {
                               <span className="material-symbols-outlined text-xs">check_circle</span>
                               You approved this
                             </p>
+                          )}
+
+                          {/* UML has 3 independently-versioned diagram types — the counts
+                              above only reflect the most recently generated one, so call
+                              out per-type status here to avoid confusing the user. */}
+                          {key === "uml" && umlDiagramsBreakdown.length > 1 && (
+                            <div className="pt-2 mt-1 border-t border-gray-100 dark:border-gray-800">
+                              <button
+                                type="button"
+                                onClick={() => setUmlBreakdownExpanded((v) => !v)}
+                                className="w-full flex items-center justify-between text-[10px] font-bold uppercase tracking-wide text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition"
+                              >
+                                <span>Per-diagram status</span>
+                                <span className="flex items-center gap-0.5 normal-case font-semibold">
+                                  {umlBreakdownExpanded ? "Show less" : "Show more"}
+                                  <span className="material-symbols-outlined text-sm">
+                                    {umlBreakdownExpanded ? "expand_less" : "expand_more"}
+                                  </span>
+                                </span>
+                              </button>
+
+                              {umlBreakdownExpanded && (
+                                <div className="flex flex-col gap-1 mt-1.5">
+                                  {umlDiagramsBreakdown.map((d) => (
+                                    <div key={d.diagram_type} className="flex items-center justify-between text-[11px]">
+                                      <span className="capitalize text-gray-600 dark:text-gray-300">
+                                        {d.diagram_type} ({d.version})
+                                      </span>
+                                      <span
+                                        className={`flex items-center gap-1 font-medium ${
+                                          d.all_members_approved
+                                            ? "text-emerald-600 dark:text-emerald-400"
+                                            : "text-amber-600 dark:text-amber-400"
+                                        }`}
+                                      >
+                                        <span className="material-symbols-outlined text-xs">
+                                          {d.all_members_approved ? "check_circle" : "schedule"}
+                                        </span>
+                                        {d.all_members_approved
+                                          ? "Approved"
+                                          : `${d.approved_members_count}/${d.total_members_count}`}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {umlDiagramsBreakdown.some((d) => !d.all_members_approved) && (
+                                <p className="mt-1.5 text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-xs">info</span>
+                                  Other diagrams need approval{umlBreakdownExpanded ? " — see above." : " — click to view."}
+                                </p>
+                              )}
+                            </div>
                           )}
                         </div>
                       );
@@ -493,6 +582,59 @@ export default function SessionDetailsPage() {
             </div>
           </div>
         )}
+
+      {/* Pending approvers popup */}
+      {pendingPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setPendingPopup(null)}
+          />
+
+          <div className="relative w-full max-w-sm rounded-2xl bg-white dark:bg-[#1a162e] p-6 shadow-2xl border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                Awaiting approval &middot; {pendingPopup.label}
+              </h3>
+              <button
+                onClick={() => setPendingPopup(null)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            {pendingPopup.pending_members.length === 0 ? (
+              <p className="text-sm text-gray-400">Everyone has approved.</p>
+            ) : (
+              <div className="flex flex-col gap-2 max-h-72 overflow-y-auto">
+                {pendingPopup.pending_members.map((m, idx) => (
+                  <div
+                    key={m.user_id}
+                    className="flex items-center gap-3 p-2.5 rounded-lg bg-gray-50 dark:bg-white/5"
+                  >
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${
+                        avatarColors[idx % avatarColors.length]
+                      }`}
+                    >
+                      {(m.full_name || m.email || "?")
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .toUpperCase()
+                        .slice(0, 2)}
+                    </div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                      {m.full_name || m.email}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {notification && (

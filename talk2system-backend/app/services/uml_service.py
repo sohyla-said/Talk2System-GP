@@ -29,15 +29,36 @@ client = genai.Client(api_key=api_key)
 KROKI_URL = "https://kroki.io"
 STORAGE_PATH = "storage/uml"
 
+# Local fallback when all Gemini models are quota-exhausted/unavailable
+OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_MODEL = "qwen2.5:3b"
+# OLLAMA_MODEL = "qwen2.5:7b"
+
 # ==========================
 # HELPERS
 # ==========================
+# Filler words that, combined with "system", still just mean "the system itself"
+# (e.g. "system being built", "the system", "current system") rather than a named
+# external system (e.g. "payment gateway", "email service") — those must be kept.
+_SYSTEM_SELF_REFERENCE_FILLERS = {
+    "the", "this", "our", "target", "current",
+    "being", "built", "developed", "designed", "itself",
+}
+
+
+def _is_self_referential_system(actor: str) -> bool:
+    words = actor.strip().lower().split()
+    if "system" not in words:
+        return False
+    return all(w == "system" or w in _SYSTEM_SELF_REFERENCE_FILLERS for w in words)
+
+
 def clean_actors(actors: list):
-    """Remove 'system' and normalize actors"""
+    """Remove the system itself (and self-referential variants like 'system being built') from actors"""
     return list(set([
         a.strip().lower()
         for a in actors
-        if a and a.strip().lower() != "system"
+        if a and not _is_self_referential_system(a)
     ]))
 
 
@@ -49,8 +70,8 @@ def simplify_requirements(frs: list):
 
     for fr in frs:
         actor = fr.get("actor", "user")
-        # Skip entirely if actor is "system"
-        if actor.strip().lower() == "system":
+        # Skip entirely if actor is the system itself (or a self-referential variant)
+        if _is_self_referential_system(actor):
             continue
         feature = fr.get("feature") or fr.get("text")
 
@@ -66,12 +87,35 @@ def simplify_requirements(frs: list):
 # AI: GENERATE UML CODE
 # ==========================
 def generate_uml_code_with_ai(requirements_json: dict, diagram_type: str):
-    
     actors = clean_actors(requirements_json.get("actors", []))
     frs = simplify_requirements(requirements_json.get("functional_requirements", []))
 
     prompt = build_prompt(actors, frs, diagram_type)
+    return _generate_uml_with_fallback_chain(prompt)
 
+
+def repair_uml_code_with_ai(broken_uml_code: str, diagram_type: str, error_message: str) -> str:
+    """Asks the AI to fix a PlantUML syntax error reported by the renderer, used as a single retry after a render failure."""
+    rules = _diagram_rules(diagram_type)
+    prompt = f"""
+The following PlantUML {diagram_type.upper()} diagram failed to render due to a syntax error.
+
+Render error:
+{error_message[:300]}
+
+Fix the error while strictly following these rules — the same rules used to generate it, do not violate any of them while repairing:
+
+{rules}
+
+Keep the same classes/actors/actions and overall structure — only fix what's broken.
+
+Broken PlantUML code:
+{broken_uml_code}
+"""
+    return _generate_uml_with_fallback_chain(prompt)
+
+
+def _generate_uml_with_fallback_chain(prompt: str) -> str:
     models_to_try = [
         "gemini-2.0-flash",
         "gemini-2.5-flash",
@@ -107,33 +151,79 @@ def generate_uml_code_with_ai(requirements_json: dict, diagram_type: str):
                     print(f"{model_name} failed, trying next model...")
                     break
 
-    raise Exception(f"All models failed. Last error: {last_error}")
+    # All Gemini models exhausted/unavailable — fall back to local Ollama
+    try:
+        return generate_uml_code_with_ollama(prompt)
+    except Exception as ollama_error:
+        raise Exception(
+            f"All models failed. Last Gemini error: {last_error}. "
+            f"Ollama fallback error: {ollama_error}"
+        )
+
+
+# ==========================
+# OLLAMA FALLBACK
+# ==========================
+def generate_uml_code_with_ollama(prompt: str, timeout: int = 300) -> str:
+    logger.info(f"Falling back to Ollama ({OLLAMA_MODEL}) for UML generation...")
+    try:
+        response = requests.post(
+            OLLAMA_URL,
+            json={
+                "model": OLLAMA_MODEL,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.2,
+                    "num_predict": 1024,
+                    "num_ctx": 4096,
+                },
+            },
+            timeout=timeout,
+        )
+    except requests.exceptions.ConnectionError:
+        raise Exception("Ollama is not running. Start it with: ollama serve")
+    except requests.exceptions.Timeout:
+        raise Exception("Ollama timed out generating the UML diagram.")
+
+    if response.status_code != 200:
+        raise Exception(f"Ollama error: {response.status_code} — {response.text[:200]}")
+
+    text = response.json().get("response", "").strip()
+    return clean_uml_output(text)
 
 
 # ==========================
 # PROMPT BUILDER
 # ==========================
-def build_prompt(actors, frs, diagram_type):
-
+def _diagram_rules(diagram_type: str) -> str:
+    """Diagram-specific instructions, shared between the initial generation prompt and the repair prompt."""
     if diagram_type == "usecase":
-        return f"""
-Generate a PlantUML USE CASE diagram.
+        return """Generate a PlantUML USE CASE diagram.
 
 Strict rules:
 - Only return valid PlantUML
 - Start with @startuml and end with @enduml
 - No explanations
 - Define actors
-- Define use cases from actions
-- Link actors to use cases
+- Draw the system boundary using a rectangle block, and declare EVERY use case inside it with: usecase "Use Case Name" as Alias
+    rectangle "System Boundary" {
+      usecase "Login" as Login
+      usecase "Manage Profile" as ManageProfile
+    }
+- Place all actors OUTSIDE the rectangle block — never declare an actor inside it
+- All relationships (actor-to-use-case, extend, include, inheritance) go OUTSIDE the rectangle block, written using each use case's Alias — never write a relationship line inside the rectangle block, and never use inline "(Use Case Name)" syntax
 - Avoid duplicate use cases
 - NEVER include "System" as an actor — omit any use case whose only actor is System
-- Draw a system boundary (frame) that contains all use cases
-- Place all actors OUTSIDE the system boundary
+- If an actor's name contains spaces (e.g. "payment gateway"), declare it with quotes and an alias, then use the alias everywhere else:
+    actor "Payment Gateway" as PaymentGateway
+    PaymentGateway --> ProcessPayment
+- NEVER write a multi-word actor name unquoted directly in a relationship (e.g. "Payment Gateway --> ProcessPayment" without quotes/alias is invalid)
 
 Use case naming rules:
-- Every use case name MUST follow the format: "Verb + Subject" (e.g., "Manage Users", "Submit Report") or "Verb only" (e.g., "Login", "Register")
+- Every use case's quoted Name MUST follow the format: "Verb + Subject" (e.g., "Manage Users", "Submit Report") or "Verb only" (e.g., "Login", "Register")
 - Never name a use case with a noun phrase alone (e.g., avoid "User Authentication" — use "Authenticate User" instead)
+- The Alias must be the Name in PascalCase with no spaces (e.g. "Manage Users" → ManageUsers)
 
 Inheritance (Generalization) rules:
 - Inheritance is ONLY allowed between actors, never between use cases
@@ -143,59 +233,108 @@ Inheritance (Generalization) rules:
 
 Extend relationship rules:
 - Use «extend» to show that one use case optionally extends another
-- The arrow goes FROM the extending use case TO the base use case, as a dashed arrow
-- Syntax: ExtendingUseCase .down.> BaseUseCase : «extend»
+- The arrow goes FROM the extending use case TO the base use case, as a dashed arrow, using their Aliases
+- Syntax: ExtendingAlias .down.> BaseAlias : «extend»
 - Example: "Edit Transcript" extends "View Transcript" meaning the user CAN edit after viewing, but it is optional
 - Use extend only for optional/conditional behavior that is not part of the main flow
 
 Include relationship rules:
 - Use «include» when a use case always calls another as a mandatory sub-step
-- Syntax: BaseUseCase .down.> IncludedUseCase : «include»
+- Syntax: BaseAlias .down.> IncludedAlias : «include»
 
-Actors:
-{actors}
-
-Use Cases:
-{frs}
-"""
+Example:
+@startuml
+actor User
+rectangle "System Boundary" {
+  usecase "Login" as Login
+  usecase "Manage Profile" as ManageProfile
+}
+User --> Login
+User --> ManageProfile
+@enduml"""
 
     elif diagram_type == "class":
-        return f"""
-Generate a PlantUML CLASS diagram.
+        return """Generate a PlantUML CLASS diagram.
 
 Strict rules:
 - Only return valid PlantUML
-- Extract meaningful classes from actions
-- Include methods
-- No explanations
+- Start with @startuml and end with @enduml
+- No explanations, no markdown code fences
+- Extract meaningful classes from the actors and actions below
+- Every class must use this exact block syntax (one member per line, inside curly braces):
+    class ClassName {
+      +attributeName: Type
+      +methodName()
+    }
+- Every attribute/method line must start with a visibility symbol: + (public), - (private), or # (protected)
+- Every class must include relevant attributes inferred from its actions/domain (not just an id) — e.g. a User that can "login" implies attributes like username and password; an Order implies attributes like status and total
+- Identify and include relationships between classes whenever they logically exist (e.g. one class manages, owns, creates, or uses another) — do not output isolated classes with no relationships unless none genuinely exist
+- Relationships go OUTSIDE class blocks, one per line, using the most appropriate type: --> (association), --|> (inheritance), *-- (composition, "owns and cannot exist without"), o-- (aggregation, "has a, but can exist independently")
+- Never place a relationship arrow inside a class block
+- Class names must be a single valid identifier — convert any multi-word actor/action name to PascalCase (e.g. "payment gateway" → PaymentGateway). Never put spaces or quotes in a class name.
+- Avoid duplicate classes and duplicate methods
 
-Actors:
-{actors}
-
-Actions:
-{frs}
-"""
+Example:
+@startuml
+class User {
+  +id: int
+  +username: string
+  +password: string
+  +login()
+}
+class Order {
+  +id: int
+  +status: string
+  +total: float
+  +submit()
+}
+User "1" --> "many" Order
+@enduml"""
 
     elif diagram_type == "sequence":
-        return f"""
-Generate a PlantUML SEQUENCE diagram.
+        return """Generate a PlantUML SEQUENCE diagram.
 
 Strict rules:
 - Only return valid PlantUML
-- Use @startuml and @enduml
-- Show interaction between actors and system
-- Show message flow clearly
-- No explanations
+- Start with @startuml and end with @enduml
+- No explanations, no markdown code fences
+- Declare every actor once at the top using: actor ActorName  (and declare "System" with: participant System)
+- If an actor's name contains spaces (e.g. "payment gateway"), declare it with quotes and an alias, then use the alias everywhere else:
+    actor "Payment Gateway" as PaymentGateway
+- NEVER write a multi-word actor name unquoted in a declaration or message (e.g. "actor Payment Gateway" or "Payment Gateway -> System" without quotes/alias is invalid)
+- Every interaction must be one message per line using -> (call) or --> (return), in the form:
+    ActorName -> System: actionName()
+    System --> ActorName: result
+- If you open an alt/opt/loop block, you must close it with end
+- Avoid duplicate or contradictory messages
 
-Actors:
-{actors}
-
-Interactions:
-{frs}
-"""
+Example:
+@startuml
+actor User
+participant System
+actor "Payment Gateway" as PaymentGateway
+User -> System: login()
+System --> User: loginResult
+System -> PaymentGateway: processPayment()
+PaymentGateway --> System: paymentResult
+@enduml"""
 
     else:
         raise ValueError("Invalid diagram type")
+
+
+def build_prompt(actors, frs, diagram_type):
+    rules = _diagram_rules(diagram_type)
+    items_label = {"usecase": "Use Cases", "sequence": "Interactions"}.get(diagram_type, "Actions")
+
+    return f"""{rules}
+
+Actors:
+{actors}
+
+{items_label}:
+{frs}
+"""
 
 
 # ==========================
@@ -248,6 +387,7 @@ def render_diagram_with_kroki(uml_code: str):
     kroki_url = f"{KROKI_URL}/plantuml/png"
 
     # Try kroki first (1 attempt, short timeout); fall back to plantuml.com
+    errors = {}
     for label, fn in [
         ("kroki",    lambda: _try_render(kroki_url, post_data=uml_code.encode("utf-8"), timeout=15)),
         ("plantuml", lambda: _try_render(plantuml_url, timeout=20)),
@@ -256,8 +396,11 @@ def render_diagram_with_kroki(uml_code: str):
             return fn()
         except Exception as e:
             logger.warning(f"{label} render failed, trying next: {e}")
+            errors[label] = str(e)
 
-    raise Exception("All UML render services failed (kroki + plantuml.com)")
+    # Kroki returns the actual PlantUML syntax diagnostic as text; plantuml.com
+    # bakes its error into a PNG image, which isn't usable as an error message.
+    raise Exception(errors.get("kroki", "All UML render services failed (kroki + plantuml.com)"))
 
 
 # ==========================
@@ -292,8 +435,19 @@ def generate_uml_pipeline(
         # 1. Generate UML code
         uml_code = generate_uml_code_with_ai(requirements_json, diagram_type)
 
-        # 2. Render
-        image_bytes = render_diagram_with_kroki(uml_code)
+        # 2. Render (one AI repair retry if the generated PlantUML has a syntax error)
+        try:
+            image_bytes = render_diagram_with_kroki(uml_code)
+        except Exception as render_error:
+            logger.warning(f"Render failed, attempting AI syntax repair: {render_error}")
+            logger.warning(f"Broken PlantUML code:\n{uml_code}")
+            uml_code = repair_uml_code_with_ai(uml_code, diagram_type, str(render_error))
+            try:
+                image_bytes = render_diagram_with_kroki(uml_code)
+            except Exception as second_render_error:
+                logger.error(f"Repair attempt also failed: {second_render_error}")
+                logger.error(f"Repaired PlantUML code:\n{uml_code}")
+                raise
 
         # 3. Save
         file_path = save_uml_file(
@@ -331,6 +485,8 @@ def _sanitize_error_message(raw: str) -> str:
         return "Diagram rendering service is temporarily unavailable. Please retry in a moment."
     if "kroki" in low:
         return "Diagram rendering failed. Please retry in a moment."
+    if "ollama is not running" in low:
+        return "AI quota exceeded and the local fallback (Ollama) is not running. Please start Ollama and retry."
     if "timeout" in low or "timed out" in low:
         return "The request timed out. Please retry."
     if "all models failed" in low or "quota" in low or "429" in raw:
@@ -387,6 +543,17 @@ def run_async_uml_task(
             "artifact_id": artifact["id"],   # whatever ArtifactService returns
         }
         task.status = "done"
+
+        # A brand-new artifact has zero approvals — refresh the cached project status
+        # so it reflects "pending_approval" instead of the previous (already fully
+        # approved) artifact's "in_progress" state.
+        if source == "project":
+            from app.services.project_approval_service import ProjectApprovalService
+            new_status = ProjectApprovalService.compute_project_status(db, project_id)
+            project_row = db.query(Project).filter(Project.id == project_id).first()
+            if project_row and project_row.project_status not in ("suspended", "completed"):
+                project_row.project_status = new_status
+
         db.commit()
         session_label = "Project-level"
         if source == "session" and session_id:

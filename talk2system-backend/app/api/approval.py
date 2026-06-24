@@ -13,6 +13,12 @@ from app.models.session import Session as SessionModel
 router = APIRouter(prefix="/api", tags=["approval"])
 
 
+class PendingMember(BaseModel):
+    user_id: int
+    full_name: Optional[str] = None
+    email: str
+
+
 class ApprovalItem(BaseModel):
     feature: str
     approved_members_count: int
@@ -21,6 +27,7 @@ class ApprovalItem(BaseModel):
     all_members_approved: bool
     status: str
     exists: bool
+    pending_members: List[PendingMember] = []
 class ApproveRequest(BaseModel):
     version_id: Optional[int] = None
 
@@ -35,6 +42,24 @@ class ApprovalStatusResponse(BaseModel):
 def get_features_approval_status( session_id: int,db: Session = Depends(get_db),current_user: User = Depends(get_current_user),):
     try:
         return ApprovalService.get_approval_status(db, session_id, current_user.id)
+    except ApprovalError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+
+
+class UmlDiagramApproval(ApprovalItem):
+    diagram_type: str
+    version: str
+
+
+@router.get("/sessions/{session_id}/features/uml/diagrams-status", response_model=List[UmlDiagramApproval])
+def get_uml_diagrams_status(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Per-diagram-type (usecase/class/sequence) approval breakdown, each on its own latest version."""
+    try:
+        return ApprovalService.get_uml_diagrams_breakdown(db, session_id, current_user.id)
     except ApprovalError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail)
 

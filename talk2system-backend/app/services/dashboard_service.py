@@ -178,7 +178,7 @@ class DashboardService:
                     "project_id":   s.project_id,
                     "project_name": project_name_map.get(s.project_id, f"Project #{s.project_id}"),
                     "status":       s.status,
-                    "days_stale":   (datetime.utcnow() - s.created_at).days,
+                    "days_stale":   _days_since(s.created_at),
                 })
 
         # 9) Sessions and projects pending approval IN GENERAL (someone — anyone
@@ -197,7 +197,7 @@ class DashboardService:
                     "name": p.name,
                     # pending_since marks the actual transition into pending_approval;
                     # created_at is only a fallback for rows that predate that field.
-                    "days_waiting": (datetime.utcnow() - (p.pending_since or p.created_at)).days if p.created_at else 0,
+                    "days_waiting": _days_since(p.pending_since or p.created_at),
                 }
                 for p in pm_projects if p.project_status == "pending_approval"
             ],
@@ -210,7 +210,7 @@ class DashboardService:
                     "id": s.id,
                     "name": s.title,
                     "project_id": s.project_id,
-                    "days_waiting": (datetime.utcnow() - (s.pending_since or s.created_at)).days if s.created_at else 0,
+                    "days_waiting": _days_since(s.pending_since or s.created_at),
                 }
                 for s in pm_session_rows if s.status in ("pending_approval", "pending approval")
             ],
@@ -387,7 +387,7 @@ class DashboardService:
                 func.date_trunc("month", User.created_at).label("month"),
                 func.count(User.id).label("count"),
             )
-            .filter(User.created_at >= cutoff_12m)
+            .filter(User.created_at >= cutoff_12m, User.id != current_user.id)
             .group_by("month")
             .order_by("month")
             .all()
@@ -1088,6 +1088,16 @@ class DashboardService:
 
 def _to_dict(rows):
     return {r.month.strftime("%Y-%m"): r.count for r in rows}
+
+
+def _days_since(dt) -> int:
+    # Models are inconsistent about DateTime(timezone=True) vs naive, so
+    # treat naive values as UTC rather than letting aware - naive raise.
+    if dt is None:
+        return 0
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - dt).days
 
 
 def _format_duration(seconds) -> str:

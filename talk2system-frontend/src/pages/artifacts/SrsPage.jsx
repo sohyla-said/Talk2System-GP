@@ -255,8 +255,6 @@ export default function SrsPage() {
   const [loading, setLoading] = useState(false);
   const [versions, setVersions] = useState([]);
   const [artifactId, setArtifactId] = useState(null);
-  const [approved, setApproved] = useState(false);
-  const [hasNewUnapproved, setHasNewUnapproved] = useState(false); 
   const [sessionCompleted, setSessionCompleted] = useState(false);
   const [projectCompleted, setProjectCompleted] = useState(false);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
@@ -297,48 +295,36 @@ export default function SrsPage() {
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
-  const refreshSrsApproval = async (resolvedSessionId = sessionId) => {
-    if (!resolvedSessionId) return;
-
-    try {
-      const res = await fetch(
-        `${BASE_URL}/api/sessions/${resolvedSessionId}/features/approval-status`,
-        { headers: getAuthHeaders() }
-      );
-      if (!res.ok) return;
-
-      const data = await res.json();
-      const feature = Array.isArray(data.features)
-        ? data.features.find((f) => f.feature === "srs")
-        : null;
-      if (!feature) return;
-
-      setSrsApproval(feature);
-      setApproved(Boolean(feature.current_user_approved));
-    } catch (err) {
-      console.error("Failed to load SRS approval status:", err);
-    }
+  // Reset shape used when there's no artifact selected yet
+  const EMPTY_SRS_APPROVAL = {
+    approved_members_count: 0,
+    total_members_count: 0,
+    current_user_approved: false,
+    all_members_approved: false,
+    status: "pending",
+    exists: false,
   };
 
-  const refreshProjectSrsApproval = async () => {
-    if (!projectId) return;
+  // Loads the approval snapshot for ONE specific artifact (SRS version) — single source
+  // of truth for the approve button + count, avoiding stale data from other versions.
+  const loadSrsApprovalForVersion = async (targetArtifactId, resolvedSessionId = sessionId) => {
+    if (!targetArtifactId) return;
     try {
-      const res = await fetch(
-        `${BASE_URL}/api/projects/${projectId}/features/approval-status`,
-        { headers: getAuthHeaders() }
-      );
-      if (!res.ok) return;
-
-      const data = await res.json();
-      const feature = Array.isArray(data.features)
-        ? data.features.find((f) => f.feature === "srs")
-        : null;
-      if (!feature) return;
-
-      setProjectSrsApproval(feature);
-      setApproved(Boolean(feature.current_user_approved));
+      if (isProjectSource) {
+        const res = await fetch(
+          `${BASE_URL}/api/projects/${projectId}/features/srs/approval-status/${targetArtifactId}`,
+          { headers: getAuthHeaders() }
+        );
+        if (res.ok) setProjectSrsApproval(await res.json());
+      } else if (resolvedSessionId) {
+        const res = await fetch(
+          `${BASE_URL}/api/sessions/${resolvedSessionId}/features/srs/approval-status/${targetArtifactId}`,
+          { headers: getAuthHeaders() }
+        );
+        if (res.ok) setSrsApproval(await res.json());
+      }
     } catch (err) {
-      console.error("Failed to load project SRS approval status:", err);
+      console.error("Failed to load SRS approval status for version:", err);
     }
   };
 
@@ -445,15 +431,13 @@ export default function SrsPage() {
         const latest = fetched[0];
         setArtifactId(latest.id);
         setSrsContent(latest.file_path);
-        setApproved(latest.approval_status === "approved");
         fetchSrsText(latest.id);
-        if (isProjectSource) {
-          await refreshProjectSrsApproval();
-        }
+        await loadSrsApprovalForVersion(latest.id, resolvedSessionId);
       } else {
         setArtifactId(null);
         setSrsContent(null);
-        setApproved(false);
+        if (isProjectSource) setProjectSrsApproval(EMPTY_SRS_APPROVAL);
+        else setSrsApproval(EMPTY_SRS_APPROVAL);
       }
     } catch (err) {
       console.error("fetchVersions error:", err);
@@ -472,7 +456,6 @@ export default function SrsPage() {
       .catch(console.error);
   } else if (sessionId) {
     fetchVersions();
-    refreshSrsApproval(sessionId);
   }
   }, [sessionId, isProjectSource]);
 
@@ -565,7 +548,6 @@ export default function SrsPage() {
     if (!res.ok) throw new Error(data.detail);
 
     setProjectSrsApproval(data);
-    setApproved(Boolean(data.current_user_approved));
 
     if (data.all_members_approved) {
       await approveSrsArtifact(artifactId);
@@ -601,29 +583,8 @@ export default function SrsPage() {
     setPreviewMode(false);
     await fetchSrsText(res.data.id);
 
-    // Fetch the real approval status for THIS specific version — no delete
-    if (!isProjectSource && sessionId) {
-      const approvalRes = await fetch(
-        `${BASE_URL}/api/sessions/${sessionId}/features/srs/approval-status/${selectedId}`,
-        { headers: getAuthHeaders() }
-      );
-      if (approvalRes.ok) {
-        const approvalData = await approvalRes.json();
-        setSrsApproval(approvalData);
-        setApproved(Boolean(approvalData.current_user_approved));
-        setHasNewUnapproved(!approvalData.all_members_approved);
-      }
-    } else if (isProjectSource) {
-      const approvalRes = await fetch(
-        `${BASE_URL}/api/projects/${projectId}/features/srs/approval-status/${selectedId}`,
-        { headers: getAuthHeaders() }
-      );
-      if (approvalRes.ok) {
-        const approvalData = await approvalRes.json();
-        setProjectSrsApproval(approvalData);
-        setApproved(Boolean(approvalData.current_user_approved));
-      }
-    }
+    // Fetch the real approval status for THIS specific version
+    await loadSrsApprovalForVersion(selectedId);
   } catch (err) {
     console.error(err);
   }
@@ -649,8 +610,6 @@ export default function SrsPage() {
     }
 
     setSrsApproval(data);
-    setApproved(Boolean(data.current_user_approved));
-    setHasNewUnapproved(false);
     setShowApprovalModal(false);
 
     // Use computed-status instead of hardcoded string
@@ -675,8 +634,16 @@ export default function SrsPage() {
   }
  };
 
-  // Derived: is the button currently in "approved" display state?
-  const isApprovedState = approved && !hasNewUnapproved; 
+  // Derived: isFullyApproved is the SELECTED version's true status (every member has
+  // approved it) — used for the "✓ Approved"/"Pending Approval" status badge and document
+  // banner. currentUserApprovedVersion drives the Approve button itself, which flips to
+  // green "Approved" as soon as the current user approves, even while others are pending.
+  const isFullyApproved = isProjectSource
+    ? projectSrsApproval.all_members_approved
+    : srsApproval.all_members_approved;
+  const currentUserApprovedVersion = isProjectSource
+    ? projectSrsApproval.current_user_approved
+    : srsApproval.current_user_approved;
 
   return (
     <div className="font-display bg-background-light dark:bg-background-dark min-h-screen text-[#100d1c] dark:text-white">
@@ -830,25 +797,25 @@ export default function SrsPage() {
                 Export
               </button>
 
-              {/* APPROVE */}
+              {/* APPROVE — green "Approved" as soon as the current user approves this version */}
               {isProjectSource ? (
                 // Project-level: direct artifact approval
                 <button
                   onClick={handleProjectApprove}
-                  disabled={approved || !artifactId || projectCompleted}
-                  className={`h-10 px-6 rounded-lg flex items-center gap-2 text-white ${approved ? "bg-green-600" : "bg-primary"}`}
+                  disabled={currentUserApprovedVersion || !artifactId || projectCompleted}
+                  className={`h-10 px-6 rounded-lg flex items-center gap-2 text-white ${currentUserApprovedVersion ? "bg-green-600" : "bg-primary"}`}
                 >
-                  <span className="material-symbols-outlined">{approved ? "check_circle" : "approval"}</span>
-                  {approved ? "Approved" : "Approve"}
+                  <span className="material-symbols-outlined">{currentUserApprovedVersion ? "check_circle" : "approval"}</span>
+                  {currentUserApprovedVersion ? "Approved" : "Approve"}
                 </button>
               ) : (
               <button
                 onClick={() => setShowApprovalModal(true)}
-                disabled={isApprovedState || !artifactId || sessionCompleted}
-                className={`h-10 px-6 rounded-lg flex items-center gap-2 text-white ${isApprovedState ? "bg-green-600" : "bg-primary"}`}
+                disabled={currentUserApprovedVersion || !artifactId || sessionCompleted}
+                className={`h-10 px-6 rounded-lg flex items-center gap-2 text-white ${currentUserApprovedVersion ? "bg-green-600" : "bg-primary"}`}
               >
-                <span className="material-symbols-outlined">{isApprovedState ? "check_circle" : "approval"}</span>
-                {isApprovedState ? "Approved" : "Approve"}
+                <span className="material-symbols-outlined">{currentUserApprovedVersion ? "check_circle" : "approval"}</span>
+                {currentUserApprovedVersion ? "Approved" : "Approve"}
               </button>
               )}
             </div>
@@ -858,8 +825,8 @@ export default function SrsPage() {
         {/* Approval badge */}
         {artifactId && (
           <div className="mb-3 flex flex-wrap items-center gap-3">
-            <span className={`text-xs font-semibold px-3 py-1 rounded-full ${isApprovedState ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300" : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300"}`}>
-              {isApprovedState ? "✓ Approved" : "Pending Approval"}
+            <span className={`text-xs font-semibold px-3 py-1 rounded-full ${isFullyApproved ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300" : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300"}`}>
+              {isFullyApproved ? "✓ Approved" : "Pending Approval"}
             </span>
             {!isProjectSource && (
               <span className="text-xs text-gray-600 dark:text-gray-300">
@@ -922,12 +889,12 @@ export default function SrsPage() {
             {/* DOCUMENT BODY */}
             <article className="lg:col-span-3 bg-white dark:bg-[#1a1730] rounded-xl shadow border border-gray-200 dark:border-gray-700 overflow-visible">
               <div className={`px-8 py-2 text-xs font-semibold flex items-center gap-2 ${
-                isApprovedState
+                isFullyApproved
                   ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border-b border-green-200 dark:border-green-800"
                   : "bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 border-b border-yellow-200 dark:border-yellow-800"
               }`}>
-                <span className="material-symbols-outlined text-base">{isApprovedState ? "verified" : "pending"}</span>
-                {isApprovedState ? "This document has been approved" : "Pending approval — review before finalizing"}
+                <span className="material-symbols-outlined text-base">{isFullyApproved ? "verified" : "pending"}</span>
+                {isFullyApproved ? "This document has been approved" : "Pending approval — review before finalizing"}
               </div>
 
               {/* Rendered markdown */}

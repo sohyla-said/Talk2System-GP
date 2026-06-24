@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 # CONFIG
 # ==========================
 OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "qwen2.5:7b"
+# OLLAMA_MODEL = "qwen2.5:7b"
+OLLAMA_MODEL = "qwen2.5:3b"
 STORAGE_PATH = "storage/srs"
 
 # ==========================
@@ -792,6 +793,16 @@ def run_async_srs_task(
             "artifact_id": artifact["id"],
         }
         task.status = "done"
+
+        # A brand-new artifact has zero approvals — refresh the cached project status
+        # so it reflects "pending_approval" instead of the previous (already fully
+        # approved) artifact's "in_progress" state.
+        if source == "project":
+            from app.services.project_approval_service import ProjectApprovalService
+            new_status = ProjectApprovalService.compute_project_status(db, project_id)
+            if project and project.project_status not in ("suspended", "completed"):
+                project.project_status = new_status
+
         db.commit()
         session_label = "Project-level"
         if source == "session" and session_id:

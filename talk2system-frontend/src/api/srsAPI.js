@@ -1,7 +1,16 @@
 import axios from "axios";
+import { getToken } from "./authApi";
 
 const API = axios.create({
   baseURL: "http://localhost:8000/api",
+});
+
+API.interceptors.request.use((config) => {
+  const token = getToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 // 1. Generate SRS — session level

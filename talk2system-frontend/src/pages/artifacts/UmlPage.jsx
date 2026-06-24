@@ -19,9 +19,7 @@ const BASE_URL = "http://localhost:8000";
 export default function UmlPage() {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [sessionCompleted, setSessionCompleted] = useState(false);
-  const [approved, setApproved] = useState(false);
   const [projectCompleted, setProjectCompleted] = useState(false);
-  const [hasNewUnapproved, setHasNewUnapproved] = useState(false); 
   const [umlApproval, setUmlApproval] = useState({
     approved_members_count: 0,
     total_members_count: 0,
@@ -143,6 +141,40 @@ export default function UmlPage() {
       .catch(console.error);
   }, [sessionId, isProjectSource]);
 
+  // Reset shape used when there's no artifact selected yet
+  const EMPTY_UML_APPROVAL = {
+    approved_members_count: 0,
+    total_members_count: 0,
+    current_user_approved: false,
+    all_members_approved: false,
+    status: "pending",
+    exists: false,
+  };
+
+  // Loads the approval snapshot for ONE specific artifact (diagram version). This is the
+  // single source of truth for the approve button + count, so switching diagram type
+  // (usecase/class/sequence) never shows another type's approval data by mistake.
+  const loadUmlApprovalForVersion = async (targetArtifactId, resolvedSessionId = sessionId) => {
+    if (!targetArtifactId) return;
+    try {
+      if (isProjectSource) {
+        const res = await fetch(
+          `${BASE_URL}/api/projects/${projectId}/features/uml/approval-status/${targetArtifactId}`,
+          { headers: getAuthHeaders() }
+        );
+        if (res.ok) setProjectUmlApproval(await res.json());
+      } else if (resolvedSessionId) {
+        const res = await fetch(
+          `${BASE_URL}/api/sessions/${resolvedSessionId}/features/uml/approval-status/${targetArtifactId}`,
+          { headers: getAuthHeaders() }
+        );
+        if (res.ok) setUmlApproval(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to load UML approval status for version:", err);
+    }
+  };
+
   const fetchVersions = async (resolvedSessionId = sessionId) => {
     try {
       let res;
@@ -164,7 +196,6 @@ export default function UmlPage() {
         setVersions([]);
         setDiagramUrl(null);
         setArtifactId(null);
-        setApproved(false);
         return;
       }
 
@@ -182,62 +213,15 @@ export default function UmlPage() {
         const latest = fetchedVersions[0];
         setDiagramUrl(`${BASE_URL}/${latest.file_path}`);
         setArtifactId(latest.id);
-        setApproved(latest.approval_status === "approved");
-        if (isProjectSource) {
-          await refreshProjectUmlApproval();
-        }
+        await loadUmlApprovalForVersion(latest.id, resolvedSessionId);
       } else {
         setDiagramUrl(null);
         setArtifactId(null);
-        setApproved(false);
+        if (isProjectSource) setProjectUmlApproval(EMPTY_UML_APPROVAL);
+        else setUmlApproval(EMPTY_UML_APPROVAL);
       }
     } catch (err) {
       console.error("fetchVersions error:", err);
-    }
-  };
-
-  const refreshUmlApproval = async (resolvedSessionId = sessionId) => {
-    if (!resolvedSessionId) return;
-
-    try {
-      const res = await fetch(
-        `${BASE_URL}/api/sessions/${resolvedSessionId}/features/approval-status`,
-        { headers: getAuthHeaders() }
-      );
-      if (!res.ok) return;
-
-      const data = await res.json();
-      const feature = Array.isArray(data.features)
-        ? data.features.find((f) => f.feature === "uml")
-        : null;
-      if (!feature) return;
-
-      setUmlApproval(feature);
-      setApproved(Boolean(feature.current_user_approved));
-    } catch (err) {
-      console.error("Failed to load UML approval status:", err);
-    }
-  };
-
-  const refreshProjectUmlApproval = async () => {
-    if (!projectId) return;
-    try {
-      const res = await fetch(
-        `${BASE_URL}/api/projects/${projectId}/features/approval-status`,
-        { headers: getAuthHeaders() }
-      );
-      if (!res.ok) return;
-
-      const data = await res.json();
-      const feature = Array.isArray(data.features)
-        ? data.features.find((f) => f.feature === "uml")
-        : null;
-      if (!feature) return;
-
-      setProjectUmlApproval(feature);
-      setApproved(Boolean(feature.current_user_approved));
-    } catch (err) {
-      console.error("Failed to load project UML approval status:", err);
     }
   };
 
@@ -331,7 +315,6 @@ export default function UmlPage() {
     if (!res.ok) throw new Error(data.detail);
 
     setProjectUmlApproval(data);
-    setApproved(Boolean(data.current_user_approved));
 
     // If all approved, also mark artifact as approved
     if (data.all_members_approved) {
@@ -371,7 +354,6 @@ export default function UmlPage() {
     }
   } else if (sessionId) {
     fetchVersions();
-    refreshUmlApproval();
   }
 }, [diagramType, sessionId, isProjectSource]);
   // ===============================
@@ -384,28 +366,7 @@ export default function UmlPage() {
     setArtifactId(res.data.id);
 
     // Fetch the real approval status for THIS specific version
-    if (!isProjectSource && sessionId) {
-      const approvalRes = await fetch(
-        `${BASE_URL}/api/sessions/${sessionId}/features/uml/approval-status/${selectedArtifactId}`,
-        { headers: getAuthHeaders() }
-      );
-      if (approvalRes.ok) {
-        const approvalData = await approvalRes.json();
-        setUmlApproval(approvalData);
-        setApproved(Boolean(approvalData.current_user_approved));
-        setHasNewUnapproved(!approvalData.all_members_approved);
-      }
-    } else if (isProjectSource) {
-      const approvalRes = await fetch(
-        `${BASE_URL}/api/projects/${projectId}/features/uml/approval-status/${selectedArtifactId}`,
-        { headers: getAuthHeaders() }
-      );
-      if (approvalRes.ok) {
-        const approvalData = await approvalRes.json();
-        setProjectUmlApproval(approvalData);
-        setApproved(Boolean(approvalData.current_user_approved));
-      }
-    }
+    await loadUmlApprovalForVersion(selectedArtifactId);
   } catch (err) {
     console.error(err);
   }
@@ -430,8 +391,6 @@ export default function UmlPage() {
     }
 
     setUmlApproval(data);
-    setApproved(Boolean(data.current_user_approved));
-    setHasNewUnapproved(false);
     setShowApprovalModal(false);
 
     // Use computed-status instead of hardcoded string
@@ -465,8 +424,12 @@ export default function UmlPage() {
     window.open(`${BASE_URL}/api/artifacts/${artifactId}/download`);
   };
 
-  // Derived: is the button currently in "approved" display state?
-  const isApprovedState = approved && !hasNewUnapproved; 
+  // Derived: has the CURRENT USER approved the selected version? Drives the button —
+  // it flips to green "Approved" as soon as they approve, even while other members are
+  // still pending (the separate approval-count text below reflects the full picture).
+  const currentUserApprovedVersion = isProjectSource
+    ? projectUmlApproval.current_user_approved
+    : umlApproval.current_user_approved;
 
   return (
     <div className="font-display bg-background-light dark:bg-background-dark min-h-screen text-[#100d1c] dark:text-white">
@@ -605,32 +568,32 @@ export default function UmlPage() {
                 Export
               </button>
 
-              {/* APPROVE — uses isApprovedState so new versions re-enable it */}
+              {/* APPROVE — green "Approved" as soon as the current user approves this version */}
 
               {isProjectSource ? (
                 // Project-level: direct artifact approval, no session members needed
                 <button
                   onClick={handleProjectApprove}
-                  disabled={approved || !artifactId || projectCompleted}
+                  disabled={currentUserApprovedVersion || !artifactId || projectCompleted}
                   className={`h-10 px-6 rounded-lg flex items-center gap-2 text-white
-                    ${approved ? "bg-green-600" : "bg-primary"}`}
+                    ${currentUserApprovedVersion ? "bg-green-600" : "bg-primary"}`}
                 >
                   <span className="material-symbols-outlined">
-                    {approved ? "check_circle" : "approval"}
+                    {currentUserApprovedVersion ? "check_circle" : "approval"}
                   </span>
-                  {approved ? "Approved" : "Approve"}
+                  {currentUserApprovedVersion ? "Approved" : "Approve"}
                 </button>
               ) : (
                 <button
                   onClick={() => setShowApprovalModal(true)}
-                  disabled={isApprovedState || !artifactId|| sessionCompleted}
+                  disabled={currentUserApprovedVersion || !artifactId|| sessionCompleted}
                 className={`h-10 px-6 rounded-lg flex items-center gap-2 text-white
-                  ${isApprovedState ? "bg-green-600" : "bg-primary"}`}
+                  ${currentUserApprovedVersion ? "bg-green-600" : "bg-primary"}`}
               >
                 <span className="material-symbols-outlined">
-                  {isApprovedState ? "check_circle" : "approval"}
+                  {currentUserApprovedVersion ? "check_circle" : "approval"}
                 </span>
-                {isApprovedState ? "Approved" : "Approve"}
+                {currentUserApprovedVersion ? "Approved" : "Approve"}
               </button>
             )}
 

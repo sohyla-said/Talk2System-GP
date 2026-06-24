@@ -118,7 +118,7 @@ export default function CheckoutSummary() {
 
         <div className="flex flex-col gap-3 items-center">
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-black">
-            Brainstorming Session Summary
+            {sessionTitle} Session Summary
           </h1>
         </div>
       </div>
