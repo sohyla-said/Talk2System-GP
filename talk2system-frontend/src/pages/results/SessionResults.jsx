@@ -105,7 +105,7 @@ export default function SessionResults() {
         {/* UML CARD */}
         {hasUML && (
           <div
-            onClick={() => navigate(`/projects/${projectId}/sessions/${sessionId}/artifacts/uml`)}
+            onClick={() => navigate(`/projects/${projectId}/artifacts/uml`, { state: { source: "session", sessionId } })}
             className="bg-card-light dark:bg-card-dark rounded-xl border p-5 shadow-sm hover:shadow-lg transition cursor-pointer"
           >
             <div className="flex items-center gap-2 mb-3">
@@ -126,7 +126,7 @@ export default function SessionResults() {
         {/* SRS CARD */}
         {hasSRS && (
           <div
-            onClick={() => navigate(`/projects/${projectId}/sessions/${sessionId}/artifacts/srs`)}
+            onClick={() => navigate(`/projects/${projectId}/sessions/${sessionId}/srs/generate`)}
             className="bg-card-light dark:bg-card-dark rounded-xl border p-5 shadow-sm hover:shadow-lg transition cursor-pointer"
           >
             <div className="flex items-center gap-2 mb-3">

@@ -90,7 +90,7 @@ export default function ProjectResults() {
 
             <div className="flex justify-end">
               <button
-                onClick={() => navigate(`/projects/${projectId}/artifacts/uml-view`)}
+                onClick={() => navigate(`/projects/${projectId}/artifacts/uml`, { state: { source: "project" } })}
                 className="text-primary font-bold flex items-center gap-1"
               >
                 View <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
@@ -113,7 +113,7 @@ export default function ProjectResults() {
 
           <div className="flex justify-end">
             <button
-              onClick={() => navigate(`/projects/${projectId}/artifacts/srs`)}
+              onClick={() => navigate(`/projects/${projectId}/srs/generate`, { state: { source: "project" } })}
               className="text-primary font-bold flex items-center gap-1"
             >
               View <span className="material-symbols-outlined text-[16px]">arrow_forward</span>

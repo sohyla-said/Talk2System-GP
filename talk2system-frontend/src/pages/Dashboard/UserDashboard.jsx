@@ -29,21 +29,21 @@ function getActivityUrl({ type, project_id, session_id }) {
   const s = session_id;
   switch (type) {
     case "project_joined":
-      return p ? `/projects/${p}` : null;
+      return p ? { url: `/projects/${p}` } : null;
     case "session_joined":
-      return p && s ? `/projects/${p}/sessions/${s}/sessiondetails` : null;
+      return p && s ? { url: `/projects/${p}/sessions/${s}/sessiondetails` } : null;
     case "srs_generated":
-      return p && s ? `/projects/${p}/sessions/${s}/artifacts/srs`
-           : p       ? `/projects/${p}/artifacts/srs`
+      return p && s ? { url: `/projects/${p}/sessions/${s}/srs/generate` }
+           : p       ? { url: `/projects/${p}/srs/generate`, state: { source: "project" } }
            : null;
     case "uml_generated":
-      return p && s ? `/projects/${p}/sessions/${s}/artifacts/uml`
-           : p       ? `/projects/${p}/artifacts/uml`
+      return p && s ? { url: `/projects/${p}/artifacts/uml`, state: { source: "session", sessionId: s } }
+           : p       ? { url: `/projects/${p}/artifacts/uml`, state: { source: "project" } }
            : null;
     case "requirements_extracted":
-      return s ? `/transcript/${s}/requirements` : null;
+      return s ? { url: `/transcript/${s}/requirements` } : null;
     case "transcription_made":
-      return s ? `/transcript/${s}` : null;
+      return s ? { url: `/transcript/${s}` } : null;
     default:
       return null;
   }
@@ -1159,7 +1159,7 @@ export default function UserDashboardPage() {
               <ul className="flex flex-col divide-y divide-gray-100 dark:divide-gray-800">
                 {pagedFeed.map((item, i) => {
                   const meta = ACTIVITY_META[item.type] ?? ACTIVITY_META.project_joined;
-                  const url  = getActivityUrl(item);
+                  const { url, state } = getActivityUrl(item) ?? {};
                   const Inner = (
                     <>
                       <div className={`p-2 rounded-xl shrink-0 ${meta.ring}`}>
@@ -1191,7 +1191,7 @@ export default function UserDashboardPage() {
                     <li key={i}>
                       {url && !isSuspended ? (
                         <button
-                          onClick={() => navigate(url)}
+                          onClick={() => navigate(url, state ? { state } : undefined)}
                           className="w-full flex items-start gap-3 py-3 first:pt-0 last:pb-0 text-left hover:bg-gray-50 dark:hover:bg-white/5 rounded-xl px-2 -mx-2 transition-colors"
                         >
                           {Inner}
