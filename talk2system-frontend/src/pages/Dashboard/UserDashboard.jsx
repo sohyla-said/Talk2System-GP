@@ -14,6 +14,12 @@ function urgencyColor(days) {
   return "text-amber-500 dark:text-amber-400";
 }
 
+function formatWaiting(days, hours, minutes) {
+  if (days > 0)  return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
 function timeAgo(iso) {
   if (!iso) return "—";
   const sec = Math.floor((Date.now() - new Date(iso)) / 1000);
@@ -500,7 +506,7 @@ export default function UserDashboardPage() {
                         >
                           <span className="material-symbols-outlined text-[14px] text-red-500 shrink-0">folder_open</span>
                           <span className="text-xs font-medium text-gray-800 dark:text-gray-100 truncate flex-1">{p.name}</span>
-                          <span className={`text-[11px] font-bold shrink-0 ${urgencyColor(p.days_waiting)}`}>{p.days_waiting}d</span>
+                          <span className={`text-[11px] font-bold shrink-0 ${urgencyColor(p.days_waiting)}`}>{formatWaiting(p.days_waiting, p.hours_waiting, p.minutes_waiting)}</span>
                         </button>
                       </li>
                     ))}
@@ -533,7 +539,7 @@ export default function UserDashboardPage() {
                         >
                           <span className="material-symbols-outlined text-[14px] text-red-500 shrink-0">mic</span>
                           <span className="text-xs font-medium text-gray-800 dark:text-gray-100 truncate flex-1">{s.name}</span>
-                          <span className={`text-[11px] font-bold shrink-0 ${urgencyColor(s.days_waiting)}`}>{s.days_waiting}d</span>
+                          <span className={`text-[11px] font-bold shrink-0 ${urgencyColor(s.days_waiting)}`}>{formatWaiting(s.days_waiting, s.hours_waiting, s.minutes_waiting)}</span>
                         </button>
                       </li>
                     ))}

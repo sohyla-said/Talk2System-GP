@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { getToken } from "../../api/authApi";
 import { fetchProject, fetchMyRole, fetchPendingRequests, acceptInvitation, rejectInvitation, fetchMembers, fetchProjectAuditLogs, fetchPendingLeaveRequests, approveLeaveRequest, rejectLeaveRequest } from "../../api/projectApi";
@@ -22,6 +22,16 @@ const formatProjectStatus = (status) => {
   let key = status.trim().toLowerCase().replace(/\s+/g, "_");
   if (key === "active") key = "in_progress";
   return PROJECT_STATUS_LABELS[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+const isPendingApprovalStatus = (status) =>
+  (status || "").trim().toLowerCase().replace(/\s+/g, "_") === "pending_approval";
+
+// Mirrors PROJECT_FEATURES in project_approval_service.py
+const PENDING_FEATURE_INFO = {
+  requirements: { label: "Requirements", icon: "checklist" },
+  uml:          { label: "UML Diagrams", icon: "schema" },
+  srs:          { label: "SRS Document", icon: "description" },
 };
 
 export default function ProjectDetailsPage() {
@@ -59,6 +69,65 @@ export default function ProjectDetailsPage() {
   const [pendingLeaveRequests, setPendingLeaveRequests] = useState([]);
   const [showLeavePanel, setShowLeavePanel] = useState(false);
   const [leaveRejectModal, setLeaveRejectModal] = useState({ show: false, req: null, reason: "" });
+
+  // "What's pending?" popout on the status chip — project-level features pending
+  // approval (fetched) plus sessions stuck in pending_approval (already loaded
+  // in `sessions`, so just filtered, not re-fetched).
+  const [pendingFeatures, setPendingFeatures] = useState([]);
+  const [showPendingPopout, setShowPendingPopout] = useState(false);
+  const [pendingPopoutPos, setPendingPopoutPos] = useState({ top: 0, left: 0 });
+  const pendingIconRef = useRef(null);
+  const pendingPopoutPanelRef = useRef(null);
+
+  const pendingSessions = useMemo(
+    () => sessions.filter((s) => isPendingApprovalStatus(s.status)),
+    [sessions]
+  );
+
+  useEffect(() => {
+    if (!showPendingPopout) return;
+    const close = (e) => {
+      if (e.type === "scroll") {
+        setShowPendingPopout(false);
+        return;
+      }
+      if (
+        pendingIconRef.current && !pendingIconRef.current.contains(e.target) &&
+        pendingPopoutPanelRef.current && !pendingPopoutPanelRef.current.contains(e.target)
+      ) {
+        setShowPendingPopout(false);
+      }
+    };
+    document.addEventListener("mousedown", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [showPendingPopout]);
+
+  const togglePendingPopout = () => {
+    if (!showPendingPopout && pendingIconRef.current) {
+      const rect = pendingIconRef.current.getBoundingClientRect();
+      setPendingPopoutPos({ top: rect.bottom + 6, left: rect.left });
+    }
+    setShowPendingPopout((v) => !v);
+  };
+
+  const goToPendingFeature = (feature) => {
+    setShowPendingPopout(false);
+    if (feature === "requirements") navigate(`/projects/${projectId}/requirements`);
+    else if (feature === "uml") navigate(`/projects/${projectId}/artifacts/uml`, { state: { source: "project" } });
+    else if (feature === "srs") navigate(`/projects/${projectId}/srs/generate`, { state: { source: "project" } });
+  };
+
+  const goToPendingSession = (session) => {
+    setShowPendingPopout(false);
+    navigate(`/projects/${projectId}/sessions/${session.id}/sessiondetails`, {
+      state: { sessionId: session.id, projectCompleted: false },
+    });
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -98,6 +167,17 @@ export default function ProjectDetailsPage() {
         const pm = membersData.find((m) => m.role === "project_manager");
         if (pm) {
           setPmName(pm.full_name || pm.email);
+        }
+
+        if (isPendingApprovalStatus(proj?.project_status)) {
+          fetch(`${BASE_URL}/api/projects/${projectId}/features/approval-status`, {
+            headers: { Authorization: `Bearer ${getToken()}` },
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data) => {
+              setPendingFeatures((data?.features || []).filter((f) => f.exists && f.status === "pending"));
+            })
+            .catch(() => {});
         }
 
         if (roleData.role === "project_manager") {
@@ -972,8 +1052,60 @@ export default function ProjectDetailsPage() {
           <div className="flex gap-3 px-4 pt-1 pb-4 overflow-x-auto">
             <span className="flex h-7 items-center rounded-full bg-primary/10 px-3 text-primary text-xs font-medium">Created: {project?.created_at ? new Date(project.created_at).toLocaleDateString() : "—"}</span>
             <span className="flex h-7 items-center rounded-full bg-primary/10 px-3 text-primary text-xs font-medium">Status: {formatProjectStatus(project?.project_status)}</span>
+            {isPendingApprovalStatus(project?.project_status) && (
+              <button
+                ref={pendingIconRef}
+                onClick={togglePendingPopout}
+                title="What's pending approval?"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50 transition"
+              >
+                <span className="material-symbols-outlined text-[16px]">pending_actions</span>
+              </button>
+            )}
             {project?.domain && (<span className="flex h-7 items-center rounded-full bg-primary/10 px-3 text-primary text-xs font-medium">Domain: {project.domain}</span>)}
           </div>
+          {showPendingPopout && (
+            <div
+              ref={pendingPopoutPanelRef}
+              style={{ top: pendingPopoutPos.top, left: pendingPopoutPos.left }}
+              className="fixed z-30 w-64 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1C192B] shadow-lg p-1.5"
+            >
+              <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400 px-2 pt-1.5 pb-1">Pending approval</p>
+              {pendingFeatures.length === 0 && pendingSessions.length === 0 ? (
+                <p className="text-xs text-gray-400 px-2 pb-2">Nothing pending right now.</p>
+              ) : (
+                <>
+                  {pendingFeatures.map((f) => (
+                    <button
+                      key={`feature-${f.feature}`}
+                      onClick={() => goToPendingFeature(f.feature)}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-left transition"
+                    >
+                      <span className="material-symbols-outlined text-[16px] text-amber-500 shrink-0">
+                        {PENDING_FEATURE_INFO[f.feature]?.icon || "task"}
+                      </span>
+                      <span className="flex-1 text-xs font-medium text-gray-700 dark:text-gray-200 truncate">
+                        {PENDING_FEATURE_INFO[f.feature]?.label || f.feature}
+                      </span>
+                      <span className="text-[11px] text-gray-400 shrink-0">{f.approved_members_count}/{f.total_members_count}</span>
+                    </button>
+                  ))}
+                  {pendingSessions.map((s) => (
+                    <button
+                      key={`session-${s.id}`}
+                      onClick={() => goToPendingSession(s)}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-left transition"
+                    >
+                      <span className="material-symbols-outlined text-[16px] text-amber-500 shrink-0">mic</span>
+                      <span className="flex-1 text-xs font-medium text-gray-700 dark:text-gray-200 truncate">
+                        {s.title || `Session #${s.id}`}
+                      </span>
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
           <div className="border-b border-gray-200 dark:border-gray-700 px-4 mb-2">
             <div className="flex gap-8">
               {["Sessions", "Requirements", "Artifacts"].map((tab, i) => (

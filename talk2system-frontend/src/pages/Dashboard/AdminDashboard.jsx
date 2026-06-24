@@ -549,7 +549,7 @@ export default function AdminDashboard() {
                           <p className="text-xs text-gray-400">No pending backlog</p>
                         ) : (
                           <div className="flex items-center gap-5 flex-wrap">
-                            <BacklogPill label="Transcripts" value={selectedWorkloadUser.pm_backlog.sessions} />
+                            <BacklogPill label="Sessions" value={selectedWorkloadUser.pm_backlog.sessions} />
                             <BacklogPill label="Requirements" value={selectedWorkloadUser.pm_backlog.requirements} />
                             <BacklogPill label="Artifacts" value={selectedWorkloadUser.pm_backlog.artifacts} />
                           </div>

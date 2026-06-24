@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from app.models.project_approval import ProjectApproval
 from app.models.project_membership import ProjectMembership
@@ -9,6 +9,15 @@ from app.models.artifact_type import ArtifactType
 from app.models.session import Session as SessionModel
 
 PROJECT_FEATURES = {"requirements", "uml", "srs"}
+
+# Mirrors UML_DIAGRAM_TYPES in approval_service.py — project-level UML also has 3
+# independently-versioned diagram types, so the aggregate "uml" snapshot only
+# reflects whichever type was generated most recently.
+UML_DIAGRAM_TYPES = {
+    "usecase": "UML_USECASE",
+    "class": "UML_CLASS",
+    "sequence": "UML_SEQUENCE",
+}
 
 
 class ProjectApprovalError(Exception):
@@ -158,6 +167,36 @@ class ProjectApprovalService:
         return "in_progress"
 
     # ─────────────────────────────────────────────
+    # PER-DIAGRAM-TYPE (usecase/class/sequence) APPROVAL BREAKDOWN
+    # mirrors ApprovalService.get_uml_diagrams_breakdown, project-level
+    # ─────────────────────────────────────────────
+    @staticmethod
+    def get_uml_diagrams_breakdown(db: Session, project_id: int, user_id: int) -> List[Dict]:
+        ProjectApprovalService._ensure_membership(db, project_id, user_id)
+        breakdown = []
+        for diagram_type, type_name in UML_DIAGRAM_TYPES.items():
+            art = (
+                db.query(Artifact)
+                .join(ArtifactType, Artifact.artifact_type_id == ArtifactType.id)
+                .filter(
+                    Artifact.project_id == project_id,
+                    Artifact.session_id == None,
+                    ArtifactType.name == type_name,
+                )
+                .order_by(Artifact.created_at.desc())
+                .first()
+            )
+            if not art:
+                continue
+            snapshot = ProjectApprovalService._snapshot_for_version(
+                db, project_id, user_id, "uml", art.id
+            )
+            snapshot["diagram_type"] = diagram_type
+            snapshot["version"] = art.version
+            breakdown.append(snapshot)
+        return breakdown
+
+    # ─────────────────────────────────────────────
     # ITEMS AWAITING THIS USER'S APPROVAL ACROSS ALL THEIR PROJECTS
     # (mirrors ApprovalService.get_pending_for_user, project-level)
     # ─────────────────────────────────────────────
@@ -274,6 +313,24 @@ class ProjectApprovalService:
         current_user_approved = user_id in approved_ids
         all_approved = total > 0 and approved_count == total
 
+        active_members = (
+            db.query(ProjectMembership)
+            .filter(
+                ProjectMembership.project_id == project_id,
+                ProjectMembership.left_at.is_(None),
+            )
+            .all()
+        )
+        pending_members = [
+            {
+                "user_id": m.user_id,
+                "full_name": m.user.full_name,
+                "email": m.user.email,
+            }
+            for m in active_members
+            if m.user_id not in approved_ids
+        ]
+
         return {
             "feature": feature,
             "version_id": version_id,
@@ -283,6 +340,7 @@ class ProjectApprovalService:
             "all_members_approved": all_approved,
             "status": "approved" if all_approved else "pending",
             "exists": ProjectApprovalService._feature_exists(db, project_id, feature),
+            "pending_members": pending_members,
         }
 
     @staticmethod

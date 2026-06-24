@@ -197,11 +197,11 @@ class DashboardService:
                     "name": p.name,
                     # pending_since marks the actual transition into pending_approval;
                     # created_at is only a fallback for rows that predate that field.
-                    "days_waiting": _days_since(p.pending_since or p.created_at),
+                    **_waiting_breakdown(p.pending_since or p.created_at),
                 }
                 for p in pm_projects if p.project_status == "pending_approval"
             ],
-            key=lambda x: x["days_waiting"],
+            key=lambda x: x["waiting_seconds"],
             reverse=True,
         )
         sessions_pending = sorted(
@@ -210,11 +210,11 @@ class DashboardService:
                     "id": s.id,
                     "name": s.title,
                     "project_id": s.project_id,
-                    "days_waiting": _days_since(s.pending_since or s.created_at),
+                    **_waiting_breakdown(s.pending_since or s.created_at),
                 }
                 for s in pm_session_rows if s.status in ("pending_approval", "pending approval")
             ],
-            key=lambda x: x["days_waiting"],
+            key=lambda x: x["waiting_seconds"],
             reverse=True,
         )
 
@@ -315,7 +315,7 @@ class DashboardService:
     }
 
     @staticmethod
-    def get_user_momentum(db: Session, user: User, weeks: int = 8):
+    def get_user_momentum(db: Session, user: User, weeks: int = 4):
         if user.role == "admin":
             raise HTTPException(403, "Admins must use /api/dashboard/admin-stats")
 
@@ -893,6 +893,22 @@ class DashboardService:
             for a in db.query(Artifact).filter(Artifact.project_id.in_(project_ids)).all():
                 artifacts_by_project[a.project_id].append(a)
 
+        # Regenerating an artifact (e.g. a new SRS draft) adds a new Artifact
+        # row rather than replacing the old one, and superseded rows keep
+        # whatever approval_status they had — usually still "pending" since
+        # nobody approves a version that's about to be replaced. Backlog
+        # counts must only look at the newest row per (session, type) slot,
+        # not every historical version, or old regenerated drafts inflate it.
+        latest_artifacts_by_project = defaultdict(list)
+        for pid, artifacts in artifacts_by_project.items():
+            latest_by_slot = {}
+            for a in artifacts:
+                slot = (a.session_id, a.artifact_type_id)
+                current = latest_by_slot.get(slot)
+                if current is None or a.created_at > current.created_at:
+                    latest_by_slot[slot] = a
+            latest_artifacts_by_project[pid] = list(latest_by_slot.values())
+
         all_sm_rows = db.query(SessionMembership).filter(SessionMembership.user_id.in_(user_ids)).all()
         session_memberships_by_user = defaultdict(list)
         for sm in all_sm_rows:
@@ -941,7 +957,7 @@ class DashboardService:
                 if r.approval_status != "approved"
             )
             pm_pending_artifacts = sum(
-                1 for pid in pm_project_ids for a in artifacts_by_project.get(pid, [])
+                1 for pid in pm_project_ids for a in latest_artifacts_by_project.get(pid, [])
                 if a.approval_status != "approved"
             )
             pm_backlog = {
@@ -984,18 +1000,21 @@ class DashboardService:
 
             # Recency — SessionMembership.joined_at is tz-aware while
             # Approval(.aproved_at)/ProjectApproval.approved_at are naive
-            # (datetime.utcnow), so normalize to aware UTC before comparing.
-            last_session_joined_at = max((sm.joined_at for sm in user_sms if sm.joined_at), default=None)
-            last_approval_at = max(
+            # (datetime.utcnow). Normalize both to aware UTC *before* they're
+            # exposed below — serializing a naive datetime via .isoformat()
+            # omits the UTC offset, and the frontend's `new Date(iso)` then
+            # silently parses it as local time, throwing off its "Xh ago" math
+            # relative to the (correctly aware) other two fields.
+            last_session_joined_at = _as_aware_utc(
+                max((sm.joined_at for sm in user_sms if sm.joined_at), default=None)
+            )
+            last_approval_at = _as_aware_utc(max(
                 [a.aproved_at for a in approvals_by_user.get(u.id, [])]
                 + [a.approved_at for a in project_approvals_by_user.get(u.id, [])],
                 default=None,
-            )
+            ))
             last_activity_at = max(
-                [
-                    d if d.tzinfo else d.replace(tzinfo=timezone.utc)
-                    for d in (last_session_joined_at, last_approval_at) if d
-                ],
+                [d for d in (last_session_joined_at, last_approval_at) if d],
                 default=None,
             )
 
@@ -1090,14 +1109,38 @@ def _to_dict(rows):
     return {r.month.strftime("%Y-%m"): r.count for r in rows}
 
 
+def _as_aware_utc(dt):
+    # Models are inconsistent about DateTime(timezone=True) vs naive — naive
+    # columns are still populated via datetime.utcnow(), so treat them as UTC
+    # rather than letting aware/naive mix in subtraction or .isoformat().
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
 def _days_since(dt) -> int:
-    # Models are inconsistent about DateTime(timezone=True) vs naive, so
-    # treat naive values as UTC rather than letting aware - naive raise.
+    dt = _as_aware_utc(dt)
     if dt is None:
         return 0
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
     return (datetime.now(timezone.utc) - dt).days
+
+
+def _waiting_breakdown(dt) -> dict:
+    # Same tz-normalization as _days_since, but split into days/hours/minutes
+    # so short waits (under a day) don't all collapse to "0".
+    dt = _as_aware_utc(dt)
+    if dt is None:
+        return {"days_waiting": 0, "hours_waiting": 0, "minutes_waiting": 0, "waiting_seconds": 0}
+    total_seconds = int((datetime.now(timezone.utc) - dt).total_seconds())
+    days, rem = divmod(total_seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes = rem // 60
+    return {
+        "days_waiting": days,
+        "hours_waiting": hours,
+        "minutes_waiting": minutes,
+        "waiting_seconds": total_seconds,
+    }
 
 
 def _format_duration(seconds) -> str:

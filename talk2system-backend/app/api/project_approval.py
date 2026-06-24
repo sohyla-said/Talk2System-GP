@@ -14,6 +14,12 @@ from app.services.project_service import ProjectService
 router = APIRouter(prefix="/api", tags=["project-approval"])
 
 
+class ProjectPendingMember(BaseModel):
+    user_id: int
+    full_name: Optional[str] = None
+    email: str
+
+
 class ProjectApprovalItem(BaseModel):
     feature: str
     version_id: Optional[int] = None
@@ -23,11 +29,17 @@ class ProjectApprovalItem(BaseModel):
     all_members_approved: bool
     status: str
     exists: bool
+    pending_members: List[ProjectPendingMember] = []
 
 
 class ProjectApprovalStatusResponse(BaseModel):
     project_id: int
     features: List[ProjectApprovalItem]
+
+
+class ProjectUmlDiagramApproval(ProjectApprovalItem):
+    diagram_type: str
+    version: str
 
 
 class ProjectApproveRequest(BaseModel):
@@ -66,6 +78,22 @@ def get_project_version_approval_status(
         return ProjectApprovalService.get_version_approval_status(
             db, project_id, current_user.id, feature, version_id
         )
+    except ProjectApprovalError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+# GET per-diagram-type (usecase/class/sequence) approval breakdown
+@router.get(
+    "/projects/{project_id}/features/uml/diagrams-status",
+    response_model=List[ProjectUmlDiagramApproval]
+)
+def get_project_uml_diagrams_status(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return ProjectApprovalService.get_uml_diagrams_breakdown(db, project_id, current_user.id)
     except ProjectApprovalError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
 
