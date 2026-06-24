@@ -51,6 +51,7 @@ export default function ProjectDetailsPage() {
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
+  const [memberSessionIds, setMemberSessionIds] = useState(null); // null = not computed yet
 
   const [rejectModal, setRejectModal] = useState({ show: false, req: null, reason: "" });
 
@@ -72,8 +73,27 @@ export default function ProjectDetailsPage() {
         ]);
         setProject(proj);
         setMyRole(roleData.role);
-        setSessions(Array.isArray(sessRes) ? sessRes : []);
+        const sessionList = Array.isArray(sessRes) ? sessRes : [];
+        setSessions(sessionList);
         setMembers(membersData);
+
+        // PM is always a session member by default — only probe per-session
+        // access for participants (and admins, who are allowed through anyway).
+        if (roleData.role === "project_manager") {
+          setMemberSessionIds(new Set(sessionList.map((s) => s.id)));
+        } else {
+          Promise.all(
+            sessionList.map((s) =>
+              fetch(`${BASE_URL}/api/sessions/${s.id}`, {
+                headers: { Authorization: `Bearer ${getToken()}` },
+              })
+                .then((r) => ({ id: s.id, ok: r.ok }))
+                .catch(() => ({ id: s.id, ok: false }))
+            )
+          ).then((checks) => {
+            setMemberSessionIds(new Set(checks.filter((c) => c.ok).map((c) => c.id)));
+          });
+        }
 
         const pm = membersData.find((m) => m.role === "project_manager");
         if (pm) {
@@ -1062,20 +1082,35 @@ export default function ProjectDetailsPage() {
                       {sessions.length === 0 ? "No sessions yet." : "No sessions match your search or filter."}
                     </p>
                   ) : (
-                    paginatedSessions.map((session) => (
+                    paginatedSessions.map((session) => {
+                      const isLocked = memberSessionIds !== null && !memberSessionIds.has(session.id);
+                      return (
                       <div
                         key={session.id}
-                        onClick={() => navigate(
-                          `/projects/${projectId}/sessions/${session.id}/sessiondetails`,
-                          { state: { sessionId: session.id, projectCompleted: ["completed", "suspended"].includes(project?.project_status) } }
-                        )}
-                        className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border shadow-sm hover:shadow-md cursor-pointer transition"
+                        onClick={() => {
+                          if (isLocked) {
+                            showToast("You're not a participant in this session.", "error");
+                            return;
+                          }
+                          navigate(
+                            `/projects/${projectId}/sessions/${session.id}/sessiondetails`,
+                            { state: { sessionId: session.id, projectCompleted: ["completed", "suspended"].includes(project?.project_status) } }
+                          );
+                        }}
+                        className={`flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border shadow-sm transition ${
+                          isLocked ? "opacity-60 cursor-not-allowed" : "hover:shadow-md cursor-pointer"
+                        }`}
                       >
                         <div className="flex items-start justify-between">
                           <h3 className="font-bold text-lg">{session.title || `Session #${session.id}`}</h3>
-                          {["completed", "suspended"].includes(project?.project_status) && (
-                            <span className="material-symbols-outlined text-indigo-400 text-base">lock</span>
-                          )}
+                          <div className="flex items-center gap-1">
+                            {isLocked && (
+                              <span className="material-symbols-outlined text-gray-400 text-base" title="You're not a participant in this session">lock</span>
+                            )}
+                            {["completed", "suspended"].includes(project?.project_status) && (
+                              <span className="material-symbols-outlined text-indigo-400 text-base">lock</span>
+                            )}
+                          </div>
                         </div>
                         <span className={`self-start flex h-6 items-center rounded-full px-2.5 text-xs font-semibold ${
                           (session.status || "").toLowerCase() === "completed"
@@ -1087,7 +1122,8 @@ export default function ProjectDetailsPage() {
                           {formatSessionStatus(session.status)}
                         </span>
                       </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
 
