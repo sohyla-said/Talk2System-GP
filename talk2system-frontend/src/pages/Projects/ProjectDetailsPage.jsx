@@ -998,13 +998,13 @@ export default function ProjectDetailsPage() {
 
       <div className="px-4 sm:px-6 lg:px-10 flex flex-1 justify-center py-8">
         <div className="flex flex-col w-full max-w-5xl">
-          <div className="flex flex-wrap justify-between items-start gap-4 p-4">
-            <div className="flex min-w-72 flex-col gap-2">
-              <p className="text-gray-900 dark:text-white text-4xl font-black leading-tight">{project?.name}</p>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 p-4">
+            <div className="flex flex-1 min-w-0 flex-col gap-2">
+              <p className="text-gray-900 dark:text-white text-4xl font-black leading-tight break-words">{project?.name}</p>
               {pmName && myRole !== "project_manager" && (<p className="text-sm text-gray-500 dark:text-gray-400">Project Manager: <span className="font-semibold text-gray-700 dark:text-gray-300">{pmName}</span></p>)}
               {myRole && (<span className="w-fit text-xs font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">Your role: {myRole.replace("_", " ")}</span>)}
             </div>
-            <div className="flex flex-col items-end gap-3">
+            <div className="flex flex-col items-end gap-3 flex-shrink-0">
               <div className="flex items-center gap-2 flex-wrap">
                 {myRole && (<button onClick={() => setShowMembersModal(true)} className="relative flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition"><span className="material-symbols-outlined text-sm">group</span>Members<span className="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{members.length}</span></button>)}
                 {myRole === "project_manager" && (<button onClick={() => navigate(`/projects/${projectId}/add-participant`)} className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 shadow-sm transition"><span className="material-symbols-outlined text-sm">person_add</span>Add Participant</button>)}
