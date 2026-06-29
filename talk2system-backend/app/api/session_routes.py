@@ -28,6 +28,7 @@ class SessionResponse(BaseModel):
     audio_file_path: Optional[str]
     transcript_text: Optional[str]
     created_at: datetime
+    is_participant: bool = True
 
     class Config:
         from_attributes = True
@@ -80,9 +81,12 @@ def get_session_members(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    membership = SessionService.get_session_membership(db, session_id, current_user.id)
-    if not membership:
-        raise HTTPException(status_code=403, detail="You are not a member of this session")
+    if current_user.role != "admin":
+        membership = SessionService.get_session_membership(db, session_id, current_user.id)
+        if not membership:
+            project_membership = ProjectService.get_membership(db, session.project_id, current_user.id)
+            if not project_membership:
+                raise HTTPException(status_code=403, detail="You are not associated with this project")
 
     memberships = SessionService.get_session_members(db, session_id)
 
@@ -125,12 +129,24 @@ def get_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    if current_user.role != "admin":
-        membership = SessionService.get_session_membership(db, session_id, current_user.id)
-        if not membership:
-            raise HTTPException(status_code=403, detail="You are not a member of this session")
+    membership = SessionService.get_session_membership(db, session_id, current_user.id)
+    is_participant = membership is not None
 
-    return session
+    if current_user.role != "admin" and not is_participant:
+        project_membership = ProjectService.get_membership(db, session.project_id, current_user.id)
+        if not project_membership:
+            raise HTTPException(status_code=403, detail="You are not associated with this project")
+
+    return SessionResponse(
+        id=session.id,
+        title=session.title,
+        project_id=session.project_id,
+        status=session.status,
+        audio_file_path=session.audio_file_path,
+        transcript_text=session.transcript_text,
+        created_at=session.created_at,
+        is_participant=is_participant,
+    )
 
 
 @router.delete("/{session_id}")

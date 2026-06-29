@@ -177,6 +177,9 @@ def approve_feature_for_all(
     
 @router.get("/sessions/{session_id}/computed-status")
 def get_computed_status(session_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    ApprovalService._ensure_session_membership(db, session_id, current_user.id)
+    try:
+        ApprovalService._ensure_session_access(db, session_id, current_user.id)
+    except ApprovalError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
     status = ApprovalService.compute_session_status(db, session_id)
     return {"status": status}

@@ -189,6 +189,10 @@ export default function SessionDetailsPage() {
   const canCompleteSession =
     myMembership?.role === "project_manager" || myMembership?.role === "owner";
 
+  // Not every project member is a participant of this specific session — those
+  // users get full read access but no edit/approve/generate actions.
+  const isNonParticipant = !loading && members.length > 0 && !myMembership;
+
   const avatarColors = [
     "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
     "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
@@ -237,6 +241,13 @@ export default function SessionDetailsPage() {
             <span className="text-text-dark/50 dark:text-text-light/50 font-medium leading-normal">/</span>
             <span className="text-text-dark dark:text-text-light font-medium leading-normal">{title}</span>
           </div>
+
+          {isNonParticipant && (
+            <div className="flex items-center gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 px-4 py-3 text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-4">
+              <span className="material-symbols-outlined text-lg">visibility</span>
+              You are not a member of this session — you can view its content, but you can't edit, approve, or generate anything.
+            </div>
+          )}
 
           <div className="flex flex-wrap justify-between items-start gap-4 p-4 pl-0">
           <div className="flex min-w-72 flex-col gap-2">
@@ -458,7 +469,7 @@ export default function SessionDetailsPage() {
                               className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-lg bg-primary text-white hover:opacity-90 transition"
                             >
                               <span className="material-symbols-outlined text-xs">open_in_new</span>
-                              {item.current_user_approved ? "View" : "Review & Approve"}
+                              {isNonParticipant || item.current_user_approved ? "View" : "Review & Approve"}
                             </button>
                           </div>
 

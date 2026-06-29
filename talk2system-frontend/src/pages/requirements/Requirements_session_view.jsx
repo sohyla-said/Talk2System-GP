@@ -4,7 +4,7 @@ import RequirementsApprovalModal from "../../components/modals/RequirementsAppro
 import RequirementsEditModal from "../../components/modals/RequirementsEditModal";
 import ConfirmModal from "../../components/modals/ConfirmModal";
 import Toast from "../../components/Toast";
-import { getToken } from "../../api/authApi";
+import { getToken, getCurrentUser } from "../../api/authApi";
 
 export default function RequirementsSessionView() {
   const [approved, setApproved] = useState(false);
@@ -20,6 +20,8 @@ export default function RequirementsSessionView() {
   const [pendingNavigation, setPendingNavigation] = useState(null);   // Stores target route temporarily when user tries to move to another tab before approval.
   const [showEditModal, setShowEditModal] = useState(false);  // controls whether the edit modal is opened
   const [sessionCompleted, setSessionCompleted] = useState(false);
+  const [isNonParticipant, setIsNonParticipant] = useState(false);
+  const isReadOnly = sessionCompleted || isNonParticipant;
   const [editingSection, setEditingSection] = useState(null); // Stores which section is being edited, such as functional, nonFunctional, actors, features.
   const [versions, setVersions] = useState([]); // Holds all available versions for the current session requirement set (for dropdown).
   const [selectedVersionId, setSelectedVersionId] = useState(null); // Tracks currently selected version in the dropdown.
@@ -113,6 +115,24 @@ export default function RequirementsSessionView() {
     .then((r) => r.json())
     .then((data) => setSessionCompleted(data.status === "completed"))
     .catch(console.error);
+  }, [sessionId]);
+
+  // A user can view a session they aren't a participant of (e.g. another
+  // project member) — detect that to drive the view-only banner/disables.
+  useEffect(() => {
+    if (!sessionId) return;
+    const currentUser = getCurrentUser();
+    fetch(`http://localhost:8000/api/sessions/${sessionId}/members`, {
+      headers: getAuthHeaders(),
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((members) => {
+        const isMember = (members || []).some(
+          (m) => String(m.user_id) === String(currentUser?.id)
+        );
+        setIsNonParticipant(!isMember);
+      })
+      .catch(console.error);
   }, [sessionId]);
   // poll for versions changes to support multi-user live sync
   useEffect(() => {
@@ -726,6 +746,12 @@ const handleApprove = async () => {
               This session is completed. All content is view-only — editing and generation are disabled.
             </div>
           )}
+          {!sessionCompleted && isNonParticipant && (
+            <div className="flex items-center gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 px-4 py-3 text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-2">
+              <span className="material-symbols-outlined text-lg">visibility</span>
+              You are not a member of this session — you can view requirements, but editing and approval are disabled.
+            </div>
+          )}
           <div className="flex items-start gap-3">
             <div className="flex flex-col items-stretch sm:items-end gap-3 w-full sm:w-auto">
               <button
@@ -735,7 +761,7 @@ const handleApprove = async () => {
                     ? 'bg-green-600 text-white cursor-default'
                     : 'bg-primary text-white hover:bg-primary/90 disabled:hover:bg-primary'
                 }`}
-                disabled={approved || sessionCompleted || !(currentRequirementId ?? requirementId)}
+                disabled={approved || isReadOnly || !(currentRequirementId ?? requirementId)}
               >
                 <span className="material-symbols-outlined text-lg">
                   {approved ? 'check_circle' : 'approval'}
@@ -796,7 +822,7 @@ const handleApprove = async () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-4 pb-4">
               <button
                 onClick={() => handleGenerate("uml")}
-                disabled={sessionCompleted || !requirementsApproval.all_members_approved}
+                disabled={isReadOnly || !requirementsApproval.all_members_approved}
                 className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary px-4 py-3 font-bold text-white shadow-soft transition-colors hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined text-xl">schema</span>
@@ -804,7 +830,7 @@ const handleApprove = async () => {
               </button>
               <button
                 onClick={() => handleGenerate("srs")}
-                disabled={sessionCompleted || !requirementsApproval.all_members_approved}
+                disabled={isReadOnly || !requirementsApproval.all_members_approved}
                 className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary px-4 py-3 font-bold text-white shadow-soft transition-colors hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined text-xl">description</span>
@@ -846,7 +872,7 @@ const handleApprove = async () => {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Functional Requirements
                       </p>
-                      {!sessionCompleted && (
+                      {!isReadOnly && (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -872,7 +898,7 @@ const handleApprove = async () => {
                           Delete Selected ({(selectedItems.functional || []).length})
                         </button>
                       )}
-                      {!sessionCompleted && (
+                      {!isReadOnly && (
                         <span
                           onClick={(e) => {
                             e.stopPropagation();
@@ -935,7 +961,7 @@ const handleApprove = async () => {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Non-Functional Requirements
                       </p>
-                      {!sessionCompleted && (
+                      {!isReadOnly && (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -961,7 +987,7 @@ const handleApprove = async () => {
                           Delete Selected ({(selectedItems.nonFunctional || []).length})
                         </button>
                       )}
-                      {!sessionCompleted && (
+                      {!isReadOnly && (
                         <span
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1024,7 +1050,7 @@ const handleApprove = async () => {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Actors
                       </p>
-                      {!sessionCompleted && (
+                      {!isReadOnly && (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -1050,7 +1076,7 @@ const handleApprove = async () => {
                           Delete Selected ({(selectedItems.actors || []).length})
                         </button>
                       )}
-                      {!sessionCompleted && (
+                      {!isReadOnly && (
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1103,7 +1129,7 @@ const handleApprove = async () => {
                       <p className="text-slate-900 dark:text-white text-lg font-bold leading-normal">
                         Features
                       </p>
-                      {!sessionCompleted && (
+                      {!isReadOnly && (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -1129,7 +1155,7 @@ const handleApprove = async () => {
                           Delete Selected ({(selectedItems.features || []).length})
                         </button>
                       )}
-                      {!sessionCompleted && (
+                      {!isReadOnly && (
                         <span
                           onClick={(e) => {
                             e.stopPropagation();

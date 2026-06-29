@@ -7,6 +7,7 @@ from app.models.artifact_type import ArtifactType
 from app.models.session import Session as SessionModel
 from app.models.session_membership import SessionMembership
 from app.models.session_requirement import SessionRequirement
+from app.models.project_membership import ProjectMembership
 
 FEATURES = {"transcript", "requirements", "uml", "srs"}
 
@@ -34,7 +35,7 @@ class ApprovalService:
     # ─────────────────────────────────────────────────────────────
     @staticmethod
     def get_approval_status(db: Session, session_id: int, user_id: int) -> Dict:
-        ApprovalService._ensure_session_membership(db, session_id, user_id)
+        ApprovalService._ensure_session_access(db, session_id, user_id)
         return {
             "session_id": session_id,
             "features": [
@@ -50,7 +51,7 @@ class ApprovalService:
     def get_version_approval_status(
         db: Session, session_id: int, user_id: int, feature: str, version_id: int
     ) -> Dict:
-        ApprovalService._ensure_session_membership(db, session_id, user_id)
+        ApprovalService._ensure_session_access(db, session_id, user_id)
         feature = feature.lower().strip()
         if feature not in FEATURES:
             raise ApprovalError(400, "Invalid feature")
@@ -224,7 +225,7 @@ class ApprovalService:
     # ─────────────────────────────────────────────────────────────
     @staticmethod
     def get_uml_diagrams_breakdown(db: Session, session_id: int, user_id: int) -> List[Dict]:
-        ApprovalService._ensure_session_membership(db, session_id, user_id)
+        ApprovalService._ensure_session_access(db, session_id, user_id)
         breakdown = []
         for diagram_type, type_name in UML_DIAGRAM_TYPES.items():
             art = (
@@ -349,6 +350,40 @@ class ApprovalService:
         )
         if not membership:
             raise ApprovalError(403, "You are not a member of this session")
+
+    @staticmethod
+    def _ensure_session_access(db: Session, session_id: int, user_id: int) -> None:
+        """Read access: session participants can always view, and so can any
+        other member of the parent project (view-only — they just aren't a
+        participant of this particular session)."""
+        session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+        if not session:
+            raise ApprovalError(404, "Session not found")
+
+        is_session_member = (
+            db.query(SessionMembership)
+            .filter(
+                SessionMembership.session_id == session_id,
+                SessionMembership.user_id == user_id,
+            )
+            .first()
+            is not None
+        )
+        if is_session_member:
+            return
+
+        is_project_member = (
+            db.query(ProjectMembership)
+            .filter(
+                ProjectMembership.project_id == session.project_id,
+                ProjectMembership.user_id == user_id,
+                ProjectMembership.left_at.is_(None),
+            )
+            .first()
+            is not None
+        )
+        if not is_project_member:
+            raise ApprovalError(403, "You are not associated with this project")
 
     @staticmethod
     def _members_count(db: Session, session_id: int) -> int:

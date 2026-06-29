@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import TranscriptApprovalModal from "../../components/modals/TranscriptApprovalModal";
 import TranscriptEditModal from "../../components/modals/TranscriptEditModal";
 import EngineChoiceModal from "../../components/modals/EngineChoiceModal";
-import { getToken } from "../../api/authApi";
+import { getToken, getCurrentUser } from "../../api/authApi";
 import { ExtractionContext } from "../../App";
 
 // ─── AssemblyAI Universal-2 benchmark data ────────────────────────────────────
@@ -50,6 +50,8 @@ export default function TranscriptPage() {
   const [isCheckingReq, setIsCheckingReq] = useState(false);
   const [hasSummary, setHasSummary] = useState(false);
   const [sessionCompleted, setSessionCompleted] = useState(false);
+  const [isNonParticipant, setIsNonParticipant] = useState(false);
+  const isReadOnly = sessionCompleted || isNonParticipant;
 
   // ── Translation state ────────────────────────────────────────────────────
   const [detectedLanguage, setDetectedLanguage] = useState(null);
@@ -306,6 +308,24 @@ export default function TranscriptPage() {
     })
       .then((r) => r.json())
       .then((data) => setSessionCompleted(data.status === "completed"))
+      .catch(console.error);
+  }, [sessionId]);
+
+  // A user can view a session they aren't a participant of (e.g. another
+  // project member) — detect that to drive the view-only banner/disables.
+  useEffect(() => {
+    if (!sessionId) return;
+    const currentUser = getCurrentUser();
+    fetch(`http://localhost:8000/api/sessions/${sessionId}/members`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((members) => {
+        const isMember = (members || []).some(
+          (m) => String(m.user_id) === String(currentUser?.id)
+        );
+        setIsNonParticipant(!isMember);
+      })
       .catch(console.error);
   }, [sessionId]);
 
@@ -730,7 +750,7 @@ export default function TranscriptPage() {
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => { setSelectionMode((v) => !v); setSelectedIds(new Set()); }}
-              disabled={sessionCompleted}
+              disabled={isReadOnly}
               className="flex items-center gap-2 rounded-lg border border-border-light dark:border-white/10 px-4 py-2.5 text-sm font-semibold bg-white dark:bg-background-dark/50 hover:bg-gray-50 dark:hover:bg-white/5 shadow-soft transition-colors"
             >
               <span className="material-symbols-outlined text-lg">
@@ -741,7 +761,7 @@ export default function TranscriptPage() {
 
             <button
               onClick={handleApprove}
-              disabled={approved || sessionCompleted}
+              disabled={approved || isReadOnly}
               className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold text-white shadow-soft transition-colors
                 ${approved ? "bg-green-600 cursor-default" : "bg-primary hover:bg-primary/90"}`}
             >
@@ -757,6 +777,13 @@ export default function TranscriptPage() {
           <div className="flex items-center gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 px-4 py-3 text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-4">
             <span className="material-symbols-outlined text-lg">lock</span>
             This session is completed. All content is view-only — editing and generation are disabled.
+          </div>
+        )}
+        {/* ── Non-participant banner ── */}
+        {!sessionCompleted && isNonParticipant && (
+          <div className="flex items-center gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 px-4 py-3 text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-4">
+            <span className="material-symbols-outlined text-lg">visibility</span>
+            You are not a member of this session — you can view the transcript, but editing and approval are disabled.
           </div>
         )}
 
@@ -784,7 +811,7 @@ export default function TranscriptPage() {
                 </div>
                 <button
                   onClick={handleDeleteSelected}
-                  disabled={selectedIds.size === 0 || isDeleting}
+                  disabled={selectedIds.size === 0 || isDeleting || isReadOnly}
                   className="flex items-center gap-2 rounded-lg bg-red-500 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2 text-sm font-bold text-white transition-colors"
                 >
                   {isDeleting ? (
@@ -845,7 +872,7 @@ export default function TranscriptPage() {
                         </span>
                       )}
                     </div>
-                    {!selectionMode && (
+                    {!selectionMode && !isReadOnly && (
                       <button
                         onClick={() => handleEditClick(speaker)}
                         className="opacity-0 group-hover:opacity-100 transition-opacity text-text-dark/40 dark:text-text-light/40 hover:text-primary p-1 rounded"
@@ -880,7 +907,7 @@ export default function TranscriptPage() {
                 ) : (
                   <button
                     onClick={() => handleGenerate("sum")}
-                    disabled={sessionCompleted}
+                    disabled={isReadOnly}
                     className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-primary-accent/90 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary-accent"
                   >
                     <span className="material-symbols-outlined text-xl">summarize</span>
@@ -899,7 +926,7 @@ export default function TranscriptPage() {
                     </button>
                     <button
                       onClick={() => handleGenerate("req", true)}
-                      disabled={sessionCompleted || isSubmittingReq || isCheckingReq || isTranslating || (shouldAutoTranslate && !translationData)}
+                      disabled={isReadOnly || isSubmittingReq || isCheckingReq || isTranslating || (shouldAutoTranslate && !translationData)}
                       className="flex w-full items-center justify-center gap-3 rounded-lg border border-primary-accent/50 bg-transparent px-4 py-2.5 text-sm font-semibold text-primary-accent hover:bg-primary-accent/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isSubmittingReq || isCheckingReq ? (
@@ -929,7 +956,7 @@ export default function TranscriptPage() {
                 ) : (
                   <button
                     onClick={() => handleGenerate("req")}
-                    disabled={sessionCompleted || isSubmittingReq || isTranslating || (shouldAutoTranslate && !translationData)}
+                    disabled={isReadOnly || isSubmittingReq || isTranslating || (shouldAutoTranslate && !translationData)}
                     className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary-accent px-4 py-3 text-base font-bold text-dark shadow-soft transition-colors hover:bg-primary-accent/90 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {isSubmittingReq || isCheckingReq ? (

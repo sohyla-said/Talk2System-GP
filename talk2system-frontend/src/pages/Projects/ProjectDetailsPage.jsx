@@ -156,11 +156,12 @@ export default function ProjectDetailsPage() {
               fetch(`${BASE_URL}/api/sessions/${s.id}`, {
                 headers: { Authorization: `Bearer ${getToken()}` },
               })
-                .then((r) => ({ id: s.id, ok: r.ok }))
-                .catch(() => ({ id: s.id, ok: false }))
+                .then((r) => (r.ok ? r.json() : null))
+                .then((data) => ({ id: s.id, isParticipant: !!data?.is_participant }))
+                .catch(() => ({ id: s.id, isParticipant: false }))
             )
           ).then((checks) => {
-            setMemberSessionIds(new Set(checks.filter((c) => c.ok).map((c) => c.id)));
+            setMemberSessionIds(new Set(checks.filter((c) => c.isParticipant).map((c) => c.id)));
           });
         }
 
@@ -1215,29 +1216,29 @@ export default function ProjectDetailsPage() {
                     </p>
                   ) : (
                     paginatedSessions.map((session) => {
-                      const isLocked = memberSessionIds !== null && !memberSessionIds.has(session.id);
+                      const isNonParticipant = memberSessionIds !== null && !memberSessionIds.has(session.id);
                       return (
                       <div
                         key={session.id}
                         onClick={() => {
-                          if (isLocked) {
-                            showToast("You're not a participant in this session.", "error");
-                            return;
-                          }
                           navigate(
                             `/projects/${projectId}/sessions/${session.id}/sessiondetails`,
-                            { state: { sessionId: session.id, projectCompleted: ["completed", "suspended"].includes(project?.project_status) } }
+                            {
+                              state: {
+                                sessionId: session.id,
+                                projectCompleted: ["completed", "suspended"].includes(project?.project_status),
+                                isNonParticipant,
+                              },
+                            }
                           );
                         }}
-                        className={`flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border shadow-sm transition ${
-                          isLocked ? "opacity-60 cursor-not-allowed" : "hover:shadow-md cursor-pointer"
-                        }`}
+                        className="flex flex-col gap-4 p-5 bg-white dark:bg-gray-800/50 rounded-lg border shadow-sm transition hover:shadow-md cursor-pointer"
                       >
                         <div className="flex items-start justify-between">
                           <h3 className="font-bold text-lg">{session.title || `Session #${session.id}`}</h3>
                           <div className="flex items-center gap-1">
-                            {isLocked && (
-                              <span className="material-symbols-outlined text-gray-400 text-base" title="You're not a participant in this session">lock</span>
+                            {isNonParticipant && (
+                              <span className="material-symbols-outlined text-gray-400 text-base" title="You're not a participant in this session — view only">visibility</span>
                             )}
                             {["completed", "suspended"].includes(project?.project_status) && (
                               <span className="material-symbols-outlined text-indigo-400 text-base">lock</span>

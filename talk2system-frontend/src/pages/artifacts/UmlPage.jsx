@@ -2,7 +2,7 @@
 import UMLApprovalModal from "../../components/modals/UMLApprovalModal";
 import Toast from "../../components/Toast";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { getToken } from "../../api/authApi";
+import { getToken, getCurrentUser } from "../../api/authApi";
 import { useContext } from "react";
 import { UmlContext } from "../../App";
 
@@ -19,6 +19,7 @@ const BASE_URL = "http://localhost:8000";
 export default function UmlPage() {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [sessionCompleted, setSessionCompleted] = useState(false);
+  const [isNonParticipant, setIsNonParticipant] = useState(false);
   const [projectCompleted, setProjectCompleted] = useState(false);
   const [umlApproval, setUmlApproval] = useState({
     approved_members_count: 0,
@@ -116,6 +117,24 @@ export default function UmlPage() {
     .then((r) => r.json())
     .then((data) => setSessionCompleted(data.status === "completed"))
     .catch(console.error);
+  }, [sessionId, isProjectSource]);
+
+  // A user can view a session they aren't a participant of (e.g. another
+  // project member) — detect that to drive the view-only banner/disables.
+  useEffect(() => {
+    if (isProjectSource || !sessionId) return;
+    const currentUser = getCurrentUser();
+    fetch(`${BASE_URL}/api/sessions/${sessionId}/members`, {
+      headers: getAuthHeaders(),
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((members) => {
+        const isMember = (members || []).some(
+          (m) => String(m.user_id) === String(currentUser?.id)
+        );
+        setIsNonParticipant(!isMember);
+      })
+      .catch(console.error);
   }, [sessionId, isProjectSource]);
 
   // ===============================
@@ -496,6 +515,12 @@ export default function UmlPage() {
             This project is completed. Generation is disabled — view only.
           </div>
         )}
+        {!isProjectSource && !sessionCompleted && isNonParticipant && (
+          <div className="flex items-center gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 px-4 py-3 text-sm font-medium text-indigo-700 dark:text-indigo-300 mt-2">
+            <span className="material-symbols-outlined text-lg">visibility</span>
+            You are not a member of this session — you can view the UML diagrams, but generation and approval are disabled.
+          </div>
+        )}
         </div>
 
         {/* DIAGRAM TYPE */}
@@ -534,7 +559,7 @@ export default function UmlPage() {
                 onClick={handleGenerate}
                 disabled={
                   (isProjectSource && projectCompleted) ||
-                  (!isProjectSource && sessionCompleted)
+                  (!isProjectSource && (sessionCompleted || isNonParticipant))
                 }
                 className="h-10 px-4 rounded-lg bg-primary text-white disabled:opacity-50"
               >
@@ -586,7 +611,7 @@ export default function UmlPage() {
               ) : (
                 <button
                   onClick={() => setShowApprovalModal(true)}
-                  disabled={currentUserApprovedVersion || !artifactId|| sessionCompleted}
+                  disabled={currentUserApprovedVersion || !artifactId|| sessionCompleted || isNonParticipant}
                 className={`h-10 px-6 rounded-lg flex items-center gap-2 text-white
                   ${currentUserApprovedVersion ? "bg-green-600" : "bg-primary"}`}
               >
