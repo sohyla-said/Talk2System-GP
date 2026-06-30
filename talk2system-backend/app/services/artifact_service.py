@@ -1,6 +1,5 @@
 from sqlalchemy.orm import Session
 from datetime import datetime
-
 from app.models.artifact import Artifact
 from app.models.artifact_type import ArtifactType
 
@@ -8,7 +7,7 @@ from app.models.artifact_type import ArtifactType
 class ArtifactService:
 
     # ==========================
-    # CREATE ARTIFACT (WITH VERSIONING + SESSION SUPPORT)
+    # CREATE ARTIFACT and SAVE TO DB
     # ==========================
     @staticmethod
     def save_artifact(
@@ -16,7 +15,7 @@ class ArtifactService:
         project_id: int,
         artifact_type_name: str,
         file_path: str,
-        session_id: int = None   # 🔥 NEW
+        session_id: int = None
     ):
 
         # ==========================
@@ -33,13 +32,13 @@ class ArtifactService:
             db.refresh(artifact_type)
 
         # ==========================
-        # 2. Get latest version (SCOPED CORRECTLY)
+        # 2. Get latest version for this artifact type and session
         # ==========================
         latest_artifact = db.query(Artifact)\
             .filter(
                 Artifact.project_id == project_id,
                 Artifact.artifact_type_id == artifact_type.id,
-                Artifact.session_id == session_id   # 🔥 CRITICAL FIX
+                Artifact.session_id == session_id
             )\
             .order_by(Artifact.created_at.desc())\
             .first()
@@ -61,7 +60,7 @@ class ArtifactService:
         # ==========================
         artifact = Artifact(
             project_id=project_id,
-            session_id=session_id,   # 🔥 NEW
+            session_id=session_id, 
             artifact_type_id=artifact_type.id,
             file_path=file_path,
             version=new_version,
@@ -76,7 +75,7 @@ class ArtifactService:
         return {
             "id": artifact.id,
             "project_id": project_id,
-            "session_id": session_id,   # 🔥 NEW
+            "session_id": session_id,  
             "artifact_type": artifact_type.name,
             "file_path": artifact.file_path,
             "version": artifact.version,
@@ -85,7 +84,7 @@ class ArtifactService:
         }
 
     # ==========================
-    # GET PROJECT ARTIFACTS (AGGREGATED ONLY)
+    # GET ALL ARTIFACT VERSIONS ON PROJECT LEVEL
     # ==========================
     @staticmethod
     def get_project_artifact_versions(
@@ -104,7 +103,7 @@ class ArtifactService:
             .filter(
                 Artifact.project_id == project_id,
                 Artifact.artifact_type_id == artifact_type.id,
-                Artifact.session_id == None   # 🔥 ONLY PROJECT LEVEL
+                Artifact.session_id == None
             )\
             .order_by(Artifact.created_at.desc())\
             .all()
@@ -121,7 +120,7 @@ class ArtifactService:
         ]
 
     # ==========================
-    # GET SESSION ARTIFACTS
+    # GET ALL ARTIFACT VERSIONS ON SESSION LEVEL
     # ==========================
     @staticmethod
     def get_session_artifact_versions(

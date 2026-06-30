@@ -31,6 +31,10 @@ SUPPORTED_FORMATS = ["ieee_830", "iso_iec_29148", "modern_agile"]
 # ==========================
 # HELPERS
 # ==========================
+
+#=========================
+# FORMAT REQUIREMENTS FOR LLM PROMPT
+# ==========================
 def format_requirements_for_prompt(requirements_json: dict) -> str:
     actors = requirements_json.get("actors", [])
     features = requirements_json.get("features", [])
@@ -71,7 +75,7 @@ def format_requirements_for_prompt(requirements_json: dict) -> str:
 # REQUIREMENTS CHUNKING
 # ==========================
 # Threshold: if total FRs + NFRs exceed this, split into chunks
-FR_CHUNK_THRESHOLD = 10   # anything above 10 FRs+NFRs gets chunked
+FR_CHUNK_THRESHOLD = 13   # anything above 13 FRs+NFRs gets chunked
 FR_CHUNK_SIZE      = 8    # 8 FRs per chunk — small enough for CPU
 NFR_CHUNK_SIZE     = 5    # 5 NFRs per chunk
 
@@ -90,7 +94,7 @@ def chunk_requirements(requirements_json: dict) -> list[dict]:
 
     total = len(frs) + len(nfrs)
 
-    # ── No chunking needed ─────────────────────────────────────────────────
+    #  No chunking needed if under threshold 
     if total <= FR_CHUNK_THRESHOLD:
         logger.info(f"Requirements within threshold ({total} items) — no chunking needed")
         return [requirements_json]
@@ -126,7 +130,9 @@ def chunk_requirements(requirements_json: dict) -> list[dict]:
 
     return chunks
 
-
+# ==========================
+# SEND PROMPTS TO OLLAMA AND RETURN SRS TEXT
+# ==========================
 def _call_ollama_for_chunk(
     prompt: str,
     chunk_index: int,
@@ -174,6 +180,9 @@ def _call_ollama_for_chunk(
     )
     return text
 
+# ==========================
+# FUNCTION FOR BUILDING PROMPT FOR CHUNKS
+# ==========================
 def build_chunk_prompt(
     chunk: dict,
     project_name: str,
@@ -248,7 +257,6 @@ STRICT RULES:
 
 # ==========================
 # BUILD PROMPT — IEEE 830
-# (original, preserved exactly)
 # ==========================
 def build_srs_prompt_ieee_830(requirements_json: dict, project_name: str) -> str:
     formatted = format_requirements_for_prompt(requirements_json)
@@ -414,7 +422,7 @@ STRICT RULES:
 
 
 # ==========================
-# ROUTER — picks the right prompt builder
+# picks the srs prompt builder according to the format_version
 # ==========================
 def build_srs_prompt(requirements_json: dict, project_name: str, format_version: str = "ieee_830") -> str:
     if format_version == "iso_iec_29148":
@@ -422,17 +430,17 @@ def build_srs_prompt(requirements_json: dict, project_name: str, format_version:
     elif format_version == "modern_agile":
         return build_srs_prompt_modern_agile(requirements_json, project_name)
     else:
-        # default: ieee_830 (original behavior preserved)
+        # default: ieee_830 
         return build_srs_prompt_ieee_830(requirements_json, project_name)
 
 
-# ==========================
-# CALL OLLAMA
-# ==========================
+# ===============================================
+# ========== CORE FUNCTION-CALL OLLAMA, CHOOSE BETWEEN SINGLE PROMPT OR CHUNKED PROMPTS
+# ===============================================
 def generate_srs_text_with_ollama(
     requirements_json: dict,
     project_name: str = "Software System",
-    format_version: str = "ieee_830"
+    format_version: str = "ieee_830" # default
 ) -> str:
     """
     Generates SRS text via Ollama.
@@ -443,12 +451,12 @@ def generate_srs_text_with_ollama(
     chunks = chunk_requirements(requirements_json)
 
     if len(chunks) == 1:
-        # ── Fast path: single prompt (original behavior) ───────────────────
+        # Fast path: single prompt (original behavior) 
         logger.info("Single-chunk SRS generation (no splitting needed)")
         prompt = build_srs_prompt(requirements_json, project_name, format_version)
         return _call_ollama_for_chunk(prompt, chunk_index=1, total_chunks=1)
 
-    # ── Chunked path ───────────────────────────────────────────────────────
+    # else Chunked path 
     logger.info(f"Chunked SRS generation: {len(chunks)} chunks")
     parts = []
 
@@ -495,8 +503,7 @@ def generate_srs_text_with_ollama(
 def _merge_srs_chunks(parts: list[str]) -> str:
     """
     Merges multiple SRS chunk outputs into one document.
-    Strategy: inject continuation FR/NFR entries into section 3/4 of part 1,
-    not after section 4 — so all requirements appear in the right place.
+    Strategy: inject continuation FR/NFR entries into section 3/4 of part 1
     """
     if not parts:
         return ""
@@ -516,10 +523,10 @@ def _merge_srs_chunks(parts: list[str]) -> str:
             stripped = line.strip()
             if not stripped:
                 continue
-            # Detect FR lines: **FR-N** | ... or FR-N | ...
+            # Detect FR lines
             if re.match(r"^\*?\*?FR-\d+\*?\*?", stripped):
                 continuation_frs.append(stripped)
-            # Detect NFR lines: NFR-N | ... or **NFR-N** | ...
+            # Detect NFR lines
             elif re.match(r"^\*?\*?NFR-\d+\*?\*?", stripped):
                 continuation_nfrs.append(stripped)
             # Detect "The system shall..." lines that follow an FR header
@@ -533,7 +540,7 @@ def _merge_srs_chunks(parts: list[str]) -> str:
                     continuation_frs.append(stripped)
 
     if not continuation_frs and not continuation_nfrs:
-        # Nothing useful extracted — fall back to simple append
+        # Nothing useful extracted, fall back to simple append
         merged = parts[0].rstrip()
         for i, part in enumerate(parts[1:], start=2):
             cleaned = part.strip()
@@ -544,7 +551,7 @@ def _merge_srs_chunks(parts: list[str]) -> str:
 
     base = parts[0]
 
-    # ── Inject continuation FRs into section 3 (before section 4) ────────
+    # Inject continuation FRs into section 3 (before section 4) 
     # Find the boundary between section 3 and section 4 in chunk 1
     # Section 4 starts with "# 4." or "## 4." or "# Non-Functional"
     section4_pattern = re.compile(
@@ -559,7 +566,7 @@ def _merge_srs_chunks(parts: list[str]) -> str:
         base = base[:insert_pos] + fr_block + base[insert_pos:]
         logger.info(f"Injected {len(continuation_frs)} continuation FR entries into section 3")
 
-    # ── Inject continuation NFRs at the end of section 4 ─────────────────
+    #  Inject continuation NFRs at the end of section 4 
     if continuation_nfrs:
         nfr_block = "\n" + "\n".join(continuation_nfrs)
         base = base.rstrip() + nfr_block
@@ -579,7 +586,7 @@ FORMAT_DISPLAY_NAMES = {
 
 
 # ==========================
-# SAVE AS DOCX
+# SAVE AS DOCX (Export)
 # ==========================
 def save_srs_as_docx(
     srs_text: str,
@@ -601,14 +608,14 @@ def save_srs_as_docx(
     path = os.path.join(STORAGE_PATH, filename)
     doc = Document()
 
-    # ---- Page margins (IEEE-style) ----
+    # Page margins (IEEE-style) 
     for section in doc.sections:
         section.top_margin    = Inches(1)
         section.bottom_margin = Inches(1)
         section.left_margin   = Inches(1.25)
         section.right_margin  = Inches(1.25)
 
-    # ---- Cover block ----
+    # Cover block
     cover_title = doc.add_heading("Software Requirements Specification", level=0)
     cover_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = cover_title.runs[0]
@@ -631,7 +638,7 @@ def save_srs_as_docx(
 
     doc.add_paragraph()
 
-    # ---- Horizontal rule after cover ----
+    # Horizontal rule after cover 
     p = doc.add_paragraph()
     pPr = p._p.get_or_add_pPr()
     pBdr = OxmlElement('w:pBdr')
@@ -645,7 +652,7 @@ def save_srs_as_docx(
 
     doc.add_paragraph()
 
-    # ---- Parse markdown into styled Word content ----
+    # Parse markdown into styled Word content 
     for line in srs_text.split("\n"):
         stripped = line.strip()
         if not stripped:
@@ -692,7 +699,7 @@ def save_srs_as_docx(
 
 
 # ==========================
-# INLINE BOLD HELPER
+# INLINE BOLD HELPER USED IN DOCX PARSING
 # ==========================
 def _add_inline_bold(paragraph, text: str):
     parts = re.split(r'(\*\*[^*]+\*\*)', text)
@@ -712,7 +719,7 @@ def generate_srs_pipeline(
     project_id: int,
     project_name: str = "Software System",
     session_id: int = None,
-    format_version: str = "ieee_830"   # ← NEW PARAM, defaults to original behavior
+    format_version: str = "ieee_830"   # default
 ) -> dict:
     try:
         srs_text = generate_srs_text_with_ollama(requirements_json, project_name, format_version)
@@ -729,7 +736,10 @@ def generate_srs_pipeline(
         }
     except Exception as e:
         raise Exception(f"SRS generation failed: {str(e)}")
-    
+
+# ===========================
+# FORMAT ERROR MESSAGES
+# =========================== 
 def _sanitize_srs_error_message(raw: str) -> str:
     """Convert raw exception text into a short user-friendly message."""
     low = raw.lower()
@@ -741,12 +751,15 @@ def _sanitize_srs_error_message(raw: str) -> str:
         return "AI generation quota exceeded. Please retry in a few minutes."
     return "SRS generation failed. Please retry."
 
+# ==========================
+# BACKGROUND TASK ORCHESTRATION (generation, artifact storage, status updates, audit logging, and notifications.)
+# ==========================
 def run_async_srs_task(
     task_id: int,
     project_id: int,
     session_id: int | None,
     format_version: str,
-    source: str,          # "session" or "project"
+    source: str,     # "session" or "project"
     user_id: int,
 ):
     db = SessionLocal()
@@ -755,7 +768,7 @@ def run_async_srs_task(
         task.status = "in-progress"
         db.commit()
 
-        # ── 1. Fetch requirements ──────────────────────────────────────────
+        # ── 1. Fetch requirements 
         from app.services.requirement_service import RequirementService
         if source == "session":
             req = RequirementService.get_latest_session_requirement(db, project_id, session_id)
@@ -763,11 +776,11 @@ def run_async_srs_task(
             req = RequirementService.get_latest_project_requirement(db, project_id)
         requirements_json = req["data"]
 
-        # ── 2. Project name ────────────────────────────────────────────────
+        # ── 2. Project name 
         project = db.query(Project).filter(Project.id == project_id).first()
         project_name = project.name if project else "Software System"
 
-        # ── 3. Run the pipeline ────────────────────────────────────────────
+        # ── 3. Run the pipeline 
         result = generate_srs_pipeline(
             requirements_json=requirements_json,
             project_id=project_id,
@@ -776,7 +789,7 @@ def run_async_srs_task(
             format_version=format_version,
         )
 
-        # ── 4. Save artifact ───────────────────────────────────────────────
+        # ── 4. Save artifact 
         from app.services.artifact_service import ArtifactService
         artifact = ArtifactService.save_artifact(
             db=db,
@@ -793,10 +806,8 @@ def run_async_srs_task(
             "artifact_id": artifact["id"],
         }
         task.status = "done"
+        # ── 5. Update Project/Session Status
 
-        # A brand-new artifact has zero approvals — refresh the cached project status
-        # so it reflects "pending_approval" instead of the previous (already fully
-        # approved) artifact's "in_progress" state.
         if source == "project":
             from app.services.project_approval_service import ProjectApprovalService
             new_status = ProjectApprovalService.compute_project_status(db, project_id)
@@ -826,7 +837,7 @@ def run_async_srs_task(
         )
         db.commit()
 
-        # ── 5. Notify ──────────────────────────────────────────────────────
+        # ── 6. Notify Members 
         _notify_srs_members(
             db=db, project_id=project_id, session_id=session_id,
             notification_type="srs_generated",
@@ -855,7 +866,9 @@ def run_async_srs_task(
     finally:
         db.close()
 
-
+# ==========================
+# NOTIFY PROJECT/SESSION MEMBERS ABOUT SRS GENERATION.
+# ==========================
 def _notify_srs_members(db, project_id, session_id, notification_type, title, message):
     project = db.query(Project).filter(Project.id == project_id).first()
     project_name = project.name if project else None
