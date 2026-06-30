@@ -13,6 +13,6 @@ class Approval(Base):
     feature = Column(String(32), nullable=False, index=True)  # transcript | requirements | uml | srs
     aproved_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     version_id = Column(Integer, nullable=True, index=True)
-
+    # relationships 
     session = relationship("Session", back_populates="approvals")
     user = relationship("User", back_populates="approvals")

@@ -17,7 +17,7 @@ class Session(Base):
     translation_notified = Column(Boolean, default=False, nullable=False, server_default="false")
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # ── Translation fields (added for multilingual support) ──────────────
+    # Translation fields (added for multilingual support) 
     detected_language = Column(String, nullable=True)          # e.g. "arabic", "french"
     translated_transcript_text = Column(Text, nullable=True)   # full English translation
 
@@ -25,32 +25,9 @@ class Session(Base):
     project = relationship("Project", back_populates="sessions")
     artifacts = relationship("Artifact", back_populates="session")
     session_requirements = relationship("SessionRequirement", back_populates="session")
-    transcripts = relationship(
-        "TranscriptSegment", back_populates="session", cascade="all, delete"
-    )
-    requirement_runs = relationship(
-        "RequirementRun",
-        back_populates="session",
-        cascade="all, delete-orphan",
-    )
-    summaries = relationship(
-        "Summary",
-        back_populates="session",
-        cascade="all, delete-orphan",
-    )
-    session_memberships = relationship(
-        "SessionMembership",
-        back_populates="session",
-        cascade="all, delete-orphan",
-    )
-    approvals = relationship(
-        "Approval",
-        back_populates="session",
-        cascade="all, delete-orphan",
-    )
-
-    background_tasks = relationship(
-        "BackgroundTask",
-        back_populates="session",
-        cascade="all, delete-orphan",
-    )
+    transcripts = relationship("TranscriptSegment", back_populates="session", cascade="all, delete")
+    requirement_runs = relationship( "RequirementRun",back_populates="session",cascade="all, delete-orphan" )
+    summaries = relationship("Summary", back_populates="session",cascade="all, delete-orphan",)
+    session_memberships = relationship("SessionMembership",back_populates="session",cascade="all, delete-orphan")
+    approvals = relationship( "Approval", back_populates="session",cascade="all, delete-orphan",)
+    background_tasks = relationship( "BackgroundTask", back_populates="session", cascade="all, delete-orphan",)

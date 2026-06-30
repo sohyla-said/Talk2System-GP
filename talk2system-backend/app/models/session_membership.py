@@ -10,11 +10,8 @@ class SessionMembership(Base):
     id         = Column(Integer, primary_key=True, autoincrement=True)
     session_id = Column(Integer, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
     user_id    = Column(Integer, ForeignKey("users.id",    ondelete="CASCADE"), nullable=False)
-
-    # "project manager" or "participant"
     role       = Column(String(50), nullable=False)
-
     joined_at  = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-
+    # relationships
     session = relationship("Session", back_populates="session_memberships")
     user    = relationship("User",    back_populates="session_memberships")

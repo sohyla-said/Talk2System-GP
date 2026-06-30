@@ -20,19 +20,8 @@ class Project(Base):
     sessions = relationship("Session", back_populates="project", cascade="all, delete-orphan")
     session_requirements = relationship( "SessionRequirement", back_populates="project",cascade="all, delete-orphan")
     artifacts = relationship("Artifact",back_populates="project", cascade="all, delete-orphan")
-
-    requirement_runs = relationship(
-        "RequirementRun",
-        back_populates="project",
-        cascade="all, delete-orphan"
-    )
-
-    background_tasks = relationship(
-        "BackgroundTask",
-        back_populates="project",
-        cascade="all, delete-orphan",
-    )
-
+    requirement_runs = relationship("RequirementRun",back_populates="project", cascade="all, delete-orphan")
+    background_tasks = relationship("BackgroundTask",back_populates="project", cascade="all, delete-orphan")
     project_requirements = relationship("ProjectRequirement", back_populates="project",cascade="all, delete-orphan")
     memberships = relationship("ProjectMembership", back_populates="project",cascade="all, delete-orphan")
     invitations = relationship("Invitation", back_populates="project",cascade="all, delete-orphan")

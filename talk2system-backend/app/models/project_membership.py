@@ -10,12 +10,9 @@ class ProjectMembership(Base):
     id         = Column(Integer, primary_key=True, autoincrement=True)
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     user_id    = Column(Integer, ForeignKey("users.id",    ondelete="CASCADE"), nullable=False)
-
-    # "project_manager" or "participant"
     role       = Column(String(50), nullable=False)
-
     joined_at  = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     left_at    = Column(DateTime(timezone=True), nullable=True)
-
+    # relationships
     project = relationship("Project", back_populates="memberships")
     user    = relationship("User",    back_populates="memberships")

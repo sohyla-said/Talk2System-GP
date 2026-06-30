@@ -7,6 +7,9 @@ from app.models.project_membership import ProjectMembership
 from app.models.invitation import Invitation
 from app.models.user import User
 from app.models.audit_log import AuditLog
+from app.models.artifact import Artifact
+from app.models.session import Session as SessionModel
+from app.models.notification import Notification
 from app.services import notification_service
 
 
@@ -20,7 +23,7 @@ class ProjectService:
             domain=data.domain,
         )
         db.add(project)
-        db.flush() 
+        db.flush() #sends SQL insert but does not commit to get the generated ID.
 
         # IF ADMIN: Do NOT add admin to memberships. Add the assigned user instead.
         if creator.role == "admin":
@@ -76,36 +79,57 @@ class ProjectService:
 
     @staticmethod
     def get_project(db: Session, project_id: int):
-        return db.query(Project).filter(Project.id == project_id).first()
-
-    # DELETE 
-    @staticmethod
-    def delete_project(db: Session, project_id: int) -> dict | None:
         project = db.query(Project).filter(Project.id == project_id).first()
         if not project:
-            return None
-        
+            raise HTTPException(404, "Project not found")
+        return project
+
+    @staticmethod
+    def delete_project(db: Session, project_id: int, current_user: User) -> None:
+        if current_user.role != "admin":
+            membership = ProjectService.get_membership(db, project_id, current_user.id)
+            if not membership or membership.role != "project_manager":
+                raise HTTPException(403, "Only a project manager or admin can delete this project")
+
+        project = ProjectService.get_project(db, project_id)
+
         project_name = project.name
-        project_id = project.id
-        
         active_members = db.query(ProjectMembership).filter(
             ProjectMembership.project_id == project_id,
             ProjectMembership.left_at.is_(None)
         ).all()
         member_user_ids = [m.user_id for m in active_members]
-        
+
+        session_ids = [
+            s.id for s in db.query(SessionModel.id).filter(SessionModel.project_id == project_id)
+        ]
+        if session_ids:
+            db.query(Notification).filter(Notification.session_id.in_(session_ids)).update(
+                {"session_id": None}, synchronize_session=False
+            )
+
+        db.query(Artifact).filter(Artifact.project_id == project_id).delete(synchronize_session=False)
         db.query(AuditLog).filter(AuditLog.project_id == project_id).delete(synchronize_session=False)
         db.query(Invitation).filter(Invitation.project_id == project_id).delete(synchronize_session=False)
         db.query(ProjectMembership).filter(ProjectMembership.project_id == project_id).delete(synchronize_session=False)
         db.delete(project)
-        
-        return {
-            "project_name": project_name,
-            "member_user_ids": member_user_ids,
-            "project_id": project_id
-        }
 
-    # MEMBERSHIP
+        for user_id in member_user_ids:
+            notification_service.create_notification(
+                db,
+                user_id=user_id,
+                notification_type="admin_deleted_project",
+                title="Project Deleted",
+                message=f"The project '{project_name}' has been deleted.",
+                actor_name=current_user.full_name if current_user.role != "admin" else "System Admin",
+                actor_email=current_user.email,
+                project_id=project_id,
+                project_name=project_name,
+            )
+
+        db.commit()
+
+    # Get the active membership record of a specific user inside a specific project.
     @staticmethod
     def get_membership(db: Session, project_id: int, user_id: int):
         return (
@@ -117,6 +141,7 @@ class ProjectService:
             )
             .first()
         )
+    #Get all active members of a project
     @staticmethod
     def get_project_members(db: Session, project_id: int):
         memberships = (
@@ -277,7 +302,6 @@ class ProjectService:
             .order_by(Invitation.created_at.desc())
             .all()
         )
-    # ADD this method to ProjectService class:
 
     @staticmethod
     def complete_project(db: Session, project_id: int, user_id: int):

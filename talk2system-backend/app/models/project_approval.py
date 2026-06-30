@@ -13,6 +13,6 @@ class ProjectApproval(Base):
     feature = Column(String(32), nullable=False, index=True)  # requirements | uml | srs
     version_id = Column(Integer, nullable=True, index=True)   # ProjectRequirement.id or Artifact.id
     approved_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-
+    # relationships
     project = relationship("Project", back_populates="project_approvals")
     user = relationship("User", back_populates="project_approvals")

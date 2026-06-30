@@ -13,17 +13,12 @@ from app.models.invitation import Invitation
 from app.services.project_service import ProjectService
 from app.services.project_approval_service import ProjectApprovalService
 from app.models.audit_log import AuditLog
-from app.models.artifact import Artifact
-from app.models.session import Session as SessionModel
 from app.models.session_requirement import SessionRequirement
-from app.models.notification import Notification
 from app.services.audit_service import log_action
 from app.services import notification_service
 from app.models.project_leave_request import ProjectLeaveRequest
 
 router = APIRouter(prefix="/api/projects", tags=["Projects"])
-
-
 
 class ProjectCreate(BaseModel):
     name: str
@@ -101,31 +96,18 @@ class LeaveRejectRequest(BaseModel):
 
 
 @router.post("/createproject", response_model=ProjectResponse, status_code=201)
-def create_project(
-    data: ProjectCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
+def create_project(data: ProjectCreate,db: Session = Depends(get_db),current_user: User = Depends(get_current_user),):
     return ProjectService.create_project(db, data, current_user, data.manager_email)
 
 
 @router.get("/getprojects", response_model=list[ProjectResponse])
-def get_projects(
-    db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
-):
+def get_projects(db: Session = Depends(get_db), _: User = Depends(get_current_user),):
     return ProjectService.get_projects(db)
 
 
 @router.get("/getproject/{project_id}", response_model=ProjectResponse)
-def get_project(
-    project_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
+def get_project(project_id: int,db: Session = Depends(get_db),current_user: User = Depends(get_current_user),):
     project = ProjectService.get_project(db, project_id)
-    if not project:
-        raise HTTPException(404, "Project not found")
 
     if current_user.role != "admin":
         membership = ProjectService.get_membership(db, project_id, current_user.id)
@@ -136,53 +118,8 @@ def get_project(
 
 
 @router.delete("/deleteproject/{project_id}", status_code=204)
-def delete_project(
-    project_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    if current_user.role != "admin":
-        membership = ProjectService.get_membership(db, project_id, current_user.id)
-        if not membership or membership.role != "project_manager":
-            raise HTTPException(403, "Only a project manager or admin can delete this project")      
-    project = ProjectService.get_project(db, project_id)
-    if not project:
-        raise HTTPException(404, "Project not found")
-
-    project_name = project.name
-    active_members = db.query(ProjectMembership).filter(
-        ProjectMembership.project_id == project_id, 
-        ProjectMembership.left_at.is_(None)
-    ).all()
-    member_user_ids = [m.user_id for m in active_members]
-    
-    session_ids = [
-        s.id for s in db.query(SessionModel.id).filter(SessionModel.project_id == project_id)
-    ]
-    if session_ids:
-        db.query(Notification).filter(Notification.session_id.in_(session_ids)).update(
-            {"session_id": None}, synchronize_session=False
-        )
-
-    db.query(Artifact).filter(Artifact.project_id == project_id).delete(synchronize_session=False)
-    db.query(AuditLog).filter(AuditLog.project_id == project_id).delete(synchronize_session=False)
-    db.query(Invitation).filter(Invitation.project_id == project_id).delete(synchronize_session=False)
-    db.query(ProjectMembership).filter(ProjectMembership.project_id == project_id).delete(synchronize_session=False)
-    db.delete(project)
-    
-    for user_id in member_user_ids:
-        notification_service.create_notification(
-            db,
-            user_id=user_id,
-            notification_type="admin_deleted_project",
-            title="Project Deleted",
-            message=f"The project '{project_name}' has been deleted.",
-            actor_name=current_user.full_name if current_user.role != "admin" else "System Admin",
-            actor_email=current_user.email,
-            project_id=project_id,
-            project_name=project_name,
-        )    
-    db.commit()
+def delete_project( project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user),):
+    ProjectService.delete_project(db, project_id, current_user)
     return
 
 @router.get("/my-projects", response_model=list[MyProjectResponse])
@@ -256,10 +193,7 @@ def request_join(
 
 
 @router.get("/my-requests", response_model=list[InvitationResponse])
-def my_join_requests(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
+def my_join_requests(db: Session = Depends(get_db), current_user: User = Depends(get_current_user),):
     return ProjectService.get_my_invitations(db, current_user)
 
 
@@ -884,11 +818,7 @@ def reject_leave_request(
 
 
 @router.patch("/{project_id}/complete")
-def complete_project(
-    project_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
+def complete_project(project_id: int,db: Session = Depends(get_db),current_user: User = Depends(get_current_user),):
     try:
         return ProjectService.complete_project(db, project_id, current_user.id)
     except ValueError as e:
