@@ -2,13 +2,24 @@ from sqlalchemy.orm import Session
 from app.models.session import Session as SessionModel
 from app.models.session_membership import SessionMembership
 from app.models.project_membership import ProjectMembership
+from app.services.project_service import ProjectService
 from datetime import datetime
 
 
 class SessionService:
 
     @staticmethod
-    def create_session(db: Session, project_id: int, title: str, participant_ids: list[int] = None):
+    def create_session(db: Session, project_id: int, user_id: int, title: str, participant_ids: list[int] = None):
+        membership = ProjectService.get_membership(db, project_id, user_id)
+        if not membership or membership.role != "project_manager":
+            raise ValueError("Only the project manager can create a session")
+
+        project = ProjectService.get_project(db, project_id)
+        if not project:
+            raise ValueError("Project not found")
+        if project.project_status == "completed":
+            raise ValueError("Cannot create a session for a completed project")
+
         session = SessionModel(
             title=title,
             project_id=project_id,
@@ -18,7 +29,7 @@ class SessionService:
         db.add(session)
         db.flush()  # get session.id before commit
 
-        # Resolve the PM for this project
+        # find the project manager for this project
         pm_membership = (
             db.query(ProjectMembership)
             .filter(
@@ -40,7 +51,7 @@ class SessionService:
             ))
             added_user_ids.add(pm_user_id)
 
-        # Add other selected participants (skip PM if included, skip duplicates)
+        # Add other selected participants (skip PM if included)
         if participant_ids:
             for uid in participant_ids:
                 if uid not in added_user_ids:
@@ -54,27 +65,7 @@ class SessionService:
         db.commit()
         db.refresh(session)
         return session
-
-    @staticmethod
-    def get_session_members(db: Session, session_id: int):
-        return (
-            db.query(SessionMembership)
-            .filter(SessionMembership.session_id == session_id)
-            .all()
-        )
-
-    @staticmethod
-    def get_session(db: Session, session_id: int):
-        return db.query(SessionModel).filter(SessionModel.id == session_id).first()
-
-    @staticmethod
-    def get_sessions_by_project(db: Session, project_id: int):
-        return (
-            db.query(SessionModel)
-            .filter(SessionModel.project_id == project_id)
-            .order_by(SessionModel.created_at.desc())
-            .all()
-        )
+    
     @staticmethod
     def get_session_membership(db: Session, session_id: int, user_id: int):
         return (
@@ -84,14 +75,56 @@ class SessionService:
         )
 
     @staticmethod
-    def delete_session(db: Session, session_id: int):
+    def get_session_members(db: Session, session_id: int, user_id: int, user_role: str):
+        session = SessionService.get_session(db, session_id)
+
+        if user_role != "admin":
+            membership = SessionService.get_session_membership(db, session_id, user_id)
+            if not membership:
+                project_membership = ProjectService.get_membership(db, session.project_id, user_id)
+                if not project_membership:
+                    raise ValueError("You are not associated with this project")
+
+        return (
+            db.query(SessionMembership)
+            .filter(SessionMembership.session_id == session_id)
+            .all()
+        )
+
+    @staticmethod
+    def get_session(db: Session, session_id: int):
         session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
         if not session:
-            return False
+            raise ValueError("Session not found")
+        return session
+
+    @staticmethod
+    def get_sessions_by_project(db: Session, project_id: int, user_id: int, user_role: str):
+        if user_role != "admin":
+            membership = ProjectService.get_membership(db, project_id, user_id)
+            if not membership:
+                raise ValueError("You are not a member of this project")
+
+        return (
+            db.query(SessionModel)
+            .filter(SessionModel.project_id == project_id)
+            .order_by(SessionModel.created_at.desc())
+            .all()
+        )
+
+    @staticmethod
+    def delete_session(db: Session, session_id: int, user_id: int, user_role: str):
+        session = SessionService.get_session(db, session_id)
+
+        if user_role != "admin":
+            membership = SessionService.get_session_membership(db, session_id, user_id)
+            if not membership or membership.role not in ("project_manager", "owner"):
+                raise ValueError("Only the project manager or session owner can delete this session")
+
         db.delete(session)
         db.commit()
-        return True
-    
+        return {"message": "Session deleted successfully"}
+
     @staticmethod
     def update_session_status(db: Session, session_id: int, status: str):
         session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
@@ -99,8 +132,8 @@ class SessionService:
         if not session:
             return False
 
-        is_pending = status in ("pending_approval", "pending approval")
-        was_pending = session.status in ("pending_approval", "pending approval")
+        is_pending = status in ("pending_approval", "pending approval")  #newStatus
+        was_pending = session.status in ("pending_approval", "pending approval") #oldStatus
         if is_pending and not was_pending:
             session.pending_since = datetime.utcnow()
         elif not is_pending:
@@ -112,10 +145,6 @@ class SessionService:
 
     @staticmethod
     def complete_session(db: Session, session_id: int, user_id: int):
-        """
-        Marks a session as completed.
-        Raises ValueError with a message if validation fails.
-        """
         session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
         if not session:
             raise ValueError("Session not found")

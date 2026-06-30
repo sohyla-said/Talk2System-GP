@@ -12,9 +12,6 @@ from app.services.project_service import ProjectService
 
 router = APIRouter(prefix="/api/sessions", tags=["Sessions"])
 
-
-# ===================== SCHEMAS =====================
-
 class SessionCreate(BaseModel):
     title: str
     participant_ids: Optional[List[int]] = None
@@ -34,7 +31,6 @@ class SessionResponse(BaseModel):
         from_attributes = True
 
 
-# ✅ FIXED MODEL
 class SessionMemberResponse(BaseModel):
     id: int
     session_id: int
@@ -58,17 +54,15 @@ def create_session(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    membership = ProjectService.get_membership(db, project_id, current_user.id)
-    if not membership or membership.role != "project_manager":
-        raise HTTPException(403, "Only the project manager can create a session")
-
-    project = ProjectService.get_project(db, project_id)
-    if not project:
-        raise HTTPException(404, "Project not found")
-    if project.project_status == "completed":
-        raise HTTPException(400, "Cannot create a session for a completed project")
-
-    return SessionService.create_session(db, project_id, data.title, data.participant_ids)
+    try:
+        return SessionService.create_session(db, project_id, current_user.id, data.title, data.participant_ids)
+    except ValueError as e:
+        msg = str(e)
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=404, detail=msg)
+        if "only the project manager" in msg.lower():
+            raise HTTPException(status_code=403, detail=msg)
+        raise HTTPException(status_code=400, detail=msg)
 
 
 @router.get("/{session_id}/members", response_model=List[SessionMemberResponse])
@@ -77,18 +71,13 @@ def get_session_members(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    session = SessionService.get_session(db, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    if current_user.role != "admin":
-        membership = SessionService.get_session_membership(db, session_id, current_user.id)
-        if not membership:
-            project_membership = ProjectService.get_membership(db, session.project_id, current_user.id)
-            if not project_membership:
-                raise HTTPException(status_code=403, detail="You are not associated with this project")
-
-    memberships = SessionService.get_session_members(db, session_id)
+    try:
+        memberships = SessionService.get_session_members(db, session_id, current_user.id, current_user.role)
+    except ValueError as e:
+        msg = str(e)
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=404, detail=msg)
+        raise HTTPException(status_code=403, detail=msg)
 
     return [
         SessionMemberResponse(
@@ -111,12 +100,10 @@ def get_sessions_by_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "admin":
-        membership = ProjectService.get_membership(db, project_id, current_user.id)
-        if not membership:
-            raise HTTPException(403, "You are not a member of this project")
-
-    return SessionService.get_sessions_by_project(db, project_id)
+    try:
+        return SessionService.get_sessions_by_project(db, project_id, current_user.id, current_user.role)
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
 
 @router.get("/{session_id}", response_model=SessionResponse)
@@ -125,9 +112,10 @@ def get_session(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    session = SessionService.get_session(db, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        session = SessionService.get_session(db, session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
     membership = SessionService.get_session_membership(db, session_id, current_user.id)
     is_participant = membership is not None
@@ -155,19 +143,13 @@ def delete_session(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    session = SessionService.get_session(db, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    if current_user.role != "admin":
-        membership = SessionService.get_session_membership(db, session_id, current_user.id)
-        if not membership or membership.role not in ("project_manager", "owner"):
-            raise HTTPException(status_code=403, detail="Only the project manager or session owner can delete this session")
-
-    success = SessionService.delete_session(db, session_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return {"message": "Session deleted successfully"}
+    try:
+        return SessionService.delete_session(db, session_id, current_user.id, current_user.role)
+    except ValueError as e:
+        msg = str(e)
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=404, detail=msg)
+        raise HTTPException(status_code=403, detail=msg)
 
 @router.put("/{session_id}/status", status_code=204)
 def update_session_status( session_id: int,status: str,db: Session = Depends(get_db)):
