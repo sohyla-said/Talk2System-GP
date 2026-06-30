@@ -7,7 +7,6 @@ from app.services.uml_service import generate_uml_pipeline, run_async_uml_task
 from app.services.requirement_service import RequirementService
 from app.services.artifact_service import ArtifactService
 from app.services.srs_service import generate_srs_pipeline, run_async_srs_task, SUPPORTED_FORMATS
-from app.services.project_service import ProjectService
 from app.models.artifact import Artifact
 from app.models.artifact_type import ArtifactType
 from pathlib import Path
@@ -135,8 +134,8 @@ def generate_project_uml(
             entity="uml_diagram",
             entity_id=artifact["id"],
             details={
-                "label": f"SRS Document {artifact['version']}",
-                "extra": f"{format_version} format (Project #{project_id})"
+                "label": f"{diagram_type.capitalize()} Diagram {artifact['version']}",
+                "extra": f"{diagram_type} (Project #{project_id})"
             }
         )
 
@@ -160,6 +159,7 @@ def approve_artifact(artifact_id: int, db: Session = Depends(get_db), current_us
     if not artifact:
         raise HTTPException(404, "Artifact not found")
 
+    old_status = artifact.approval_status
     artifact.approval_status = "approved"
 
     db.commit()
