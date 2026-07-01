@@ -1,17 +1,15 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
-import os
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File,status
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field,EmailStr, validator
+from pydantic import BaseModel, Field, EmailStr, validator
+
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user
 from app.models.user import User
 from app.services import auth_service
-from passlib.context import CryptContext
-router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
 STATUS_MESSAGES = {
     "active": None,
@@ -20,7 +18,6 @@ STATUS_MESSAGES = {
     "terminated": "Your account has been permanently terminated. Access is denied.",
     "archived": "Your account has been archived. Access is denied.",
 }
-
 
 class SignupRequest(BaseModel):
     email: str = Field(min_length=5)
@@ -41,8 +38,8 @@ class AuthResponse(BaseModel):
     role: str
     status: str
     full_name: str
-    status_message: Optional[str] = None  
-    avatar_url: Optional[str] = None  
+    status_message: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 
 class MeResponse(BaseModel):
@@ -52,35 +49,41 @@ class MeResponse(BaseModel):
     role: str
     status: str
     created_at: Optional[datetime] = None
-    status_message: Optional[str] = None   
-    is_readonly: bool = False               
-    avatar_url: Optional[str] = None  
+    status_message: Optional[str] = None
+    is_readonly: bool = False
+    avatar_url: Optional[str] = None
+
 
 class UpdateProfileRequest(BaseModel):
     full_name: Optional[str] = None
+
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8)
 
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+
 
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
 
-    @validator('new_password')
+    @validator("new_password")
     def validate_password(cls, v):
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters")
         return v
+
 
 class CreateAdminRequest(BaseModel):
     email: EmailStr
     password: str
     full_name: str | None = None
     secret_key: str
+
 
 class CreateAdminResponse(BaseModel):
     id: int
@@ -90,6 +93,8 @@ class CreateAdminResponse(BaseModel):
     status: str
     created_at: datetime
 
+
+# AUTH ENDPOINTS
 @router.post("/signup", response_model=AuthResponse, status_code=201)
 def signup(data: SignupRequest, db: Session = Depends(get_db)):
     try:
@@ -106,12 +111,12 @@ def signup(data: SignupRequest, db: Session = Depends(get_db)):
         status=user.status,
         full_name=user.full_name,
         status_message=STATUS_MESSAGES.get(user.status),
-        avatar_url=user.avatar_url,                  
+        avatar_url=user.avatar_url,
     )
 
 
 @router.post("/login", response_model=AuthResponse)
-async def login(request: Request, db: Session = Depends(get_db)): 
+async def login(request: Request, db: Session = Depends(get_db)):
     try:
         form_data = await request.form()
         if form_data:
@@ -142,63 +147,40 @@ def me(current_user: User = Depends(get_current_user)):
         avatar_url=current_user.avatar_url,
     )
 
-
+# PROFILE ENDPOINTS
 @router.put("/me")
 def update_profile(
     data: UpdateProfileRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    if current_user.status in ("suspended", "terminated", "archived"):
-        raise HTTPException(
-            403,
-            detail=f"Cannot update profile: account is {current_user.status}."
-        )
+    try:
+        return auth_service.update_profile(db, current_user, data.full_name)
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
-    if data.full_name is not None:
-        current_user.full_name = data.full_name.strip()
 
-    db.commit()
-    db.refresh(current_user)
-    return {"message": "Profile updated successfully"}
 @router.post("/change-password")
 def change_password(
     data: ChangePasswordRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    if current_user.status in ("suspended", "terminated", "archived"):
-        raise HTTPException(
-            403,
-            detail=f"Cannot change password: account is {current_user.status}."
-        )
-
-    if not auth_service.verify_password(data.current_password, current_user.hashed_password):
-        raise HTTPException(
-            401,
-            detail="Current password is incorrect"
-        )
-    current_user.hashed_password = auth_service.hash_password(data.new_password)
-    db.commit()
-    # db.refresh(current_user)
-    return {"message": "Password changed successfully"}
+    try:
+        return auth_service.change_password(db, current_user, data.current_password, data.new_password)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
 
 @router.post("/upload-avatar")
 async def upload_avatar(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """Upload or update user avatar."""
     if current_user.status in ("suspended", "terminated", "archived"):
-        raise HTTPException(
-            403,
-            detail=f"Cannot upload avatar: account is {current_user.status}."
-        )
-
+        raise HTTPException(403, detail=f"Cannot upload avatar: account is {current_user.status}.")
     try:
-        result = auth_service.update_user_avatar(db, current_user, file)
-        return result
+        return auth_service.update_user_avatar(db, current_user, file)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -208,18 +190,12 @@ async def upload_avatar(
 @router.delete("/avatar")
 def delete_avatar(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """Delete user avatar and revert to default."""
     if current_user.status in ("suspended", "terminated", "archived"):
-        raise HTTPException(
-            403,
-            detail=f"Cannot delete avatar: account is {current_user.status}."
-        )
-
+        raise HTTPException(403, detail=f"Cannot delete avatar: account is {current_user.status}.")
     try:
-        result = auth_service.remove_user_avatar(db, current_user)
-        return result
+        return auth_service.remove_user_avatar(db, current_user)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete avatar: {str(e)}")
 
@@ -253,52 +229,21 @@ async def create_admin_account(
     body: CreateAdminRequest,
     db: Session = Depends(get_db),
 ):
-    # Parse valid keys from env
-    raw_keys = os.getenv("ADMIN_CREATE_SECRET", "")
-    valid_keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
-
-    if not valid_keys:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin creation is disabled. No secret keys configured.",
+    try:
+        admin_user = auth_service.create_admin_account(
+            db,
+            email=body.email,
+            password=body.password,
+            full_name=body.full_name,
+            secret_key=body.secret_key,
         )
-    # Check if the provided key is in the allowed list
-    if body.secret_key not in valid_keys:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid secret key. Access denied.",
-        )
-    # Check if THIS SPECIFIC KEY was already used
-    already_used = db.query(User).filter(
-        User.status_reason == f"admin-invite:{body.secret_key}"
-    ).first()
-    if already_used:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This secret key has already been used. Each key can only create one account.",
-        )
-    # Check if email already exists
-    existing_user = db.query(User).filter(User.email == body.email).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"An account with email '{body.email}' already exists.",
-        )
-    # Validate password strength
-    if len(body.password) < 8:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Password must be at least 8 characters long.",
-        )
-    admin_user = User(
-        email=body.email,
-        hashed_password=auth_service.hash_password(body.password),
-        full_name=body.full_name,
-        role="admin",
-        status="active",
-        status_reason=f"admin-invite:{body.secret_key}",
-    )
-    db.add(admin_user)
-    db.commit()
-    db.refresh(admin_user)
-    return admin_user
+        return admin_user
+    except ValueError as e:
+        detail = str(e)
+        if "already exists" in detail:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+        if "disabled" in detail or "Invalid secret" in detail or "already been used" in detail:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+        if "8 characters" in detail:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)

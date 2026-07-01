@@ -228,3 +228,79 @@ def remove_user_avatar(db: Session, user: User) -> dict:
         "message": "Avatar deleted successfully",
         "avatar_url": default_avatar
     }
+
+def update_profile(db: Session, user: User, full_name: str = None) -> dict:
+    """Update user profile fields."""
+    if user.status in ("suspended", "terminated", "archived"):
+        raise ValueError(f"Cannot update profile: account is {user.status}.")
+
+    if full_name is not None:
+        user.full_name = full_name.strip()
+
+    db.commit()
+    db.refresh(user)
+    return {"message": "Profile updated successfully"}
+
+
+def change_password(db: Session, user: User, current_password: str, new_password: str) -> dict:
+    """Change user password after verifying current one."""
+    if user.status in ("suspended", "terminated", "archived"):
+        raise ValueError(f"Cannot change password: account is {user.status}.")
+
+    if not verify_password(current_password, user.hashed_password):
+        raise ValueError("Current password is incorrect")
+
+    user.hashed_password = hash_password(new_password)
+    db.commit()
+    return {"message": "Password changed successfully"}
+
+
+def create_admin_account(
+    db: Session,
+    email: str,
+    password: str,
+    full_name: str = None,
+    secret_key: str = None,
+) -> User:
+    """
+    Create an admin account using a single-use secret key.
+    Keys are loaded from ADMIN_CREATE_SECRET env var (comma-separated).
+    """
+    # Parse valid keys from env
+    raw_keys = os.getenv("ADMIN_CREATE_SECRET", "")
+    valid_keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
+
+    if not valid_keys:
+        raise ValueError("Admin creation is disabled. No secret keys configured.")
+
+    if not secret_key or secret_key not in valid_keys:
+        raise ValueError("Invalid secret key. Access denied.")
+
+    # Check if THIS SPECIFIC KEY was already used
+    already_used = db.query(User).filter(
+        User.status_reason == f"admin-invite:{secret_key}"
+    ).first()
+    if already_used:
+        raise ValueError("This secret key has already been used. Each key can only create one account.")
+
+    # Check if email already exists
+    existing_user = db.query(User).filter(User.email == email.lower().strip()).first()
+    if existing_user:
+        raise ValueError(f"An account with email '{email}' already exists.")
+
+    # Validate password strength
+    if len(password) < 8:
+        raise ValueError("Password must be at least 8 characters long.")
+
+    admin_user = User(
+        email=email.lower().strip(),
+        hashed_password=hash_password(password),
+        full_name=full_name,
+        role="admin",
+        status="active",
+        status_reason=f"admin-invite:{secret_key}",
+    )
+    db.add(admin_user)
+    db.commit()
+    db.refresh(admin_user)
+    return admin_user

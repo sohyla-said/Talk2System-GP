@@ -8,13 +8,6 @@ from app.services import oauth_service
 
 router = APIRouter(prefix="/api/auth", tags=["OAuth"])
 
-def _parse_mode(state: str) -> str:
-    try:
-        data = json.loads(base64.urlsafe_b64decode(state.encode()).decode())
-        return data.get("m", "login")
-    except Exception:
-        return "login"
-
 @router.get("/google/login")
 def google_login(mode: str = Query("login")):
     if not oauth_service.GOOGLE_CLIENT_ID:
@@ -24,7 +17,7 @@ def google_login(mode: str = Query("login")):
 @router.get("/google/callback")
 async def google_callback(code: str, state: str, db: Session = Depends(get_db)):
     try:
-        mode = _parse_mode(state)
+        mode = oauth_service.parse_oauth_state(state)
         redirect_url = await oauth_service.handle_google_callback(code, db, mode)
         return RedirectResponse(redirect_url)
     except ValueError as e:
@@ -41,7 +34,7 @@ def github_login(mode: str = Query("login")):
 @router.get("/github/callback")
 async def github_callback(code: str, state: str, db: Session = Depends(get_db)):
     try:
-        mode = _parse_mode(state)
+        mode = oauth_service.parse_oauth_state(state)
         redirect_url = await oauth_service.handle_github_callback(code, db, mode)
         return RedirectResponse(redirect_url)
     except ValueError as e:

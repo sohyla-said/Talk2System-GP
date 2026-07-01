@@ -149,3 +149,11 @@ def _create_or_login_user(db: Session, email: str, full_name: str, provider: str
         f"&full_name={encoded_name}"
         f"&redirect={redirect_path}"
     )
+
+def parse_oauth_state(state: str) -> str:
+    """Parse mode from OAuth state parameter."""
+    try:
+        data = json.loads(base64.urlsafe_b64decode(state.encode()).decode())
+        return data.get("m", "login")
+    except Exception:
+        return "login"
