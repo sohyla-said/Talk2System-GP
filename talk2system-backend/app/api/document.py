@@ -1,82 +1,61 @@
-from fastapi import APIRouter, Depends, HTTPException
+from pathlib import Path
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from fastapi.responses import FileResponse
-from app.services.srs_service import SUPPORTED_FORMATS
 from app.db.session import get_db
 from app.services.uml_service import generate_uml_pipeline, run_async_uml_task
+from app.services.srs_service import generate_srs_pipeline, run_async_srs_task, SUPPORTED_FORMATS
 from app.services.requirement_service import RequirementService
 from app.services.artifact_service import ArtifactService
-from app.services.srs_service import generate_srs_pipeline, run_async_srs_task, SUPPORTED_FORMATS
-from app.models.artifact import Artifact
-from app.models.artifact_type import ArtifactType
-from pathlib import Path
-
+from app.services.project_service import ProjectService
 from app.models.background_task import BackgroundTask
 from pydantic import BaseModel
-from fastapi import BackgroundTasks
 from app.dependencies.auth import get_current_user
 from app.models.user import User
 from app.services.audit_service import log_action
 
 router = APIRouter()
 
-# ==========================================================================
-# UML Diagrams Endpoints
-# ==========================================================================
+# ==============================================================================================
+# ============================= UML DIAGRAM Endpoints ==========================================
+# ==============================================================================================
 
 # =========================================================
-# GENERATE UML (SESSION OR PROJECT LEVEL)
+# GENERATE UML (SESSION LEVEL)
 # =========================================================
 @router.post("/projects/{project_id}/sessions/{session_id}/generate-uml")
 def generate_uml(
     project_id: int,
     session_id: int,
     diagram_type: str,
-    source: str = "session",  # "session" or "project"
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     try:
-        # ===============================
-        # 1. GET REQUIREMENTS BASED ON SOURCE
-        # ===============================
-        if source == "session":
-            req = RequirementService.get_latest_session_requirement(
-                db, project_id, session_id
-            )
-
-        elif source == "project":
-            req = RequirementService.get_latest_project_requirement(
-                db, project_id
-            )
-
-        else:
-            raise HTTPException(400, "Invalid source. Use 'session' or 'project'")
-
+        # 1. get latest session requirement
+        req = RequirementService.get_latest_session_requirement(
+            db, project_id, session_id
+        )
         requirements_json = req["data"]
 
-        # ===============================
-        # 2. GENERATE UML
-        # ===============================
+        # 2. generate UML
         result = generate_uml_pipeline(
             requirements_json=requirements_json,
             project_id=project_id,
             diagram_type=diagram_type,
-            session_id=session_id if source == "session" else None
+            session_id=session_id
         )
 
-        # ===============================
-        # 3. SAVE ARTIFACT
-        # ===============================
+        # 3. save artifact
         artifact = ArtifactService.save_artifact(
             db=db,
             project_id=project_id,
-            session_id=session_id if source == "session" else None,
+            session_id=session_id,
             artifact_type_name=f"UML_{diagram_type.upper()}",
             file_path=result["file_path"]
         )
 
-        source_label = f"Session #{session_id}" if source == "session" else "Project-level"
+        # 4. log action
         log_action(
             db=db,
             user_id=current_user.id,
@@ -86,13 +65,13 @@ def generate_uml(
             entity_id=artifact["id"],
             details={
                 "label": f"{diagram_type.capitalize()} Diagram {artifact['version']}",
-                "extra": f"{diagram_type} ({source_label})"
+                "extra": f"{diagram_type} (Session #{session_id})"
             }
         )
         return {
             "message": "UML generated successfully",
             "diagram_type": diagram_type,
-            "source": source,
+            "source": "session",
             "file_path": result["file_path"],
             "artifact": artifact
         }
@@ -100,6 +79,9 @@ def generate_uml(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
+# =========================================================
+# GENERATE UML (PROJECT LEVEL)
+# =========================================================
 @router.post("/projects/{project_id}/generate-uml")
 def generate_project_uml(
     project_id: int,
@@ -118,7 +100,7 @@ def generate_project_uml(
             diagram_type=diagram_type
         )
 
-        # 3. save artifact (NO session)
+        # 3. save artifact
         artifact = ArtifactService.save_artifact(
             db=db,
             project_id=project_id,
@@ -126,6 +108,8 @@ def generate_project_uml(
             artifact_type_name=f"UML_{diagram_type.upper()}",
             file_path=result["file_path"]
         )
+
+        # 4. log action
         log_action(
             db=db,
             user_id=current_user.id,
@@ -149,190 +133,101 @@ def generate_project_uml(
 
 
 # =========================================================
-# APPROVE ARTIFACT
+# APPROVE ARTIFACT (UML or SRS)
 # =========================================================
 @router.post("/artifacts/{artifact_id}/approve")
 def approve_artifact(artifact_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        result = ArtifactService.approve(db, artifact_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
 
-    artifact = db.query(Artifact).filter(Artifact.id == artifact_id).first()
-
-    if not artifact:
-        raise HTTPException(404, "Artifact not found")
-
-    old_status = artifact.approval_status
-    artifact.approval_status = "approved"
-
-    db.commit()
-    db.refresh(artifact)
-    artifact_type = artifact.artifact_type.name if artifact.artifact_type else "Artifact"
-    is_srs = "SRS" in artifact_type
-    is_uml = "UML" in artifact_type
-    
-    if is_srs:
-        entity_type = "srs_document"
-        label = f"SRS Document {artifact.version}"
-    elif is_uml:
-        diagram_name = artifact_type.replace("UML_", "").replace("_", " ").capitalize()
-        entity_type = "uml_diagram"
-        label = f"{diagram_name} Diagram {artifact.version}"
-    else:
-        entity_type = "artifact"
-        label = f"{artifact_type} {artifact.version}"
-
-    scope = f"Session #{artifact.session_id}" if artifact.session_id else "Project-level"
-
+    artifact = result["artifact"]
     log_action(
         db=db,
         user_id=current_user.id,
         project_id=artifact.project_id,
         action="approved",
-        entity=entity_type,
+        entity=result["entity_type"],
         entity_id=artifact.id,
         details={
-            "label": label,
-            "before": old_status,
+            "label": result["label"],
+            "before": result["old_status"],
             "after": "approved",
-            "extra": scope
-        }
+            "extra": result["scope"],
+        },
     )
     return {
         "message": "Artifact approved",
         "artifact_id": artifact.id,
         "version": artifact.version,
-        "status": artifact.approval_status
+        "status": artifact.approval_status,
     }
 
 
 # =========================================================
-# GET PROJECT-LEVEL ARTIFACT VERSIONS (AGGREGATED ONLY)
+# GET UML VERSIONS (PROJECT LEVEL)
 # =========================================================
 @router.get("/projects/{project_id}/artifacts/{type}/versions")
 def get_project_versions(project_id: int, type: str, db: Session = Depends(get_db)):
     try:
-        artifact_type = db.query(ArtifactType)\
-            .filter(ArtifactType.name == f"UML_{type.upper()}")\
-            .first()
-
-        if not artifact_type:
-            raise HTTPException(404, "Artifact type not found")
-
-        artifacts = db.query(Artifact)\
-            .filter(
-                Artifact.project_id == project_id,
-                Artifact.artifact_type_id == artifact_type.id,
-                Artifact.session_id == None,
-            )\
-            .order_by(Artifact.created_at.desc())\
-            .all()
-
-        return {
-            "project_id": project_id,
-            "diagram_type": type,
-            "scope": "project",
-            "versions": [
-                {
-                    "id": a.id,
-                    "version": a.version,
-                    "session_id": a.session_id,  
-                    "approval_status": a.approval_status,
-                    "created_at": a.created_at,
-                    "file_path": a.file_path
-                }
-                for a in artifacts
-            ]
-        }
-
+        versions = ArtifactService.get_project_uml_versions(db, project_id, type)
+        return {"project_id": project_id, "diagram_type": type, "scope": "project", "versions": versions}
+    except ValueError as e:
+        raise HTTPException(404, str(e))
     except Exception as e:
         raise HTTPException(500, str(e))
 
 
 # =========================================================
-# GET SESSION-LEVEL ARTIFACT VERSIONS
+# GET UML VERSIONS (SESSION LEVEL)
 # =========================================================
 @router.get("/projects/{project_id}/sessions/{session_id}/artifacts/{type}/versions")
 def get_session_versions(project_id: int, session_id: int, type: str, db: Session = Depends(get_db)):
     try:
-        artifact_type = db.query(ArtifactType)\
-            .filter(ArtifactType.name == f"UML_{type.upper()}")\
-            .first()
-
-        if not artifact_type:
-            raise HTTPException(404, "Artifact type not found")
-
-        artifacts = db.query(Artifact)\
-            .filter(
-                Artifact.project_id == project_id,
-                Artifact.session_id == session_id,
-                Artifact.artifact_type_id == artifact_type.id
-            )\
-            .order_by(Artifact.created_at.desc())\
-            .all()
-
-        return {
-            "project_id": project_id,
-            "session_id": session_id,
-            "diagram_type": type,
-            "scope": "session",
-            "versions": [
-                {
-                    "id": a.id,
-                    "version": a.version,
-                    "approval_status": a.approval_status,
-                    "created_at": a.created_at,
-                    "file_path": a.file_path
-                }
-                for a in artifacts
-            ]
-        }
-
+        versions = ArtifactService.get_session_uml_versions(db, project_id, session_id, type)
+        return {"project_id": project_id, "session_id": session_id, "diagram_type": type, "scope": "session", "versions": versions}
+    except ValueError as e:
+        raise HTTPException(404, str(e))
     except Exception as e:
         raise HTTPException(500, str(e))
 
 
 # =========================================================
-# GET SPECIFIC ARTIFACT
+# GET SPECIFIC ARTIFACT (UML or SRS)
 # =========================================================
 @router.get("/artifacts/{artifact_id}")
 def get_artifact(artifact_id: int, db: Session = Depends(get_db)):
-
-    artifact = db.query(Artifact).filter(Artifact.id == artifact_id).first()
-
-    if not artifact:
-        raise HTTPException(404, "Artifact not found")
-
-    return {
-        "id": artifact.id,
-        "project_id": artifact.project_id,
-        "session_id": artifact.session_id,
-        "file_path": artifact.file_path,
-        "version": artifact.version,
-        "approval_status": artifact.approval_status,
-        "created_at": artifact.created_at
-    }
+    try:
+        # get_artifact_by_id returns a dict with metadata, while get_artifact_model returns the model with info like file_path
+        return ArtifactService.get_artifact_by_id(db, artifact_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
 
 
 # =========================================================
-# DOWNLOAD ARTIFACT (NO APPROVAL REQUIRED)
+# DOWNLOAD UML DIAGRAM (PNG)
 # =========================================================
 @router.get("/artifacts/{artifact_id}/download")
 def download_artifact(artifact_id: int, db: Session = Depends(get_db)):
-
-    artifact = db.query(Artifact).filter(Artifact.id == artifact_id).first()
-
-    if not artifact:
-        raise HTTPException(404, "Artifact not found")
-
+    try:
+        # get_artifact_model returns the model with info like file_path, while get_artifact_by_id returns a dict with metadata
+        artifact = ArtifactService.get_artifact_model(db, artifact_id) 
+    except ValueError as e:
+        raise HTTPException(404, str(e))
     return FileResponse(
         path=artifact.file_path,
-        filename=artifact.file_path.split("/")[-1],
-        media_type="image/png"
+        filename=Path(artifact.file_path).name,
+        media_type="image/png",
     )
 
-# ─── Async UML — session or project level ─────────────────────────────────────
+# ─── Async UML  
 class AsyncUmlRequest(BaseModel):
     diagram_type: str
-    source: str = "session"   # "session" or "project"
 
+# =========================================================
+# GENERATE UML AS BACKGROUND TASK (SESSION LEVEL)
+# =========================================================
 @router.post("/projects/{project_id}/sessions/{session_id}/generate-uml-async")
 def generate_uml_async(
     project_id: int,
@@ -342,28 +237,33 @@ def generate_uml_async(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # create background row in the db
     task = BackgroundTask(
         user_id=current_user.id,
         task_type="generate_uml",
         project_id=project_id,
         session_id=session_id,
-        status="pending",
-        task_input={"diagram_type": request.diagram_type, "source": request.source},
+        status="pending", # task  initially with status "pending"
+        task_input={"diagram_type": request.diagram_type, "source": "session"},
     )
     db.add(task); db.commit(); db.refresh(task)
 
+    # schedule the background task to run asynchronously
     background_tasks.add_task(
         run_async_uml_task,
         task_id=task.id,
         project_id=project_id,
         session_id=session_id,
         diagram_type=request.diagram_type,
-        source=request.source,
+        source="session",
         user_id=current_user.id,
     )
+    # return the response
     return {"task_id": task.id, "status": "pending"}
 
-
+# =========================================================
+# GENERATE UML AS BACKGROUND TASK (PROJECT LEVEL)
+# =========================================================
 @router.post("/projects/{project_id}/generate-uml-async")
 def generate_project_uml_async(
     project_id: int,
@@ -372,16 +272,18 @@ def generate_project_uml_async(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # create background row in the db
     task = BackgroundTask(
         user_id=current_user.id,
         task_type="generate_uml",
         project_id=project_id,
         session_id=None,
-        status="pending",
+        status="pending", # task  initially with status "pending"
         task_input={"diagram_type": diagram_type, "source": "project"},
     )
     db.add(task); db.commit(); db.refresh(task)
 
+    # schedule the background task to run asynchronously
     background_tasks.add_task(
         run_async_uml_task,
         task_id=task.id,
@@ -391,10 +293,12 @@ def generate_project_uml_async(
         source="project",
         user_id=current_user.id,
     )
+    # return the response
     return {"task_id": task.id, "status": "pending"}
 
-
-# ─── UML polling ──────────────────────────────────────────────────────────────
+# =========================================================
+# polling endpoint -> Frontend calls this every 3 seconds to check task progress.
+# =========================================================
 @router.get("/uml-tasks/{task_id}/status")
 def get_uml_task_status(
     task_id: int,
@@ -409,17 +313,20 @@ def get_uml_task_status(
     if not task:
         raise HTTPException(404, "Task not found")
     return {
-        "task_id": task.id, "status": task.status,
+        "task_id": task.id, 
+        "status": task.status, # what the toast needs to decide what to show (spinner / success / error)
         "task_type": task.task_type,
-        "project_id": task.project_id, "session_id": task.session_id,
-        "task_output": task.task_output, "error_message": task.error_message,
+        "project_id": task.project_id, 
+        "session_id": task.session_id,
+        "task_output": task.task_output, # set when done, contains artifact_id and file_path 
+        "error_message": task.error_message, # set when failed, shown in the red toast
     }
 
 
-# ==========================================================================
-# SRS Document Endpoints
-# ==========================================================================
- 
+# ==============================================================================================
+# ============================= SRS Document Endpoints =========================================
+# ==============================================================================================
+
 # =========================================================
 # GENERATE SRS (SESSION LEVEL)
 # =========================================================
@@ -427,7 +334,7 @@ def get_uml_task_status(
 def generate_session_srs(
     project_id: int,
     session_id: int,
-    format_version: str = "ieee_830",   # ← NEW: defaults to original behavior
+    format_version: str = "ieee_830",   # default
     db: Session = Depends(get_db)
 ):
     try:
@@ -442,17 +349,16 @@ def generate_session_srs(
         requirements_json = req["data"]
  
         # 2. Get project name for the document title
-        from app.models.project import Project
-        project = db.query(Project).filter(Project.id == project_id).first()
+        project = ProjectService.get_project(db, project_id)
         project_name = project.name if project else "Software System"
- 
+
         # 3. Generate SRS
         result = generate_srs_pipeline(
             requirements_json=requirements_json,
             project_id=project_id,
             project_name=project_name,
             session_id=session_id,
-            format_version=format_version   # ← NEW
+            format_version=format_version
         )
  
         # 4. Save artifact
@@ -482,7 +388,7 @@ def generate_session_srs(
 @router.post("/projects/{project_id}/generate-srs")
 def generate_project_srs(
     project_id: int,
-    format_version: str = "ieee_830",   # ← NEW: defaults to original behavior
+    format_version: str = "ieee_830",   # default
     db: Session = Depends(get_db)
 ):
     try:
@@ -495,17 +401,16 @@ def generate_project_srs(
         requirements_json = req["data"]
  
         # 2. Get project name
-        from app.models.project import Project
-        project = db.query(Project).filter(Project.id == project_id).first()
+        project = ProjectService.get_project(db, project_id)
         project_name = project.name if project else "Software System"
- 
+
         # 3. Generate SRS
         result = generate_srs_pipeline(
             requirements_json=requirements_json,
             project_id=project_id,
             project_name=project_name,
             session_id=None,
-            format_version=format_version   # ← NEW
+            format_version=format_version
         )
  
         # 4. Save artifact
@@ -535,34 +440,8 @@ def generate_project_srs(
 @router.get("/projects/{project_id}/sessions/{session_id}/srs/versions")
 def get_session_srs_versions(project_id: int, session_id: int, db: Session = Depends(get_db)):
     try:
-        artifact_type = db.query(ArtifactType)\
-            .filter(ArtifactType.name == "SRS_DOCUMENT").first()
- 
-        if not artifact_type:
-            return {"project_id": project_id, "session_id": session_id, "versions": []}
- 
-        artifacts = db.query(Artifact)\
-            .filter(
-                Artifact.project_id == project_id,
-                Artifact.session_id == session_id,
-                Artifact.artifact_type_id == artifact_type.id
-            )\
-            .order_by(Artifact.created_at.desc()).all()
- 
-        return {
-            "project_id": project_id,
-            "session_id": session_id,
-            "versions": [
-                {
-                    "id": a.id,
-                    "version": a.version,
-                    "approval_status": a.approval_status,
-                    "created_at": a.created_at,
-                    "file_path": a.file_path
-                }
-                for a in artifacts
-            ]
-        }
+        versions = ArtifactService.get_session_srs_versions(db, project_id, session_id)
+        return {"project_id": project_id, "session_id": session_id, "versions": versions}
     except Exception as e:
         raise HTTPException(500, str(e))
  
@@ -573,33 +452,8 @@ def get_session_srs_versions(project_id: int, session_id: int, db: Session = Dep
 @router.get("/projects/{project_id}/srs/versions")
 def get_project_srs_versions(project_id: int, db: Session = Depends(get_db)):
     try:
-        artifact_type = db.query(ArtifactType)\
-            .filter(ArtifactType.name == "SRS_DOCUMENT").first()
- 
-        if not artifact_type:
-            return {"project_id": project_id, "versions": []}
- 
-        artifacts = db.query(Artifact)\
-            .filter(
-                Artifact.project_id == project_id,
-                Artifact.artifact_type_id == artifact_type.id
-            )\
-            .order_by(Artifact.created_at.desc()).all()
- 
-        return {
-            "project_id": project_id,
-            "versions": [
-                {
-                    "id": a.id,
-                    "version": a.version,
-                    "session_id": a.session_id,
-                    "approval_status": a.approval_status,
-                    "created_at": a.created_at,
-                    "file_path": a.file_path
-                }
-                for a in artifacts
-            ]
-        }
+        versions = ArtifactService.get_project_srs_versions(db, project_id)
+        return {"project_id": project_id, "versions": versions}
     except Exception as e:
         raise HTTPException(500, str(e))
  
@@ -609,69 +463,54 @@ def get_project_srs_versions(project_id: int, db: Session = Depends(get_db)):
 # =========================================================
 @router.get("/artifacts/{artifact_id}/srs-text")
 def get_srs_text(artifact_id: int, db: Session = Depends(get_db)):
-    artifact = db.query(Artifact).filter(Artifact.id == artifact_id).first()
-    if not artifact:
-        raise HTTPException(404, "Artifact not found")
- 
-    from docx import Document as DocxDocument
-    doc = DocxDocument(artifact.file_path)
-    lines = []
-    for para in doc.paragraphs:
-        text = para.text.strip()
-        if not text:
-            continue
-        if para.style.name.startswith("Heading 1"):
-            lines.append(f"# {text}")
-        elif para.style.name.startswith("Heading 2"):
-            lines.append(f"## {text}")
-        elif para.style.name.startswith("Heading 3"):
-            lines.append(f"### {text}")
-        else:
-            lines.append(text)
- 
-    return {"text": "\n".join(lines)}
+    try:
+        return ArtifactService.extract_srs_text(db, artifact_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
  
  
 # =========================================================
-# DOWNLOAD SRS
+# DOWNLOAD SRS (DOCX)
 # =========================================================
 @router.get("/artifacts/{artifact_id}/download-srs")
 def download_srs(artifact_id: int, db: Session = Depends(get_db)):
-    artifact = db.query(Artifact).filter(Artifact.id == artifact_id).first()
- 
-    if not artifact:
-        raise HTTPException(404, "Artifact not found")
- 
+    try:
+        artifact = ArtifactService.get_artifact_model(db, artifact_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
     return FileResponse(
         path=artifact.file_path,
         filename=Path(artifact.file_path).name,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     )
 
-
-# ─── Async SRS ────────────────────────────────────────────────────────────────
+# =========================================================
+# GENERATE SRS AS BACKGROUND TASK (SESSION LEVEL)
+# =========================================================
 @router.post("/projects/{project_id}/sessions/{session_id}/generate-srs-async")
 def generate_session_srs_async(
     project_id: int,
     session_id: int,
-    format_version: str = "ieee_830",
+    format_version: str = "ieee_830", # default
     background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if format_version not in SUPPORTED_FORMATS:
         raise HTTPException(400, f"Unsupported format. Choose from: {SUPPORTED_FORMATS}")
-
+    
+    # create background row in the db
     task = BackgroundTask(
         user_id=current_user.id,
         task_type="generate_srs",
         project_id=project_id,
         session_id=session_id,
-        status="pending",
+        status="pending", # task  initially with status "pending"
         task_input={"format_version": format_version, "source": "session"},
     )
     db.add(task); db.commit(); db.refresh(task)
 
+    # schedule the background task to run asynchronously
     background_tasks.add_task(
         run_async_srs_task,
         task_id=task.id,
@@ -681,30 +520,34 @@ def generate_session_srs_async(
         source="session",
         user_id=current_user.id,
     )
+    # return the response
     return {"task_id": task.id, "status": "pending"}
 
-
+# =========================================================
+# GENERATE SRS AS BACKGROUND TASK (PROJECT LEVEL)
+# =========================================================
 @router.post("/projects/{project_id}/generate-srs-async")
 def generate_project_srs_async(
     project_id: int,
-    format_version: str = "ieee_830",
+    format_version: str = "ieee_830", # default
     background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if format_version not in SUPPORTED_FORMATS:
         raise HTTPException(400, f"Unsupported format. Choose from: {SUPPORTED_FORMATS}")
-
+    # create background row in the db
     task = BackgroundTask(
         user_id=current_user.id,
         task_type="generate_srs",
         project_id=project_id,
         session_id=None,
-        status="pending",
+        status="pending", # task initially with status "pending"
         task_input={"format_version": format_version, "source": "project"},
     )
     db.add(task); db.commit(); db.refresh(task)
 
+    # schedule the background task to run asynchronously
     background_tasks.add_task(
         run_async_srs_task,
         task_id=task.id,
@@ -714,10 +557,13 @@ def generate_project_srs_async(
         source="project",
         user_id=current_user.id,
     )
+    # return the response
     return {"task_id": task.id, "status": "pending"}
 
 
-# ─── SRS polling ──────────────────────────────────────────────────────────────
+# =========================================================
+# polling endpoint -> Frontend calls this every 3 seconds to check task progress.
+# =========================================================
 @router.get("/srs-tasks/{task_id}/status")
 def get_srs_task_status(
     task_id: int,

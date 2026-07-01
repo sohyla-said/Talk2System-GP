@@ -174,7 +174,7 @@ def _generate_uml_with_fallback_chain(prompt: str) -> str:
 # ==========================
 def generate_uml_code_with_ollama(prompt: str, timeout: int = 300) -> str:
     logger.info(f"Falling back to Ollama ({OLLAMA_MODEL}) for UML generation...")
-    try:
+    try: # Send the request to ollama
         response = requests.post(
             OLLAMA_URL,
             json={
@@ -196,7 +196,7 @@ def generate_uml_code_with_ollama(prompt: str, timeout: int = 300) -> str:
 
     if response.status_code != 200:
         raise Exception(f"Ollama error: {response.status_code} — {response.text[:200]}")
-
+    # Receive the json response and extract the response text and clean it for PlantUML 
     text = response.json().get("response", "").strip()
     return clean_uml_output(text)
 

@@ -7,6 +7,6 @@ class ArtifactType(Base):
     __tablename__ = "artifact_types"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True)  # SRS, UML_USECASE, UML_CLASS, UML_SEQUENCE
+    name = Column(String, unique=True)  # SRS_DOCUMENT, UML_USECASE, UML_CLASS, UML_SEQUENCE
 
     artifacts = relationship("Artifact", back_populates="artifact_type")
