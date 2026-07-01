@@ -45,14 +45,18 @@ _SYSTEM_SELF_REFERENCE_FILLERS = {
     "being", "built", "developed", "designed", "itself",
 }
 
-
+# ==========================
+# PREPROCESSING CLEAN INPUT BEFORE SENDING IT TO AI
+# ==========================
 def _is_self_referential_system(actor: str) -> bool:
     words = actor.strip().lower().split()
     if "system" not in words:
         return False
     return all(w == "system" or w in _SYSTEM_SELF_REFERENCE_FILLERS for w in words)
 
-
+# =========================
+# REMOVE INVALID ACTORS BEFORE AI GENERATION
+# =========================
 def clean_actors(actors: list):
     """Remove the system itself (and self-referential variants like 'system being built') from actors"""
     return list(set([
@@ -84,7 +88,7 @@ def simplify_requirements(frs: list):
 
 
 # ==========================
-# AI: GENERATE UML CODE
+# GENERATE UML CODE WITH AI
 # ==========================
 def generate_uml_code_with_ai(requirements_json: dict, diagram_type: str):
     actors = clean_actors(requirements_json.get("actors", []))
@@ -93,7 +97,9 @@ def generate_uml_code_with_ai(requirements_json: dict, diagram_type: str):
     prompt = build_prompt(actors, frs, diagram_type)
     return _generate_uml_with_fallback_chain(prompt)
 
-
+# ==========================
+# REPAIR BROKEN UML CODE WITH AI
+# ==========================
 def repair_uml_code_with_ai(broken_uml_code: str, diagram_type: str, error_message: str) -> str:
     """Asks the AI to fix a PlantUML syntax error reported by the renderer, used as a single retry after a render failure."""
     rules = _diagram_rules(diagram_type)
@@ -114,7 +120,9 @@ Broken PlantUML code:
 """
     return _generate_uml_with_fallback_chain(prompt)
 
-
+# =========================
+# TRY 3 GEMINI MODELS IF FAILS, FALL BACK TO OLLAMA
+# =========================
 def _generate_uml_with_fallback_chain(prompt: str) -> str:
     models_to_try = [
         "gemini-2.0-flash",
@@ -322,7 +330,9 @@ PaymentGateway --> System: paymentResult
     else:
         raise ValueError("Invalid diagram type")
 
-
+# =========================
+# THIS IS WHAT AI RECEIVES AS PROMPT — IT INCLUDES THE RULES, ACTORS, AND ACTIONS
+# =========================
 def build_prompt(actors, frs, diagram_type):
     rules = _diagram_rules(diagram_type)
     items_label = {"usecase": "Use Cases", "sequence": "Interactions"}.get(diagram_type, "Actions")
@@ -338,7 +348,7 @@ Actors:
 
 
 # ==========================
-# CLEAN AI OUTPUT
+# CLEAN AI OUTPUT CODE TO BE COMPATIBLE WITH KROKI/PLANTUML INPUT
 # ==========================
 def clean_uml_output(text: str):
     text = text.replace("```plantuml", "").replace("```", "")
@@ -357,6 +367,9 @@ def clean_uml_output(text: str):
 # ==========================
 _PLANTUML_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"
 
+# ==========================
+# ENCODE/COMPRESS PLANTUML FOR URL AS DON'T ACCEPT TEXT
+# ==========================
 def _encode_plantuml(uml_code: str) -> str:
     compressed = zlib.compress(uml_code.encode("utf-8"))[2:-4]  # strip zlib header/checksum
     result = []
@@ -370,7 +383,9 @@ def _encode_plantuml(uml_code: str) -> str:
         result.append(_PLANTUML_CHARS[b2 & 0x3F])
     return "".join(result)
 
-
+# ==========================
+# HELPER FUNCTION TO TRY RENDERING WITH KROKI OR PLANTUML.COM
+# ==========================
 def _try_render(url: str, *, post_data: bytes = None, timeout: int = 20) -> bytes:
     if post_data is not None:
         response = requests.post(url, data=post_data, timeout=timeout)
@@ -404,7 +419,7 @@ def render_diagram_with_kroki(uml_code: str):
 
 
 # ==========================
-# SAVE FILE
+# SAVE FILE TO STORAGE
 # ==========================
 def save_uml_file(image_bytes, project_id, diagram_type, session_id=None):
     os.makedirs(STORAGE_PATH, exist_ok=True)
@@ -496,6 +511,9 @@ def _sanitize_error_message(raw: str) -> str:
     # Generic fallback — never expose raw stack traces or HTML
     return "UML generation failed. Please retry."
 
+# ==========================
+# BACKGROUND TASK ORCHESTRATION (generation, artifact storage, status updates, audit logging, and notifications.)
+# ==========================
 def run_async_uml_task(
     task_id: int,
     project_id: int,
@@ -510,7 +528,7 @@ def run_async_uml_task(
         task.status = "in-progress"
         db.commit()
 
-        # ── 1. Fetch requirements ──────────────────────────────────────────
+        # ── 1. Fetch requirements 
         from app.services.requirement_service import RequirementService
         if source == "session":
             req = RequirementService.get_latest_session_requirement(db, project_id, session_id)
@@ -518,7 +536,7 @@ def run_async_uml_task(
             req = RequirementService.get_latest_project_requirement(db, project_id)
         requirements_json = req["data"]
 
-        # ── 2. Run the pipeline ────────────────────────────────────────────
+        # ── 2. Run the pipeline 
         result = generate_uml_pipeline(
             requirements_json=requirements_json,
             project_id=project_id,
@@ -526,7 +544,7 @@ def run_async_uml_task(
             session_id=session_id if source == "session" else None,
         )
 
-        # ── 3. Save artifact ───────────────────────────────────────────────
+        # ── 3. Save artifact 
         from app.services.artifact_service import ArtifactService
         artifact = ArtifactService.save_artifact(
             db=db,
@@ -544,9 +562,7 @@ def run_async_uml_task(
         }
         task.status = "done"
 
-        # A brand-new artifact has zero approvals — refresh the cached project status
-        # so it reflects "pending_approval" instead of the previous (already fully
-        # approved) artifact's "in_progress" state.
+        # ── 4. UPDATE PROJECT STATUS IF PROJECT_LEVEL ARTIFACT
         if source == "project":
             from app.services.project_approval_service import ProjectApprovalService
             new_status = ProjectApprovalService.compute_project_status(db, project_id)
@@ -577,7 +593,7 @@ def run_async_uml_task(
             }
         )
         db.commit()
-        # ── 4. Notify ──────────────────────────────────────────────────────
+        # ── 5. Notify 
         _notify_uml_members(
             db=db, project_id=project_id, session_id=session_id,
             notification_type="uml_generated",
